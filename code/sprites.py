@@ -1,0 +1,533 @@
+# Sprite-sheet generation (extracted from indienegev-2026/app/build.py)
+# Requires: Pillow, numpy. CACHE = assets dir containing map.webp (the illustrated map).
+import base64, json, math
+from pathlib import Path
+from PIL import Image
+
+CACHE = Path(__file__).resolve().parent / 'assets'
+
+
+BIRDS = [(518, 118, 624, 188), (2260, 70, 2392, 121), (2398, 110, 2538, 164)]  # x0, y0, x1, y1 במפה (3200px)
+
+
+def make_birds():
+    """חותך את הציפורים מהמפה: שכבה שקופה לכל ציפור + מפה שבה מקומן נצבע בצבע השמיים מסביב."""
+    import numpy as np
+    from PIL import ImageFilter
+    im = Image.open(CACHE / 'map.webp').convert('RGB')
+    a = np.asarray(im).astype(np.float32)
+    birds = []
+    for n, (x0, y0, x1, y1) in enumerate(BIRDS):
+        box = a[y0:y1, x0:x1].copy()
+        lum = box @ np.array([0.3, 0.59, 0.11], dtype=np.float32)
+        sky_px = box[(box[..., 2] > 150) & (box[..., 2] > box[..., 0] + 60)]
+        sky = np.median(sky_px, axis=0)
+        sky_l = float(sky @ np.array([0.3, 0.59, 0.11]))
+        # ציפור = כהה בהרבה מהשמיים, בגוון כחלחל-אפור (לא ירוק/ורוד/לבן של האותיות והעננים)
+        alpha = np.clip((sky_l - lum - 25) / 45, 0, 1) * (box[..., 2] >= box[..., 1] - 12)
+        al = Image.fromarray((alpha * 255).astype('uint8'))
+        grow = np.asarray(al.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(1.2))).astype(np.float32) / 255
+        grow = np.clip(grow * 1.6, 0, 1)[..., None]
+        a[y0:y1, x0:x1] = box * (1 - grow) + sky * grow  # מוחק את הציפור מהמפה
+        ink = np.median(box[alpha > 0.85], axis=0) * 0.55  # צבע הציפור, מוכהה לכמעט שחור (כמו שאר הדמויות בציור)
+        sprite = Image.fromarray(np.dstack([np.broadcast_to(ink, box.shape), alpha * 255]).astype('uint8'), 'RGBA')
+        f = f'bird{n}.webp'
+        sprite.save(CACHE / f, 'WEBP', lossless=True)
+        birds.append({'x': x0, 'y': y0, 'w': x1 - x0, 'h': y1 - y0, 'file': f})
+    Image.fromarray(a.clip(0, 255).astype('uint8')).save(CACHE / 'map-sky.webp', 'WEBP', quality=70, method=6)
+    (CACHE / 'birds.json').write_text(json.dumps(birds))
+
+
+PERSON = (2506, 700, 2540, 768)  # דמות שהולכת לבד, ליד מתחם הצימוד (במפה ברוחב 3200)
+
+
+def make_person():
+    """מעתיק דמות אדם מהציור לשכבה שקופה: כהה מהרקע הוורוד = הדמות."""
+    import numpy as np
+    im = Image.open(CACHE / 'map.webp').convert('RGB')
+    x0, y0, x1, y1 = PERSON
+    box = np.asarray(im.crop(PERSON)).astype(np.float32)
+    lum = box @ np.array([0.3, 0.59, 0.11], dtype=np.float32)
+    bg_l = float(np.percentile(lum, 80))
+    alpha = np.clip((bg_l - lum - 55) / 45, 0, 1)
+    ys, xs = np.nonzero(alpha > 0.3)
+    t, b, l, r = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+    ink = np.median(box[alpha > 0.9], axis=0)  # צבע הדיו של הדמות (בלי הוורוד שמסביב)
+    rgb = np.broadcast_to(ink, box.shape)
+    sprite = Image.fromarray(np.dstack([rgb, alpha * 255]).astype('uint8')[t:b, l:r], 'RGBA')
+    sprite.save(CACHE / 'person0.webp', 'WEBP', lossless=True)
+    make_walk_sheet(sprite, tuple(int(v) for v in ink))
+
+
+WALK_FRAMES = 24
+WALK_A = 0.13        # חצי צעד ביחס לגובה: כף הרגל זזה מ-+A ל-−A (ביחס לירך) בזמן שהיא על הקרקע
+WALK_KF = 0.6        # קיצור פרספקטיבה במבט מלפנים/מאחור (צעד "קדימה" נראה קצר יותר על המסך)
+RUN_A, RUN_DUTY = 0.16, 0.35   # ריצה: חצי צעד (יחסית לגובה); חלק המחזור שבו כל רגל על הקרקע (השאר – באוויר, כולל ריחוף)
+RUN_D = 2 * RUN_A / RUN_DUTY   # מרחק לכל מחזור ריצה (יחסית לגובה) – כף הרגל שעל הקרקע נעוצה
+# 4 דמויות: (גובה בפיקסלים של המפה, עובי, תיק על הגב, מעיל ארוך כמו הדמויות שבציור)
+WALK_VARIANTS = [(58, 1.00, False, False, None), (63, 0.88, False, False, None), (54, 1.05, True, False, None), (59, 1.0, False, True, None),
+                 (60, 0.95, False, False, 'hat'), (56, 0.92, False, False, 'pony'), (62, 1.08, False, False, 'cap'), (52, 0.95, True, False, 'hat'),
+                 (60, 0.98, False, False, 'balloon')]   # האחרונה – הנודד עם הבלון: לא נכנס לשום מקום
+BALLOON = (244, 111, 106)
+BALLOON_HANDS = [[None] * 28 for _ in range(3)]  # מיקום היד שמחזיקה את הבלון: [מבט][תמונה] (מתמלא בבניית הגיליון)
+WALK_FOOT = 0.9      # מיקום הקרקע (כפות הרגליים) בגובה התמונה – שם "נוגעים" בשביל
+WALK_IDLE = 4        # תמונות עמידה אחרי מחזור ההליכה: עומד, נושם, משען על שמאל, משען על ימין
+WALK_IDLE = 4        # תמונות עמידה אחרי מחזור ההליכה: עומד, נושם, משען על שמאל, משען על ימין
+
+
+def make_walk_sheet(sprite, ink):
+    """מחזור הליכה מצויר מאפס: 24 תמונות לכל מחזור (2 צעדים), 3 מבטים (צד/מלפנים/מאחור) × 4 דמויות.
+    בנוי לפי מיקום כפות הרגליים (ולא זוויות): כף הרגל שעל הקרקע זזה אחורה בקצב קבוע לגמרי ביחס לירך,
+    וכף הרגל שבאוויר מתקדמת בקשת. הברך מחושבת (קינמטיקה הפוכה, שני מקטעים), וגובה הירך נובע מאורך הרגל –
+    כך מתקבלת עלייה-וירידה טבעית. באפליקציה התמונה נבחרת לפי המרחק שהדמות עברה, כך שכף הרגל שעל הקרקע
+    נשארת נעוצה במקום – בלי החלקה. בצבע הדיו של הדמויות שבציור, קצוות רכים (מצויר ×8 ומוקטן)."""
+    import math
+    from PIL import ImageDraw, ImageFilter
+    S = 8
+    Hmax = max(v[0] for v in WALK_VARIANTS)
+    TW, TH = round(Hmax * 0.7), round(Hmax * 1.12)
+    col = ink + (255,)
+    wrap = lambda x: x - math.floor(x)
+
+    def seg(d, a, b, wa, wb):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        n = math.hypot(dx, dy) or 1
+        nx, ny = -dy / n, dx / n
+        d.polygon([(a[0] + nx * wa / 2, a[1] + ny * wa / 2), (b[0] + nx * wb / 2, b[1] + ny * wb / 2),
+                   (b[0] - nx * wb / 2, b[1] - ny * wb / 2), (a[0] - nx * wa / 2, a[1] - ny * wa / 2)], fill=col)
+        for c, r in ((a, wa / 2), (b, wb / 2)):
+            d.ellipse([c[0] - r, c[1] - r, c[0] + r, c[1] + r], fill=col)
+
+    def foot(q, A, lift_h):
+        """מיקום כף רגל בשלב q: (היסט קדימה ביחס לירך, הרמה). q<0.5 – על הקרקע, זזה אחורה בקצב קבוע"""
+        if q < 0.5:
+            return A - 2 * A * (q / 0.5), 0.0
+        u = (q - 0.5) / 0.5
+        return -A + 2 * A * (1 - math.cos(math.pi * u)) / 2, lift_h * math.sin(math.pi * u)
+
+    def knee_ik(H, Ap, Lt, Ls, fwd):
+        dx, dy = Ap[0] - H[0], Ap[1] - H[1]
+        d = min(math.hypot(dx, dy), (Lt + Ls) * 0.999)
+        th = math.atan2(dy, dx)
+        al = math.acos(max(-1, min(1, (Lt * Lt + d * d - Ls * Ls) / (2 * Lt * d))))
+        a = th - al * fwd  # הברך קדימה
+        return (H[0] + Lt * math.cos(a), H[1] + Lt * math.sin(a))
+
+    NV = len(WALK_VARIANTS)
+    sheet = Image.new('RGBA', (TW * (WALK_FRAMES + WALK_IDLE), TH * NV * 4), (0, 0, 0, 0))  # 3 מבטי הליכה לכל דמות + שורת ריצה
+    for v, (H, wf, bag, coat, extra) in enumerate(WALK_VARIANTS):
+        Hs = H * S
+        head, Lt, Ls, foot_l = 0.135 * Hs, 0.255 * Hs, 0.235 * Hs, 0.085 * Hs
+        L = Lt + Ls
+        A, lift_h = WALK_A * Hs, 0.055 * Hs
+        torso_len = 0.295 * Hs                                   # מהירך לכתפיים
+        wt, wsn, wua, wfa = 0.075 * Hs * wf, 0.052 * Hs * wf, 0.05 * Hs * wf, 0.04 * Hs * wf
+        sw, hw = 0.15 * Hs * wf, 0.125 * Hs * wf
+        gy = TH * WALK_FOOT * S                                  # הקרקע
+        cx = TW * S / 2
+        for view in (0, 1, 2):
+            for f in range(WALK_FRAMES + WALK_IDLE):
+                idle = f - WALK_FRAMES                                          # ≥0: תמונת עמידה
+                if idle < 0:
+                    ph = f / WALK_FRAMES
+                    feet = [foot(wrap(ph + 0.5 * k), A, lift_h) for k in (0, 1)]
+                    fx_st = feet[0][0] if wrap(ph) < 0.5 else feet[1][0]       # הרגל שעל הקרקע
+                    tl, sx = torso_len, 0.0
+                else:
+                    # עמידה: שתי הרגליים על הקרקע, צמודות; נשימה = הכתפיים עולות מעט; העברת משקל = הירכיים זזות הצידה
+                    ph = 0.25
+                    feet = [(-0.04 * A, 0.0), (0.04 * A, 0.0)]
+                    fx_st = 0.0
+                    tl = torso_len * (1.03 if idle == 1 else 1.0)
+                    sx = {2: -0.014, 3: 0.014}.get(idle, 0.0) * Hs
+                ag = wsn * 0.4                                                  # הקרסול מעט מעל הקרקע
+                hipH = math.sqrt((L * 0.992) ** 2 - fx_st ** 2) + ag           # גובה הירך: רגל העמידה כמעט ישרה
+                big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
+                d = ImageDraw.Draw(big)
+                if view == 0:
+                    lean = 5                                                # נטייה קדימה (לכיוון ההליכה)
+                    if idle >= 0:
+                        lean = 1.5                                          # בעמידה – כמעט זקוף
+                    hip = (cx + sx * 0.5, gy - hipH)
+                    a_l = math.radians(180 - lean)                          # 180 = למעלה; פחות = מעט קדימה (ימינה, לכיוון ההליכה)
+                    sh = (hip[0] + math.sin(a_l) * tl, hip[1] + math.cos(a_l) * tl)
+                    parts = []
+                    for k in (0, 1):
+                        fx, lf = feet[k]
+                        ank = (cx + fx, gy - lf - ag)
+                        kn = knee_ik(hip, ank, Lt, Ls, 1)
+                        ta = 0 if idle >= 0 else math.radians(22 * math.sin(math.pi * max(0.0, (wrap(ph + 0.5 * k) - 0.5) / 0.5)))  # בוהן מעט כלפי מטה באוויר
+                        toe = (ank[0] + math.cos(ta) * foot_l, ank[1] + math.sin(ta) * foot_l)
+                        armA = math.radians(-24 * fx / A)                          # יד הפוכה לרגל באותו צד
+                        el = (sh[0] + math.sin(armA) * 0.17 * Hs, sh[1] + math.cos(armA) * 0.17 * Hs)
+                        fa = armA + math.radians(18 + 14 * max(0.0, -fx / A))
+                        hand = (el[0] + math.sin(fa) * 0.15 * Hs, el[1] + math.cos(fa) * 0.15 * Hs)
+                        parts.append((kn, ank, toe, el, hand))
+
+                    def draw_side(k):
+                        kn, ank, toe, el, hand = parts[k]
+                        seg(d, hip, kn, wt, wsn * 1.08); seg(d, kn, ank, wsn * 1.08, wsn * 0.8); seg(d, ank, toe, wsn * 0.95, wsn * 0.6)
+
+                    def draw_arm(k):
+                        kn, ank, toe, el, hand = parts[k]
+                        seg(d, sh, el, wua, wfa); seg(d, el, hand, wfa, wfa * 0.85)
+
+                    draw_arm(1); draw_side(1)
+                    if coat:
+                        bot = (hip[0], hip[1] + 0.13 * Hs)
+                        d.polygon([(sh[0] - sw / 2, sh[1]), (sh[0] + sw / 2, sh[1]), (bot[0] + hw * 0.8, bot[1]), (bot[0] - hw * 0.8, bot[1])], fill=col)
+                    d.polygon([(sh[0] - sw / 2, sh[1] + 0.01 * Hs), (sh[0] + sw / 2, sh[1] + 0.01 * Hs), (hip[0] + hw / 2, hip[1]), (hip[0] - hw / 2, hip[1])], fill=col)
+                    d.ellipse([sh[0] - sw / 2, sh[1] - 0.02 * Hs, sh[0] + sw / 2, sh[1] + 0.06 * Hs], fill=col)
+                    if bag:
+                        d.rounded_rectangle([sh[0] - sw / 2 - 0.07 * Hs, sh[1] + 0.04 * Hs, sh[0] - sw / 2 + 0.03 * Hs, sh[1] + 0.21 * Hs], radius=0.025 * Hs, fill=col)
+                    neck = (sh[0] + math.sin(a_l) * 0.035 * Hs, sh[1] + math.cos(a_l) * 0.035 * Hs)
+                    seg(d, sh, neck, 0.055 * Hs, 0.05 * Hs)
+                    hc = (neck[0] + math.sin(a_l) * head * 0.5, neck[1] + math.cos(a_l) * head * 0.5)
+                    d.ellipse([hc[0] - head / 2, hc[1] - head * 0.55, hc[0] + head / 2, hc[1] + head * 0.5], fill=col)
+                    if extra == 'hat':
+                        d.ellipse([hc[0] - head * 0.95, hc[1] - head * 0.42, hc[0] + head * 1.05, hc[1] - head * 0.22], fill=col)
+                        d.ellipse([hc[0] - head * 0.45, hc[1] - head * 0.78, hc[0] + head * 0.5, hc[1] - head * 0.25], fill=col)
+                    if extra == 'cap':
+                        d.ellipse([hc[0] - head * 0.55, hc[1] - head * 0.7, hc[0] + head * 0.55, hc[1] - head * 0.05], fill=col)
+                        d.ellipse([hc[0] + head * 0.1, hc[1] - head * 0.32, hc[0] + head * 0.95, hc[1] - head * 0.12], fill=col)  # מצחייה קדימה
+                    if extra == 'pony':
+                        swing = 0.04 * Hs * math.sin(2 * math.pi * ph * 2)  # מתנדנד קצת בהליכה
+                        d.ellipse([hc[0] - head * 1.0 - swing * 0.3, hc[1] - head * 0.15, hc[0] - head * 0.25, hc[1] + head * 0.55], fill=col)
+                        d.ellipse([hc[0] - head * 0.75, hc[1] - head * 0.45, hc[0] - head * 0.15, hc[1] + head * 0.05], fill=col)
+                    draw_side(0); draw_arm(0)
+                    if extra == 'balloon':
+                        BALLOON_HANDS[view][f] = [round(parts[0][4][0] / S, 1), round(parts[0][4][1] / S, 1)]
+                else:
+                    # מלפנים (1, הולך לכיוון המסך – למטה) / מאחור (2, הולך למעלה): "קדימה" = למטה/למעלה על המסך, מקוצר בפרספקטיבה
+                    fsign = 1 if view == 1 else -1
+                    sway = 0.012 * Hs * math.sin(2 * math.pi * ph) if idle < 0 else sx
+                    hip = (cx + sway, gy - hipH)
+                    sh = (cx + sway * 0.6, hip[1] - tl)
+                    for k in (0, 1):
+                        fx, lf = feet[k]
+                        side = -1 if k == 0 else 1
+                        hx = hip[0] + side * 0.045 * Hs
+                        ank = (hx, gy + fsign * fx * WALK_KF - lf - ag)
+                        mid = ((hx + ank[0]) / 2 + side * 0.01 * Hs, (hip[1] + ank[1]) / 2)
+                        seg(d, (hx, hip[1]), mid, wt, wsn * 1.08)
+                        seg(d, mid, ank, wsn * 1.08, wsn * 0.8)
+                        d.ellipse([ank[0] - wsn * 0.6, ank[1] - wsn * 0.3, ank[0] + wsn * 0.6, ank[1] + wsn * 0.5], fill=col)
+                        # ידיים בצדי הגוף, מעט החוצה (רווח קטן מהגוף), מתנדנדות קדימה-אחורה = מתקצרות/מתארכות מעט
+                        armV = math.cos(math.radians(24 * fx / A))
+                        s0 = (sh[0] + side * (sw / 2 + wua * 0.15), sh[1] + 0.03 * Hs)
+                        el = (s0[0] + side * 0.028 * Hs, s0[1] + 0.165 * Hs * armV)
+                        hand = (el[0] + side * 0.012 * Hs, el[1] + 0.145 * Hs * armV)
+                        seg(d, s0, el, wua * 0.92, wfa)
+                        seg(d, el, hand, wfa, wfa * 0.8)
+                        d.ellipse([hand[0] - wfa * 0.62, hand[1] - wfa * 0.5, hand[0] + wfa * 0.62, hand[1] + wfa * 0.7], fill=col)  # כף יד
+                        if extra == 'balloon' and side == 1:
+                            bhand = hand
+                    if coat:
+                        d.polygon([(sh[0] - sw / 2, sh[1]), (sh[0] + sw / 2, sh[1]), (hip[0] + hw * 0.85, hip[1] + 0.13 * Hs), (hip[0] - hw * 0.85, hip[1] + 0.13 * Hs)], fill=col)
+                    d.polygon([(sh[0] - sw / 2, sh[1] + 0.01 * Hs), (sh[0] + sw / 2, sh[1] + 0.01 * Hs), (hip[0] + hw * 0.6, hip[1]), (hip[0] - hw * 0.6, hip[1])], fill=col)
+                    d.ellipse([sh[0] - sw / 2, sh[1] - 0.02 * Hs, sh[0] + sw / 2, sh[1] + 0.06 * Hs], fill=col)
+                    seg(d, sh, (sh[0], sh[1] - 0.035 * Hs), 0.055 * Hs, 0.05 * Hs)
+                    hc = (sh[0], sh[1] - 0.035 * Hs - head * 0.5)
+                    d.ellipse([hc[0] - head / 2, hc[1] - head * 0.55, hc[0] + head / 2, hc[1] + head * 0.5], fill=col)
+                    if extra == 'hat':
+                        d.ellipse([hc[0] - head * 1.0, hc[1] - head * 0.42, hc[0] + head * 1.0, hc[1] - head * 0.2], fill=col)
+                        d.ellipse([hc[0] - head * 0.48, hc[1] - head * 0.8, hc[0] + head * 0.48, hc[1] - head * 0.25], fill=col)
+                    if extra == 'cap':
+                        d.ellipse([hc[0] - head * 0.58, hc[1] - head * 0.72, hc[0] + head * 0.58, hc[1] - head * 0.02], fill=col)
+                        if view == 1:
+                            d.ellipse([hc[0] - head * 0.5, hc[1] - head * 0.2, hc[0] + head * 0.5, hc[1] + head * 0.05], fill=col)  # מצחייה מלפנים
+                    if extra == 'balloon':
+                        BALLOON_HANDS[view][f] = [round(bhand[0] / S, 1), round(bhand[1] / S, 1)]
+                    if extra == 'pony' and view == 2:  # מאחור רואים את הקוקו יורד
+                        d.ellipse([hc[0] - head * 0.22, hc[1] + head * 0.2, hc[0] + head * 0.22, hc[1] + head * 0.95], fill=col)
+                    if extra == 'pony':
+                        d.ellipse([hc[0] - head * 0.58, hc[1] - head * 0.5, hc[0] + head * 0.58, hc[1] + head * 0.35], fill=col)
+                img = big.filter(ImageFilter.GaussianBlur(S * 0.28)).resize((TW, TH), Image.LANCZOS)
+                sheet.alpha_composite(img, (f * TW, (3 * v + view) * TH))
+        # ───── ריצה (מהצד): ריחוף, צעד ארוך, עקב שנבעט למעלה, ברך מתכופפת חזק, ידיים כפופות שעובדות, גוף נוטה וקופץ ─────
+        if extra == 'balloon':
+            continue  # הנודד לא רץ
+        Ar = RUN_A * Hs
+        for f in range(WALK_FRAMES):
+            ph = f / WALK_FRAMES
+            def rfoot(q):
+                if q < RUN_DUTY:                                    # על הקרקע: נע אחורה בקצב קבוע
+                    return Ar - 2 * Ar * (q / RUN_DUTY), 0.0
+                u = (q - RUN_DUTY) / (1 - RUN_DUTY)                 # באוויר: עקב למעלה מאחור, ואז קדימה
+                return -Ar + 2 * Ar * (1 - math.cos(math.pi * u)) / 2, 0.2 * Hs * math.sin(math.pi * u) ** 0.8 * (1.15 - 0.3 * u)
+            feet = [rfoot(wrap(ph + 0.5 * k)) for k in (0, 1)]
+            st = [k for k in (0, 1) if wrap(ph + 0.5 * k) < RUN_DUTY]
+            ag = wsn * 0.4
+            if st:
+                fx_st = feet[st[0]][0]
+                hipH = math.sqrt((L * 0.96) ** 2 - fx_st ** 2) + ag     # ברך מעט כפופה בנחיתה
+            else:                                                        # ריחוף – הגוף באוויר
+                q = wrap(ph * 2) - RUN_DUTY * 2 if False else None
+                fl = (wrap(ph + 0.5) if wrap(ph) >= 0.5 else wrap(ph)) - RUN_DUTY
+                u = max(0.0, min(1.0, fl / (0.5 - RUN_DUTY)))
+                hipH = math.sqrt((L * 0.96) ** 2 - Ar ** 2) + ag + 0.045 * Hs * math.sin(math.pi * u)
+            big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
+            d = ImageDraw.Draw(big)
+            lean = math.radians(180 - 13)                               # נטייה קדימה בריצה
+            hip = (cx, gy - hipH)
+            sh = (hip[0] + math.sin(lean) * torso_len, hip[1] + math.cos(lean) * torso_len)
+            parts = []
+            for k in (0, 1):
+                fx, lf = feet[k]
+                ank = (cx + fx, gy - lf - ag)
+                kn = knee_ik(hip, ank, Lt, Ls, 1)
+                q = wrap(ph + 0.5 * k)
+                ta = math.radians(30 * math.sin(math.pi * max(0.0, (q - RUN_DUTY) / (1 - RUN_DUTY))) - 8)
+                toe = (ank[0] + math.cos(ta) * foot_l, ank[1] + math.sin(ta) * foot_l)
+                ua = math.radians(-38 * fx / Ar)                         # יד הפוכה לרגל באותו צד
+                el = (sh[0] + math.sin(ua) * 0.16 * Hs, sh[1] + math.cos(ua) * 0.16 * Hs)
+                fa = ua + math.radians(-95)                              # מרפק כפוף ~90° – האמה קדימה-למעלה
+                hand = (el[0] - math.sin(fa) * 0.13 * Hs, el[1] - math.cos(fa) * 0.13 * Hs)
+                parts.append((kn, ank, toe, el, hand))
+
+            def rleg(k):
+                kn, ank, toe, el, hand = parts[k]
+                seg(d, hip, kn, wt, wsn * 1.08); seg(d, kn, ank, wsn * 1.08, wsn * 0.8); seg(d, ank, toe, wsn * 0.95, wsn * 0.6)
+
+            def rarm(k):
+                kn, ank, toe, el, hand = parts[k]
+                seg(d, sh, el, wua, wfa); seg(d, el, hand, wfa, wfa * 0.85)
+
+            rarm(1); rleg(1)
+            if coat:
+                bot = (hip[0] + 0.02 * Hs, hip[1] + 0.12 * Hs)
+                d.polygon([(sh[0] - sw / 2, sh[1]), (sh[0] + sw / 2, sh[1]), (bot[0] + hw * 0.8, bot[1]), (bot[0] - hw * 0.8, bot[1])], fill=col)
+            d.polygon([(sh[0] - sw / 2, sh[1] + 0.01 * Hs), (sh[0] + sw / 2, sh[1] + 0.01 * Hs), (hip[0] + hw / 2, hip[1]), (hip[0] - hw / 2, hip[1])], fill=col)
+            d.ellipse([sh[0] - sw / 2, sh[1] - 0.02 * Hs, sh[0] + sw / 2, sh[1] + 0.06 * Hs], fill=col)
+            if bag:
+                d.rounded_rectangle([sh[0] - sw / 2 - 0.07 * Hs, sh[1] + 0.04 * Hs, sh[0] - sw / 2 + 0.03 * Hs, sh[1] + 0.21 * Hs], radius=0.025 * Hs, fill=col)
+            neck = (sh[0] + math.sin(lean) * 0.035 * Hs, sh[1] + math.cos(lean) * 0.035 * Hs)
+            seg(d, sh, neck, 0.055 * Hs, 0.05 * Hs)
+            hc = (neck[0] + math.sin(lean) * head * 0.5, neck[1] + math.cos(lean) * head * 0.5)
+            d.ellipse([hc[0] - head / 2, hc[1] - head * 0.55, hc[0] + head / 2, hc[1] + head * 0.5], fill=col)
+            if extra == 'hat':
+                d.ellipse([hc[0] - head * 0.95, hc[1] - head * 0.42, hc[0] + head * 1.05, hc[1] - head * 0.22], fill=col)
+                d.ellipse([hc[0] - head * 0.45, hc[1] - head * 0.78, hc[0] + head * 0.5, hc[1] - head * 0.25], fill=col)
+            if extra == 'cap':
+                d.ellipse([hc[0] - head * 0.55, hc[1] - head * 0.7, hc[0] + head * 0.55, hc[1] - head * 0.05], fill=col)
+                d.ellipse([hc[0] + head * 0.1, hc[1] - head * 0.32, hc[0] + head * 0.95, hc[1] - head * 0.12], fill=col)
+            if extra == 'pony':
+                d.ellipse([hc[0] - head * 1.15, hc[1] - head * 0.25, hc[0] - head * 0.3, hc[1] + head * 0.35], fill=col)  # קוקו מתעופף אחורה
+                d.ellipse([hc[0] - head * 0.75, hc[1] - head * 0.45, hc[0] - head * 0.15, hc[1] + head * 0.05], fill=col)
+            rleg(0); rarm(0)
+            img = big.filter(ImageFilter.GaussianBlur(S * 0.28)).resize((TW, TH), Image.LANCZOS)
+            sheet.alpha_composite(img, (f * TW, (3 * NV + v) * TH))
+    sheet.save(CACHE / 'walk0.webp', 'WEBP', lossless=True)
+    (CACHE / 'balloon.json').write_text(json.dumps(BALLOON_HANDS))
+
+
+SMOKER_H = 58          # גובה הדמות (עומדת) – בפיקסלים של המפה
+SMOKER_FRAMES = 9      # היד: 0 = על הברך, 8 = הסיגריה בפה
+SMOKER_AT = (20.72, 33.52)  # בתוך גוש ירוק כהה בצפון הקמפינג (ליד מתחם שבת), ליד אוהל – נקודת הקרקע מתחת לכיסא
+
+
+def make_smoker(ink):
+    """המעשן (מבט מהצד, פונה ימינה), שלוש שורות בגיליון:
+    0 – יושב על כיסא הקמפינג ומעשן (9 תמונות: היד מהברך אל הפה),
+    1 – עומד ליד הכיסא ומעשן (9 תמונות: היד מהמותן אל הפה),
+    2 – קם/מתיישב (9 תמונות: מישיבה לעמידה – נוטה קדימה, הירך עולה מעל כפות הרגליים, הרגליים מתיישרות).
+    כל התנוחות משלד אחד: הרגליים מחושבות מהירך אל כפות הרגליים (קינמטיקה הפוכה). מחזיר את מיקומי קצה הסיגריה והפה."""
+    import math
+    from PIL import ImageDraw, ImageFilter
+    S, H = 8, SMOKER_H
+    Hs = H * S
+    TW, TH = round(H * 0.62), round(H * 1.12)
+    gy = TH * 0.96 * S
+    cx = TW * 0.42 * S
+    col = ink + (255,)
+    chair = (40, 58, 64, 255)
+    cig, ember = (238, 232, 214, 255), (255, 118, 40, 255)
+    Lt, Ls = 0.255 * Hs, 0.235 * Hs
+
+    def seg(d, a, b, wa, wb, c=col):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        n = math.hypot(dx, dy) or 1
+        nx, ny = -dy / n, dx / n
+        d.polygon([(a[0] + nx * wa / 2, a[1] + ny * wa / 2), (b[0] + nx * wb / 2, b[1] + ny * wb / 2),
+                   (b[0] - nx * wb / 2, b[1] - ny * wb / 2), (a[0] - nx * wa / 2, a[1] - ny * wa / 2)], fill=c)
+        for q, r in ((a, wa / 2), (b, wb / 2)):
+            d.ellipse([q[0] - r, q[1] - r, q[0] + r, q[1] + r], fill=c)
+
+    def knee_ik(Hp, Ap):
+        dx, dy = Ap[0] - Hp[0], Ap[1] - Hp[1]
+        d = min(math.hypot(dx, dy), (Lt + Ls) * 0.999)
+        th = math.atan2(dy, dx)
+        al = math.acos(max(-1, min(1, (Lt * Lt + d * d - Ls * Ls) / (2 * Lt * d))))
+        return (Hp[0] + Lt * math.cos(th - al), Hp[1] + Lt * math.sin(th - al))
+
+    lerp = lambda a, b, t: (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+    ease = lambda t: (1 - math.cos(math.pi * t)) / 2
+    seat_y = gy - 0.25 * Hs
+    sit_hip, sit_ank = (cx - 0.07 * Hs, seat_y - 0.03 * Hs), (cx + 0.19 * Hs, gy - 0.02 * Hs)
+    stand_ank = (cx + 0.15 * Hs, gy - 0.02 * Hs)                         # עומד ממש לפני הכיסא
+    stand_hip = (stand_ank[0] - 0.01 * Hs, gy - 0.02 * Hs - (Lt + Ls) * 0.985)
+
+    def frame(hip, ank, ank2, lean_deg, arm_e, rest_hand):
+        """ציור תנוחה: ירך, קרסוליים (קרוב/רחוק), נטיית הגוף, מצב היד (0 = מנוחה, 1 = בפה)"""
+        big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
+        d = ImageDraw.Draw(big)
+        # כיסא קמפינג (נשאר במקום)
+        seg(d, (cx - 0.12 * Hs, gy), (cx + 0.1 * Hs, seat_y), 0.018 * Hs, 0.018 * Hs, chair)
+        seg(d, (cx + 0.1 * Hs, gy), (cx - 0.12 * Hs, seat_y), 0.018 * Hs, 0.018 * Hs, chair)
+        seg(d, (cx - 0.14 * Hs, seat_y), (cx + 0.12 * Hs, seat_y), 0.03 * Hs, 0.03 * Hs, chair)
+        seg(d, (cx - 0.14 * Hs, seat_y), (cx - 0.19 * Hs, seat_y - 0.26 * Hs), 0.028 * Hs, 0.028 * Hs, chair)
+        lean = math.radians(180 - lean_deg)                               # חיובי = קדימה
+        sh = (hip[0] + math.sin(lean) * 0.3 * Hs, hip[1] + math.cos(lean) * 0.3 * Hs)
+        hc = (sh[0] + math.sin(lean) * 0.1 * Hs + 0.01 * Hs, sh[1] + math.cos(lean) * 0.1 * Hs)
+        for a2 in (ank2, ank):                                            # הרגל הרחוקה קודם
+            kn = knee_ik(hip, a2)
+            seg(d, hip, kn, 0.08 * Hs, 0.06 * Hs)
+            seg(d, kn, a2, 0.06 * Hs, 0.045 * Hs)
+            seg(d, a2, (a2[0] + 0.08 * Hs, a2[1] + 0.005 * Hs), 0.045 * Hs, 0.03 * Hs)
+        seg(d, sh, hip, 0.15 * Hs, 0.13 * Hs)
+        d.ellipse([sh[0] - 0.075 * Hs, sh[1] - 0.025 * Hs, sh[0] + 0.075 * Hs, sh[1] + 0.06 * Hs], fill=col)
+        seg(d, sh, (sh[0] + math.sin(lean) * 0.035 * Hs, sh[1] + math.cos(lean) * 0.035 * Hs), 0.055 * Hs, 0.05 * Hs)
+        d.ellipse([hc[0] - 0.068 * Hs, hc[1] - 0.075 * Hs, hc[0] + 0.068 * Hs, hc[1] + 0.068 * Hs], fill=col)
+        mouth = (hc[0] + 0.07 * Hs, hc[1] + 0.03 * Hs)
+        e = ease(arm_e)
+        el = lerp((sh[0] + 0.07 * Hs, sh[1] + 0.17 * Hs), (sh[0] + 0.13 * Hs, sh[1] + 0.1 * Hs), e)
+        hand = lerp(rest_hand(sh), (mouth[0] + 0.005 * Hs, mouth[1] + 0.01 * Hs), e)
+        seg(d, sh, el, 0.05 * Hs, 0.04 * Hs)
+        seg(d, el, hand, 0.04 * Hs, 0.035 * Hs)
+        ang = math.radians(-8 - 25 * e)
+        tip = (hand[0] + math.cos(ang) * 0.065 * Hs, hand[1] + math.sin(ang) * 0.065 * Hs)
+        seg(d, hand, tip, 0.016 * Hs, 0.016 * Hs, cig)
+        d.ellipse([tip[0] - 0.012 * Hs, tip[1] - 0.012 * Hs, tip[0] + 0.012 * Hs, tip[1] + 0.012 * Hs], fill=ember)
+        img = big.filter(ImageFilter.GaussianBlur(S * 0.25)).resize((TW, TH), Image.LANCZOS)
+        return img, [round(tip[0] / S, 1), round(tip[1] / S, 1)], [round(mouth[0] / S, 1), round(mouth[1] / S, 1)]
+
+    sit_rest = lambda sh: (sit_hip[0] + 0.2 * Hs, sit_hip[1] - 0.06 * Hs)   # היד על הברך
+    stand_rest = lambda sh: (sh[0] + 0.06 * Hs, sh[1] + 0.3 * Hs)            # היד ליד המותן
+    sheet = Image.new('RGBA', (TW * SMOKER_FRAMES, TH * 3), (0, 0, 0, 0))
+    tips, mouths = [[], [], []], [None, None, None]
+    for f in range(SMOKER_FRAMES):
+        a = f / (SMOKER_FRAMES - 1)
+        rows = [
+            frame(sit_hip, sit_ank, (sit_ank[0] - 0.03 * Hs, sit_ank[1]), -8 + 3 * ease(a), a, sit_rest),
+            frame(stand_hip, stand_ank, (stand_ank[0] - 0.06 * Hs, stand_ank[1]), 2, a, stand_rest),
+        ]
+        # קם: נוטה קדימה (שיא באמצע), הירך עוברת מעל כפות הרגליים, הרגליים מתיישרות
+        u = ease(a)
+        hip = lerp(sit_hip, stand_hip, u)
+        hip = (hip[0] + 0.05 * Hs * math.sin(math.pi * u), hip[1])
+        ank = lerp(sit_ank, stand_ank, min(1, u * 2))
+        rows.append(frame(hip, ank, (ank[0] - 0.03 * Hs - 0.03 * Hs * u, ank[1]), -8 + 34 * math.sin(math.pi * u) + 10 * u, 0,
+                          lambda sh, u=u: lerp(sit_rest(sh), stand_rest(sh), u)))
+        for r, (img, tip, mouth) in enumerate(rows):
+            sheet.alpha_composite(img, (f * TW, r * TH))
+            tips[r].append(tip)
+            mouths[r] = mouth
+    sheet.save(CACHE / 'smoker0.webp', 'WEBP', lossless=True)
+    return {'w': TW, 'h': TH, 'frames': SMOKER_FRAMES, 'rows': 3, 'tips': tips, 'mouths': mouths,
+            'foot': 0.96, 'cx': 0.42, 'at': SMOKER_AT}
+
+
+FRISBEE_H = 57
+FRISBEE_POSES = 48  # 0–28 זריקה (חזה → הכנה 12 → שחרור 20 → המשך 28) · 29–44 תפיסה (הושטה 36 → ספיגה אל החזה 44) · 45–47 חזרה לעמידה
+
+
+def make_frisbee(ink):
+    """שחקן פריזבי (מבט מהצד, פונה ימינה): 6 תנוחות של זריקה ותפיסה, בסגנון המטיילים.
+    מחזיר את מיקום היד בכל תנוחה – משם הפריזבי יוצא ואליה הוא מגיע."""
+    import math
+    from PIL import ImageDraw, ImageFilter
+    S, H = 8, FRISBEE_H
+    Hs = H * S
+    TW, TH = round(H * 0.8), round(H * 1.12)
+    gy = TH * 0.96 * S
+    cx = TW * 0.45 * S
+    col = ink + (255,)
+
+    def seg(d, a, b, wa, wb):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        n = math.hypot(dx, dy) or 1
+        nx, ny = -dy / n, dx / n
+        d.polygon([(a[0] + nx * wa / 2, a[1] + ny * wa / 2), (b[0] + nx * wb / 2, b[1] + ny * wb / 2),
+                   (b[0] - nx * wb / 2, b[1] - ny * wb / 2), (a[0] - nx * wa / 2, a[1] - ny * wa / 2)], fill=col)
+        for q, r in ((a, wa / 2), (b, wb / 2)):
+            d.ellipse([q[0] - r, q[1] - r, q[0] + r, q[1] + r], fill=col)
+    at = lambda o, deg, L: (o[0] + math.sin(math.radians(deg)) * L, o[1] + math.cos(math.radians(deg)) * L)
+    # (נטייה, כיפוף ברכיים, זווית הזרוע העליונה, זווית האמה) – מעלות מהאנך כלפי מטה, חיובי = קדימה
+    K = {'idle': (2, 0.0, 6, 20), 'chest': (3, 0.15, 40, 150), 'wind': (-6, 0.4, -80, -105), 'release': (12, 0.55, 95, 90),
+         'follow': (16, 0.45, 60, 40), 'reach': (6, 0.25, 82, 70)}
+    lerpP = lambda a, b, t: tuple(x + (y - x) * t for x, y in zip(a, b))
+    ease = lambda t: (1 - math.cos(math.pi * t)) / 2
+    seq = lambda a, b, n: [lerpP(K[a], K[b], ease((k + 1) / n)) for k in range(n)]
+    poses = ([K['chest']] + seq('chest', 'wind', 12) + seq('wind', 'release', 8) + seq('release', 'follow', 8)   # 0–28
+             + seq('idle', 'reach', 8) + seq('reach', 'chest', 8)                                                     # 29–44
+             + seq('follow', 'idle', 3))                                                                              # 45–47
+    sheet = Image.new('RGBA', (TW * FRISBEE_POSES, TH), (0, 0, 0, 0))
+    hands = []
+    for f, (lean, kb, ua, fa) in enumerate(poses):
+        big = Image.new('RGBA', (TW * S, TH * S), (0, 0, 0, 0))
+        d = ImageDraw.Draw(big)
+        Lt, Ls = 0.255 * Hs, 0.235 * Hs
+        hipH = (Lt + Ls) * (0.985 - 0.07 * kb)
+        hip = (cx, gy - hipH - 0.02 * Hs)
+        for sx in (-0.085, 0.07):                                   # עמידה בפיסוק קל (רגל קדימה, רגל אחורה)
+            ank = (cx + sx * Hs, gy - 0.02 * Hs)
+            mid = ((hip[0] + ank[0]) / 2 + 0.03 * Hs * kb, (hip[1] + ank[1]) / 2)
+            seg(d, hip, mid, 0.075 * Hs, 0.055 * Hs); seg(d, mid, ank, 0.055 * Hs, 0.042 * Hs)
+            seg(d, ank, (ank[0] + 0.08 * Hs, ank[1]), 0.045 * Hs, 0.03 * Hs)
+        sh = at(hip, 180 - lean, 0.3 * Hs)
+        # היד הרחוקה – רפויה בצד
+        el2 = at(sh, -10, 0.17 * Hs); seg(d, sh, el2, 0.05 * Hs, 0.04 * Hs); seg(d, el2, at(el2, 10, 0.15 * Hs), 0.04 * Hs, 0.034 * Hs)
+        d.polygon([(sh[0] - 0.075 * Hs, sh[1] + 0.01 * Hs), (sh[0] + 0.075 * Hs, sh[1] + 0.01 * Hs), (hip[0] + 0.062 * Hs, hip[1]), (hip[0] - 0.062 * Hs, hip[1])], fill=col)
+        d.ellipse([sh[0] - 0.075 * Hs, sh[1] - 0.02 * Hs, sh[0] + 0.075 * Hs, sh[1] + 0.06 * Hs], fill=col)
+        neck = at(sh, 180 - lean, 0.035 * Hs); seg(d, sh, neck, 0.055 * Hs, 0.05 * Hs)
+        hc = at(neck, 180 - lean, 0.068 * Hs)
+        d.ellipse([hc[0] - 0.068 * Hs, hc[1] - 0.075 * Hs, hc[0] + 0.068 * Hs, hc[1] + 0.068 * Hs], fill=col)
+        # היד הזורקת/התופסת
+        el = at(sh, ua, 0.17 * Hs); hand = at(el, fa, 0.15 * Hs)
+        seg(d, sh, el, 0.05 * Hs, 0.04 * Hs); seg(d, el, hand, 0.04 * Hs, 0.034 * Hs)
+        img = big.filter(ImageFilter.GaussianBlur(S * 0.28)).resize((TW, TH), Image.LANCZOS)
+        sheet.alpha_composite(img, (f * TW, 0))
+        hands.append([round(hand[0] / S, 1), round(hand[1] / S, 1)])
+    sheet.save(CACHE / 'frisbee0.webp', 'WEBP', lossless=True)
+    return {'w': TW, 'h': TH, 'frames': FRISBEE_POSES, 'hands': hands, 'foot': 0.96, 'cx': 0.45}
+
+
+
+def export_assets(out):
+    """How the sheets + JSON reach the browser as ASSETS.* (from build_assets in build.py)."""
+    with Image.open(CACHE / 'map.webp') as m:
+        out['mapW'], out['mapH'] = m.size
+    # הציפורים שבציור: נחתכות לשכבות נפרדות (שזזות על המפה), ובמקומן המקורי נצבע השמיים
+    if not (CACHE / 'birds.json').exists():
+        make_birds()
+    out['map'] = 'data:image/webp;base64,' + base64.b64encode((CACHE / 'map-sky.webp').read_bytes()).decode()
+    out['birds'] = [dict(b, src='data:image/webp;base64,' + base64.b64encode((CACHE / b['file']).read_bytes()).decode())
+                    for b in json.loads((CACHE / 'birds.json').read_text())]
+    for b in out['birds']: del b['file']
+    # דמות אדם מהציור (מועתקת – המקור נשאר במקומו), להולכים בשבילי הקמפינג
+    if not (CACHE / 'walk0.webp').exists():
+        make_person()
+    with Image.open(CACHE / 'walk0.webp') as pm:  # מחזור הליכה: WALK_FRAMES תמונות זו לצד זו
+        out['person'] = {'frames': WALK_FRAMES, 'idle': WALK_IDLE, 'rows': len(WALK_VARIANTS) * 4, 'variants': len(WALK_VARIANTS), 'a': WALK_A, 'kf': WALK_KF, 'foot': WALK_FOOT,
+                         'heights': [v[0] for v in WALK_VARIANTS], 'roam': [i for i, v in enumerate(WALK_VARIANTS) if v[4] == 'balloon'], 'balloonHands': json.loads((CACHE / 'balloon.json').read_text()), 'hipr': 0.99 * (0.255 + 0.235), 'w': pm.width // (WALK_FRAMES + WALK_IDLE), 'h': pm.height // (len(WALK_VARIANTS) * 4), 'runRow0': len(WALK_VARIANTS) * 3, 'runD': RUN_D, 'src': 'data:image/webp;base64,' + base64.b64encode((CACHE / 'walk0.webp').read_bytes()).decode()}
+    # המעשן – יושב על כיסא ליד אוהל בדרום הקמפינג
+    if not (CACHE / 'smoker.json').exists():
+        with Image.open(CACHE / 'walk0.webp') as wk:  # אותו צבע דיו כמו המטיילים
+            px = [c for c in wk.convert('RGBA').getdata() if c[3] > 250]
+        ink = tuple(sorted(px)[len(px) // 2][:3])
+        (CACHE / 'smoker.json').write_text(json.dumps(make_smoker(ink)))
+    out['smoker'] = dict(json.loads((CACHE / 'smoker.json').read_text()), src='data:image/webp;base64,' + base64.b64encode((CACHE / 'smoker0.webp').read_bytes()).decode())
+    # שחקני פריזבי
+    if not (CACHE / 'frisbee.json').exists():
+        with Image.open(CACHE / 'walk0.webp') as wk:
+            px = [c for c in wk.convert('RGBA').getdata() if c[3] > 250]
+        (CACHE / 'frisbee.json').write_text(json.dumps(make_frisbee(tuple(sorted(px)[len(px) // 2][:3]))))
+    out['frisbee'] = dict(json.loads((CACHE / 'frisbee.json').read_text()), src='data:image/webp;base64,' + base64.b64encode((CACHE / 'frisbee0.webp').read_bytes()).decode())
+    # רשת הליכה לחישוב מסלולים (נבנית מתמונת המפה)
+    from walkgrid import build as build_walk, encode, CELL
+    grid, (base_w, _) = build_walk(PROJECT / 'festival-map-2026-web-large.jpg')
+    out['walk'] = encode(grid)
+    out['fest'] = encode(build_walk.fest)
+    out['walkH'], out['walkW'] = grid.shape
+    out['walkCell'], out['walkBase'] = CELL, base_w
+    return out

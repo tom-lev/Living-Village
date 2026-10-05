@@ -1,0 +1,43 @@
+/* Map animation styles (extracted from indienegev-2026/app/src/styles.css) */
+/* ציפורים מהציור – מרחפות ומנפנפות */
+/* אנשים הולכים בקמפינג: צעדים קטנים (קפיצה עדינה ונדנוד) */
+.m-walker { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; transform-origin: 50% 100%; }
+/* המעשן: יושב, נושם ומתנדנד קלות; העשן עולה ונעלם */
+.m-smoker { position: absolute; pointer-events: none; }
+.m-smoker::before { content: ''; position: absolute; left: 12%; right: 18%; top: calc(95% - 3px); height: 6px; border-radius: 50%; background: rgba(30, 40, 20, .25); filter: blur(1.4px); }
+.m-smoker i { position: absolute; inset: 0; background-repeat: no-repeat; transform-origin: 42% 95%; animation: smoker-breath 4.2s ease-in-out infinite; }
+.m-smoker .ember { position: absolute; left: -1.2px; top: -1.2px; width: 2.4px; height: 2.4px; border-radius: 50%; background: #ff8a3a; box-shadow: 0 0 1.5px 0.5px rgba(255, 120, 40, .6); transition: box-shadow .4s, background .4s; }
+.m-smoker .ember.hot { background: #ffd27a; box-shadow: 0 0 3px 1.4px rgba(255, 140, 40, .95); }
+@keyframes smoker-breath { 0%, 100% { transform: scaleY(1) rotate(0deg); } 50% { transform: scaleY(1.018) rotate(-0.8deg); } }
+.m-smoke-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.m-smoke { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(245, 245, 240, .95), rgba(230, 230, 225, 0) 70%); will-change: transform, opacity; }
+@media (prefers-reduced-motion: reduce) { .m-smoker i { animation: none; } }
+/* הישן: שק השינה עולה ויורד בנשימה איטית; z עולים ונעלמים */
+.m-sleeper { position: absolute; pointer-events: none; }
+.m-sleeper svg { display: block; overflow: visible; }
+.m-sleeper .bag { transform-box: fill-box; transform-origin: 50% 100%; animation: sleep-breath 4.4s ease-in-out infinite; }
+@keyframes sleep-breath { 0%, 100% { transform: scaleY(1); } 45% { transform: scaleY(1.09); } }
+.m-z-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.m-z { position: absolute; font: 900 7px/1 Rubik, system-ui, sans-serif; color: #3a1c18; will-change: transform, opacity; }
+@media (prefers-reduced-motion: reduce) { .m-sleeper .bag { animation: none; } }
+/* פריזבי */
+.m-fplayer { position: absolute; pointer-events: none; }
+.m-fplayer::before { content: ''; position: absolute; left: 24%; right: 30%; top: calc(96% - 3px); height: 5px; border-radius: 50%; background: rgba(30, 40, 20, .26); filter: blur(1.2px); }
+.m-fplayer i { position: absolute; inset: 0; background-repeat: no-repeat; }
+.m-frisbee { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 2; }
+.m-frisbee svg { display: block; overflow: visible; }
+.m-fshadow { position: absolute; left: 0; top: 0; width: 10px; height: 4px; border-radius: 50%; background: #1d1206; opacity: 0; pointer-events: none; z-index: 1; filter: blur(.6px); }
+/* הבלון של הנודד: נקודת הקשירה (ביד) היא ראש הסיבוב */
+.m-balloon { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+.m-balloon svg { position: absolute; left: -8px; top: -24px; overflow: visible; }
+/* צל קטן מתחת לכפות הרגליים – "מושיב" את הדמות על השביל */
+.m-walker::before { content: ''; position: absolute; left: 24%; right: 24%; top: calc(var(--foot) * 100% - 2.5px); height: 5px; border-radius: 50%; background: rgba(30, 40, 20, .28); filter: blur(1.2px); }
+/* תמונת הצעד נקבעת בכל פריים לפי המרחק שהדמות עברה (ב-JS) */
+.m-walker i { position: absolute; inset: 0; background-repeat: no-repeat; transform-origin: 50% var(--hip); }
+.m-walker i.up { clip-path: inset(0 0 calc(100% - var(--hip) - 2px) 0); }   /* ראש וגוף */
+.m-walker i.lo { clip-path: inset(calc(var(--hip) - 1px) 0 0 0); }           /* רגליים – מוטות לפי השביל */
+.m-bird { position: absolute; pointer-events: none; will-change: transform; z-index: 1; }
+.m-bird img { display: block; width: 100%; height: auto; transform-origin: 50% 70%; animation: bird-flap .75s ease-in-out infinite; }
+@keyframes bird-glide { from { transform: translate(0, 0); } to { transform: translate(var(--dx), var(--dy)); } }
+@keyframes bird-flap { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.35) translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .m-bird, .m-bird img { animation: none; } }

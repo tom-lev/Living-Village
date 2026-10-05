@@ -5,6 +5,7 @@
 הלקחים כאן נאספו בזמן העבודה על מפת הקמפינג באפליקציית אינדינגב 2026
 ([tom-lev/indienegev-2026](https://github.com/tom-lev/indienegev-2026), הקבצים `app/build.py` ו־`app/src/map.js`).
 בכל נושא יש שלושה חלקים: מה עובד, מה לא עובד ולמה, והמספרים שנבחרו בסוף.
+עותק מלא של הקוד נמצא בתיקייה [`code/`](code/) (ראו סעיף 11).
 
 ---
 
@@ -307,3 +308,26 @@ const f = Math.floor(wrap1(w.phase) * P.frames) % P.frames;
 - [ ] עוצרת כשהמפה לא בתצוגה, ומכבדת את `prefers-reduced-motion`.
 - [ ] בצבע הדיו של הציור, עם קצוות רכים.
 - [ ] עדינה: אם צריך לחפש אותה, זה כנראה בדיוק בסדר.
+
+---
+
+## 11. הקוד (`code/`)
+
+זה עותק של הקוד כפי שהוא רץ באפליקציה, בגרסה האחרונה (כולל הפריזבי המשופר). אלה קטעים מתוך האפליקציה ולא ספרייה עצמאית,
+כך שבפרויקט חדש צריך לחבר אותם לכמה דברים (מפורטים בהמשך הסעיף).
+
+| קובץ | מה יש בו |
+|---|---|
+| [`code/sprites.py`](code/sprites.py) | יצירת כל גיליונות התמונות ב־Python ו־PIL: `make_birds` (חיתוך הציפורים מהציור), `make_person` ו־`make_walk_sheet` (הליכה בשלושה מבטים, עמידה וריצה), `make_smoker`, `make_frisbee`. בסוף הקובץ `export_assets(out)` מראה איך הכול מגיע לדפדפן כ־`ASSETS.*` (data URI ו־JSON) |
+| [`code/walkgrid.py`](code/walkgrid.py) | בניית רשת ההליכה מתמונת המפה: אילו תאים הם שביל, מתחם ההופעות והכניסות. נשמרת כ־bitset ב־base64 |
+| [`code/animations.js`](code/animations.js) | חלק 1: פענוח רשת ההליכה, ‏A\*‏, `simplify`. חלק 2: כל הדמויות (`flyBirds`, `walkPeople`, `smokePeople`, `sleepZ`, `playFrisbee`) ופונקציות ה־HTML שלהן |
+| [`code/animations.css`](code/animations.css) | העיצוב של הדמויות: שתי השכבות של המטייל, הגחלת, העשן, נשימת השק, הפריזבי והצל, הציפורים |
+
+### מה צריך לספק בפרויקט חדש
+- `ASSETS`: האובייקט שמגיע מ־`export_assets`. כולל `mapW` ו־`mapH`, ‏`birds`, ‏`person`, ‏`smoker`, ‏`frisbee`, ‏`walk`, ‏`fest`, ‏`walkW`, ‏`walkH` ו־`walkCell`.
+- `PLACES` ו־`PLACE`: נקודות במפה (`{id, mapX, mapY}` באחוזים), וגם `placeXY(p)` שממיר אותן לפיקסלים. משמשים ליעדים (`WALK_SPOTS`) ולכניסות (`GATE_POINTS`).
+- `MAP_W` ו־`MAP_H` מגיעים מ־`ASSETS.mapW` ו־`ASSETS.mapH`. הקואורדינטות הקבועות בקוד (למשל `FRISBEE_AT`, ‏`SLEEPER_AT`, ‏`BIRDS`) הן של המפה הזו, ברוחב 3200 פיקסלים.
+- **חיבור:** ב־stage של המפה מכניסים את ה־HTML של הדמויות (`birdsHtml()`, ‏`walkersHtml()`, ‏`smokerHtml()`, ‏`sleeperHtml()`, ‏`frisbeeHtml()`),
+  ואחרי הרינדור קוראים ל־`flyBirds(stage)`, ‏`walkPeople(stage)`, ‏`smokePeople(stage)`, ‏`sleepZ(stage)` ו־`playFrisbee(stage)`.
+  כל אחת מהן נעצרת מעצמה כש־stage מוסר מהדף.
+- התגובות בקוד בעברית, כמו בפרויקט המקורי.
