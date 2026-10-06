@@ -25,8 +25,8 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
   font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-tap-highlight-color: transparent; }
 /* שתי שכבות: סטטית (קרקע, דרכים, בתים, עצים) ודינמית (דמויות ואפקטים, מתעדכנת בכל פריים).
-   בזמן זום/גרירה שתיהן רק מוזזות ומוגדלות ב-GPU (transform של CSS) והדמויות קופאות לרגע;
-   כשהאצבע עוזבת, הן מצוירות מחדש וחדות. */
+   בזמן זום/גרירה שתיהן רק מוזזות ומוגדלות ב-GPU (transform של CSS). הדמויות ממשיכות לזוז:
+   בשכבה הדינמית מצוירים מחדש רק האזורים הקטנים שבהם משהו זז. כשהאצבע עוזבת, הכול מצויר מחדש וחד. */
 #stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 #stage.drag { cursor: grabbing; }
 #sWrap, #dWrap { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
@@ -1222,14 +1222,11 @@ function applyCam() {
 function beginGesture() {
   if (gesturing) return;
   gesturing = true; gestureMoved = false;
-  stage.classList.add('paused');
 }
 function endGesture() {
   if (!gesturing || ptrs.size || anim || wheelTimer) return;
   gesturing = false;
   if (gestureMoved) { commit(); commitD(); }
-  if (running) stage.classList.remove('paused');
-  last = performance.now();
 }
 function zoomAt(sx, sy, f) {
   const nk = clamp(cam.k * f, fitK, fitK * 24), wx = (sx - cam.x) / cam.k, wy = (sy - cam.y) / cam.k;
@@ -1323,7 +1320,6 @@ let running = false, last = 0, T = 0, frame = 0;
 const playBtn = document.getElementById('play');
 function tick(now) {
   if (!running) return;
-  if (gesturing) { if (anim) anim(now); last = now; requestAnimationFrame(tick); return; }   // במחווה: רק המצלמה זזה
   const dt = Math.min(.05, (now - last) / 1000 || .016); last = now; T += dt; frame++;
   for (const w of walkers) w.update(dt, T);
   dog.update(dt, T); leash.update(); balloon.update(dt, T);
@@ -1395,7 +1391,7 @@ function tick(now) {
 }
 function setRunning(on) {
   running = on;
-  stage.classList.toggle('paused', !on || gesturing);
+  stage.classList.toggle('paused', !on);
   playBtn.textContent = on ? '❚❚' : '▶';
   playBtn.setAttribute('aria-label', on ? 'עצירה' : 'הפעלה');
   if (on) { last = performance.now(); requestAnimationFrame(tick); }
