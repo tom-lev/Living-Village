@@ -27,6 +27,8 @@ function measure() {
   // השכבה הדינמית גדולה מהמסך בשוליים M, כדי שבזמן גרירה לא ייחשפו חורים
   M = Math.round(Math.max(vw, vh) * .3);
   const svgD = ctx.svgD;
+  view.dpr = Math.min(devicePixelRatio || 1, 3);
+  if (view.gpu) { resizeCanvas(); return; }
   svgD.setAttribute('width', String(vw + 2 * M)); svgD.setAttribute('height', String(vh + 2 * M));
   svgD.style.left = -M + 'px'; svgD.style.top = -M + 'px';
   view.dpr = Math.min(devicePixelRatio || 1, 3);
@@ -34,6 +36,7 @@ function measure() {
 }
 const camMatrix = (c: typeof cam) => `matrix(${c.k} 0 0 ${c.k} ${(c.x + M).toFixed(2)} ${(c.y + M).toFixed(2)})`;
 function commitD() {
+  if (view.gpu) { ctx.L.clouds.setAttribute('opacity', clamp((4 - cam.k / view.fitK) / 2.5, 0, 1).toFixed(2)); return; }
   dcam = { ...cam };
   ctx.worldD.setAttribute('transform', camMatrix(cam));
   dWrap.style.transform = '';
@@ -55,7 +58,7 @@ function clampCam() {
 }
 export function applyCam() {
   clampCam();
-  if (gesturing) { gestureMoved = true; if (!cssMove(dWrap, dcam)) commitD(); }
+  if (gesturing && !view.gpu) { gestureMoved = true; if (!cssMove(dWrap, dcam)) commitD(); }
   else commitD();
   requestStatic();
   zoomLbl.textContent = '×' + (cam.k / view.fitK).toFixed(1);
@@ -95,7 +98,22 @@ export function cameraTick(now: number, dt: number) {
 const center = () => [(view.vw / 2 - cam.x) / cam.k, (view.vh / 2 - cam.y) / cam.k];
 function goHome() { const { home } = ctx; measure(); animateTo(view.fitK, (home.x0 + home.x1) / 2, (home.y0 + home.y1) / 2); }
 
+/** בכרטיס הגרפי אין אלמנטים ללחוץ עליהם: מחפשים דמות לפי המיקום (הרגליים ב-x,y, הגוף מעליהן) */
+let followList: any[] = [];
+function pick(sx: number, sy: number) {
+  const r = stage.getBoundingClientRect(), wx = (sx - r.left - cam.x) / cam.k, wy = (sy - r.top - cam.y) / cam.k;
+  const slack = 8 / cam.k;   // לפחות 8 פיקסלים של מסך, כדי שגם דמות קטנה תהיה לחיצה
+  let best = null, bd = 1e9;
+  followList.forEach((f, i) => {
+    const h = f.look?.h || 18, dx = Math.abs(wx - f.x), top = f.y - h * 1.15 - slack, bot = f.y + 4 + slack;
+    if (dx > h * .45 + slack || wy < top || wy > bot) return;
+    const d = dx + Math.abs(wy - (f.y - h / 2)) * .5; if (d < bd) { bd = d; best = i; }
+  });
+  return best;
+}
+
 export function initCamera(followables: any[]) {
+  followList = followables;
   stage = document.getElementById('stage'); dWrap = document.getElementById('dWrap');
   zoomLbl = document.getElementById('zoomLbl'); followEl = document.getElementById('follow');
   const startFollow = (f: any) => {
@@ -115,7 +133,10 @@ export function initCamera(followables: any[]) {
   stage.addEventListener('pointerdown', e => {
     stage.setPointerCapture(e.pointerId);
     ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    if (ptrs.size === 1) { const f = (e.target as Element).closest('[data-f]') as any; down = { x: e.clientX, y: e.clientY, f: f ? +f.dataset.f : null, moved: false }; }
+    if (ptrs.size === 1) {
+      const f = view.gpu ? null : (e.target as Element).closest('[data-f]') as any;
+      down = { x: e.clientX, y: e.clientY, f: f ? +f.dataset.f : view.gpu ? pick(e.clientX, e.clientY) : null, moved: false };
+    }
     if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), c: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; if (down) down.moved = true; }
     anim = null; stage.classList.add('drag'); beginGesture();
   });

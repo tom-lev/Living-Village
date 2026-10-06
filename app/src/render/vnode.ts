@@ -1,0 +1,214 @@
+/* שכבת תרגום: "אלמנט" עם הממשק של SVG שבונה צורות וקטוריות ב-PixiJS (כרטיס גרפי).
+   הקוד של הדמויות והאפקטים ממשיך לקרוא ל-el() ול-setAttribute כרגיל, והשכבה הזאת
+   הופכת אותם לאובייקטים על הכרטיס הגרפי: אין ציור מחדש של שכבה שלמה בזום, רק מטריצה אחת.
+   הגאומטריה נבנית פי S (ומוקטנת חזרה), כדי שעיגולים ועקומות יישארו חלקים גם בזום עמוק. */
+import { Container, Graphics, GraphicsPath, Sprite, Text, Texture, Matrix } from 'pixi.js';
+
+const S = 8;
+const SHAPES = new Set(['path', 'rect', 'circle', 'ellipse', 'line', 'polygon', 'polyline']);
+const GEOM = new Set(['d', 'x', 'y', 'width', 'height', 'rx', 'ry', 'cx', 'cy', 'r', 'x1', 'y1', 'x2', 'y2', 'points']);
+const STYLE = new Set(['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-weight', 'text-anchor', 'fill-opacity', 'stroke-opacity']);
+const INHERIT = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-weight', 'text-anchor'];
+const dirty = new Set<VNode>();
+let defsRoot: Element | null = null;
+export const setDefs = (e: Element) => { defsRoot = e; };
+
+/* ───────── צבעים ───────── */
+const colorCache = new Map<string, [number, number] | null>();
+function parseColor(c: string): [number, number] | null {
+  let r = colorCache.get(c);
+  if (r !== undefined) return r;
+  r = null;
+  const s = c.trim().toLowerCase();
+  if (s[0] === '#') {
+    let h = s.slice(1); if (h.length === 3) h = h.replace(/./g, x => x + x);
+    if (h.length === 6) r = [parseInt(h, 16), 1];
+  } else if (s.startsWith('rgb')) {
+    const v = s.slice(s.indexOf('(') + 1, -1).split(',').map(Number);
+    r = [(v[0] << 16) | (v[1] << 8) | v[2], v.length > 3 ? v[3] : 1];
+  } else if (s === 'white') r = [0xffffff, 1];
+  else if (s === 'black') r = [0, 1];
+  colorCache.set(c, r);
+  return r;
+}
+
+/* ───────── מסלולי SVG: מכפילים את כל המספרים פי S (חוץ מסיבוב ודגלים בקשתות) ───────── */
+const pathCache = new Map<string, string>();
+function scalePath(d: string) {
+  let out = pathCache.get(d);
+  if (out) return out;
+  const toks = d.match(/[a-zA-Z]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/g) || [];
+  const res: string[] = []; let cmd = '', idx = 0;
+  for (const t of toks) {
+    if (/[a-zA-Z]/.test(t)) { cmd = t; idx = 0; res.push(t); continue; }
+    let v = +t;
+    if (cmd === 'A' || cmd === 'a') { const k = idx % 7; if (k !== 2 && k !== 3 && k !== 4) v *= S; }
+    else v *= S;
+    idx++; res.push(String(+v.toFixed(3)));
+  }
+  out = res.join(' ');
+  if (pathCache.size > 4000) pathCache.clear();
+  pathCache.set(d, out);
+  return out;
+}
+
+/* ───────── מטריצות transform ───────── */
+const mCache = new Map<string, Matrix>();
+function parseTransform(t: string): Matrix {
+  const hit = mCache.get(t); if (hit) return hit;
+  const m = new Matrix();
+  const re = /(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g; let a: RegExpExecArray | null;
+  const ops: [string, number[]][] = [];
+  while ((a = re.exec(t))) ops.push([a[1], a[2].split(/[\s,]+/).filter(Boolean).map(Number)]);
+  for (const [op, v] of ops) {
+    const o = new Matrix();
+    if (op === 'matrix') o.set(v[0], v[1], v[2], v[3], v[4], v[5]);
+    else if (op === 'translate') o.translate(v[0] || 0, v[1] || 0);
+    else if (op === 'scale') o.scale(v[0], v.length > 1 ? v[1] : v[0]);
+    else if (op === 'rotate') {
+      const r = v[0] * Math.PI / 180, cx = v[1] || 0, cy = v[2] || 0;
+      o.translate(-cx, -cy).rotate(r).translate(cx, cy);
+    } else if (op === 'skewX') o.set(1, 0, Math.tan(v[0] * Math.PI / 180), 1, 0, 0);
+    else if (op === 'skewY') o.set(1, Math.tan(v[0] * Math.PI / 180), 0, 1, 0, 0);
+    m.append(o);
+  }
+  if (mCache.size > 3000) mCache.clear();
+  mCache.set(t, m);
+  return m;
+}
+
+/* ───────── גרדיאנט רדיאלי (זוהר המדורה) כטקסטורה ───────── */
+const gradTex = new Map<string, Texture>();
+function gradientTexture(id: string): Texture | null {
+  if (gradTex.has(id)) return gradTex.get(id);
+  const g = defsRoot?.querySelector('#' + id);
+  if (!g) return null;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d'), grd = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  for (const s of [...g.children]) {
+    const col = parseColor(s.getAttribute('stop-color') || '#000') || [0, 1], a = +(s.getAttribute('stop-opacity') ?? 1);
+    grd.addColorStop(parseFloat(s.getAttribute('offset')) / 100, `rgba(${col[0] >> 16},${(col[0] >> 8) & 255},${col[0] & 255},${a})`);
+  }
+  x.fillStyle = grd; x.fillRect(0, 0, 128, 128);
+  const t = Texture.from(c); gradTex.set(id, t);
+  return t;
+}
+
+export class VNode {
+  tag: string; attrs: Record<string, string> = {}; kids: VNode[] = []; parentNode: VNode | null = null;
+  c = new Container(); gfx: Graphics | Text | Sprite | null = null;
+  dataset: Record<string, any> = {}; private _text = '';
+  constructor(tag: string) {
+    this.tag = tag;
+    if (SHAPES.has(tag) || tag === 'text') dirty.add(this);
+  }
+  get firstChild() { return this.kids[0] || null; }
+  get nextSibling() { const p = this.parentNode; if (!p) return null; const i = p.kids.indexOf(this); return p.kids[i + 1] || null; }
+  get children() { return this.kids; }
+  get textContent() { return this._text; }
+  set textContent(v: string) { this._text = String(v); dirty.add(this); }
+  getAttribute(k: string) { return this.attrs[k] ?? null; }
+  removeAttribute(k: string) { delete this.attrs[k]; this.setAttribute(k, null); }
+  setAttribute(k: string, v: any) {
+    if (v === null || v === undefined) { if (!(k in this.attrs)) return; delete this.attrs[k]; }
+    else { const s = String(v); if (this.attrs[k] === s) return; this.attrs[k] = s; }   // אותו ערך: אין מה לעשות
+    const s = this.attrs[k];
+    if (k === 'transform') { if (s) this.c.setFromMatrix(parseTransform(s)); else this.c.setFromMatrix(new Matrix()); }
+    else if (k === 'opacity') this.c.alpha = s === undefined ? 1 : +s;
+    else if (k === 'display') this.c.visible = s !== 'none';
+    else if (k === 'clip-path') this.applyClip(s);
+    else if (GEOM.has(k) || STYLE.has(k)) { if (this.gfx || SHAPES.has(this.tag) || this.tag === 'text') dirty.add(this); else this.markKids(); }
+  }
+  /** סגנון שעובר בירושה מקבוצה (fill על g) */
+  private markKids() { for (const k of this.kids) { if (SHAPES.has(k.tag) || k.tag === 'text') dirty.add(k); else k.markKids(); } }
+  private style(k: string) {
+    for (let n: VNode | null = this; n; n = n.parentNode) if (n.attrs[k] !== undefined) return n.attrs[k];
+    return undefined;
+  }
+  appendChild(n: VNode) { return this.insertBefore(n, null); }
+  insertBefore(n: VNode, ref: VNode | null) {
+    if (n.parentNode) n.parentNode.detach(n);
+    const i = ref ? this.kids.indexOf(ref) : -1, at = i < 0 ? this.kids.length : i;
+    this.kids.splice(at, 0, n); n.parentNode = this;
+    this.c.addChildAt(n.c, Math.min(at, this.c.children.length));
+    if (INHERIT.some(k => this.style(k) !== undefined)) n.markKids();
+    return n;
+  }
+  private detach(n: VNode) { const i = this.kids.indexOf(n); if (i >= 0) this.kids.splice(i, 1); n.c.parent?.removeChild(n.c); n.parentNode = null; }
+  remove() { this.parentNode?.detach(this); dirty.delete(this); }
+  querySelectorAll(_sel: string) { const out: VNode[] = []; const walk = (n: VNode) => { for (const k of n.kids) { out.push(k); walk(k); } }; walk(this); return out; }
+  get classList() { return { add() {}, remove() {}, toggle() {}, contains: () => false }; }
+
+  private applyClip(v: string | undefined) {
+    if (this.c.mask) { const m = this.c.mask as Graphics; this.c.mask = null; m.destroy(); }
+    const id = v && /url\(#([^)]+)\)/.exec(v)?.[1], cp = id && defsRoot?.querySelector('#' + id);
+    if (!cp) return;
+    const m = new Graphics();
+    for (const r of [...cp.children]) {
+      const n = (a: string) => +(r.getAttribute(a) || 0);
+      if (r.tagName === 'rect') m.roundRect(n('x'), n('y'), n('width'), n('height'), n('rx')).fill(0xffffff);
+    }
+    this.c.addChild(m); this.c.mask = m;
+  }
+
+  /** בונה מחדש את הצורה לפי התכונות הנוכחיות */
+  build() {
+    const a = this.attrs, num = (k: string) => +(a[k] || 0);
+    if (this.tag === 'text') {
+      const fill = parseColor(this.style('fill') || '#000') || [0, 1], size = +(this.style('font-size') || 12), anchor = this.style('text-anchor');
+      if (!(this.gfx instanceof Text)) { this.gfx?.destroy(); this.gfx = new Text({ text: '', style: { fontFamily: 'Rubik, system-ui, sans-serif' } }); this.c.addChildAt(this.gfx, 0); }
+      const t = this.gfx as Text;
+      t.text = this._text;
+      t.style.fontSize = size * S; t.style.fontWeight = (this.style('font-weight') || '400') as any; t.style.fill = fill[0];
+      t.alpha = fill[1]; t.scale.set(1 / S);
+      t.anchor.set(anchor === 'middle' ? .5 : anchor === 'end' ? 1 : 0, .78);   // y של SVG הוא קו הבסיס
+      t.position.set(num('x'), num('y'));
+      return;
+    }
+    const fillS = this.style('fill') ?? '#000';
+    if (fillS.startsWith('url(')) {           // גרדיאנט: ספרייט רך במקום צורה
+      const tex = gradientTexture(/url\(#([^)]+)\)/.exec(fillS)?.[1] || '');
+      if (!(this.gfx instanceof Sprite)) { this.gfx?.destroy(); this.gfx = new Sprite(tex || Texture.WHITE); this.c.addChildAt(this.gfx, 0); }
+      const r = this.tag === 'circle' ? num('r') : num('rx'), ry = this.tag === 'circle' ? r : num('ry') || r;
+      const sp = this.gfx as Sprite; sp.anchor.set(.5); sp.position.set(num('cx'), num('cy')); sp.width = 2 * r; sp.height = 2 * ry;
+      return;
+    }
+    if (!(this.gfx instanceof Graphics)) { this.gfx?.destroy(); this.gfx = new Graphics(); this.gfx.scale.set(1 / S); this.c.addChildAt(this.gfx, 0); }
+    const g = this.gfx as Graphics;
+    g.clear();
+    switch (this.tag) {
+      case 'path': { const d = a.d; if (!d) return; g.path(new GraphicsPath(scalePath(d))); break; }
+      case 'rect': {
+        const w = num('width') * S, h = num('height') * S; if (!(w > 0 && h > 0)) return;
+        const rx = Math.min(+(a.rx ?? a.ry ?? 0) * S, w / 2, h / 2);
+        if (rx > 0) g.roundRect(num('x') * S, num('y') * S, w, h, rx); else g.rect(num('x') * S, num('y') * S, w, h);
+        break;
+      }
+      case 'circle': if (!(num('r') > 0)) return; g.circle(num('cx') * S, num('cy') * S, num('r') * S); break;
+      case 'ellipse': if (!(num('rx') > 0 && num('ry') > 0)) return; g.ellipse(num('cx') * S, num('cy') * S, num('rx') * S, num('ry') * S); break;
+      case 'line': g.moveTo(num('x1') * S, num('y1') * S).lineTo(num('x2') * S, num('y2') * S); break;
+      case 'polygon': case 'polyline': {
+        const p = (a.points || '').trim().split(/[\s,]+/).map(v => +v * S); if (p.length < 4) return;
+        g.poly(p, this.tag === 'polygon'); break;
+      }
+    }
+    if (fillS !== 'none' && fillS !== 'transparent') {
+      const f = parseColor(fillS); if (f) g.fill({ color: f[0], alpha: f[1] * +(a['fill-opacity'] ?? 1) });
+    }
+    const st = this.style('stroke');
+    if (st && st !== 'none' && st !== 'transparent') {
+      const f = parseColor(st), w = +(this.style('stroke-width') ?? 1);
+      if (f && w > 0) g.stroke({ color: f[0], alpha: f[1] * +(a['stroke-opacity'] ?? 1), width: w * S,
+        cap: (this.style('stroke-linecap') || 'butt') as any, join: (this.style('stroke-linejoin') || 'miter') as any });
+    }
+  }
+}
+
+/** בונה מחדש את כל הצורות שהשתנו מאז הפריים הקודם (נקרא ממש לפני הציור) */
+export function flushVNodes() {
+  if (!dirty.size) return;
+  for (const n of dirty) if (n.parentNode) { n.build(); dirty.delete(n); vstats.built++; }
+  vstats.flushes++;   // מה שעוד לא חובר לעץ נשאר לפעם הבאה
+}
+export const vstats = { built: 0, flushes: 0 };
+export const isVNode = (x: any): x is VNode => x instanceof VNode;

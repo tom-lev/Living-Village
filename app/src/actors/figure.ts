@@ -2,6 +2,7 @@
 import { el, n2, P, circ, rrect, shade, wrap1 } from '../core/util';
 import { grade, rememberColor } from '../core/palette';
 import type { Look } from '../world/types';
+import { VNode } from '../render/vnode';
 
 /* פרופורציות (×גובה), כמו בסעיף 3 במדריך */
 export const PR = { thigh: .255, shin: .235, torso: .295, foot: .085, ua: .16, fa: .15, gap: .03, A: .13, lift: .075, KF: .6 };
@@ -100,7 +101,21 @@ export function sitPose(look: Look, seatH: number, hands: number[][], t: number)
   return out;
 }
 
-/** דמות: רשימת צורות SVG שמתעדכנות בכל פריים. הכול וקטורי, אז היא חדה בכל זום */
+/* שלד: כל קטע גפה הוא "קפסולה" שנבנית פעם אחת לאורכה, ובכל פריים רק מזיזים ומסובבים אותה.
+   בכרטיס הגרפי זה כמעט חינם (מטריצה בלבד); ב-SVG זה transform אחד במקום מסלול חדש */
+const L0 = new WeakMap<any, number>();
+function place(e: any, x: number, y: number, ang = 0, sx = 1) {
+  if (e instanceof VNode) { e.c.position.set(x, y); e.c.rotation = ang; e.c.scale.set(sx, 1); }
+  else e.setAttribute('transform', `translate(${n2(x)},${n2(y)}) rotate(${(ang * 180 / Math.PI).toFixed(2)}) scale(${sx.toFixed(4)},1)`);
+}
+function bone(e: any, a: number[], b: number[]) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1e-3;
+  let l0 = L0.get(e);
+  if (!l0) { l0 = len; L0.set(e, len); e.setAttribute('d', `M0,0L${n2(len)},0`); }
+  place(e, a[0], a[1], Math.atan2(dy, dx), len / l0);
+}
+
+/** דמות: שלד של קפסולות וראש. הכול וקטורי, אז היא חדה בכל זום */
 export class Figure {
   [k: string]: any;
   constructor(parent: any, look: Look) {
@@ -110,12 +125,13 @@ export class Figure {
     this.body = el('g', null, this.g);
     const S = (c: string, w: number) => el('path', { fill: 'none', stroke: c, 'stroke-width': n2(w * h), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, this.body);
     const dk = (c: string) => shade(c, -.16);
-    this.armBu = S(dk(look.shirt), .062); this.armBf = S(dk(look.skin), .052);
-    this.legB = S(dk(look.pants), .074); this.shoeB = S('#3b2f2a', .052);
-    this.legA = S(look.pants, .074); this.shoeA = S('#4a3b33', .052);
+    // סדר הציור: יד ורגל רחוקות, רגל קרובה, חצאית, גוף, יד קרובה, ראש
+    this.armBu = S(dk(look.shirt), .062); this.armBf1 = S(dk(look.skin), .052); this.armBf2 = S(dk(look.skin), .052);
+    this.legB1 = S(dk(look.pants), .074); this.legB2 = S(dk(look.pants), .074); this.shoeB = S('#3b2f2a', .052);
+    this.legA1 = S(look.pants, .074); this.legA2 = S(look.pants, .074); this.shoeA = S('#4a3b33', .052);
     this.skirt = look.skirt ? el('path', { fill: look.skirt, stroke: look.skirt, 'stroke-width': n2(.035 * h), 'stroke-linejoin': 'round' }, this.body) : null;
     this.torso = S(look.shirt, .165);
-    this.armAu = S(look.shirt, .062); this.armAf = S(look.skin, .052);
+    this.armAu = S(look.shirt, .062); this.armAf1 = S(look.skin, .052); this.armAf2 = S(look.skin, .052);
     this.hairB = el('path', { fill: look.hair }, this.body);
     this.head = el('circle', { r: n2(look.headR * h), fill: look.skin }, this.body);
     this.face = el('path', { fill: '#3b2f2a' }, this.body);
@@ -123,40 +139,18 @@ export class Figure {
     el('rect', { x: n2(-h * .4), y: n2(-h * 1.2), width: n2(h * .8), height: n2(h * 1.32), fill: 'transparent' }, this.g);   // אזור לחיצה
     this.view = null;
   }
-  render(p: Pose, x: number, y: number, flip: number, opacity?: number) {
-    const { look } = this, h = look.h;
-    this.g.setAttribute('transform', `translate(${n2(x)},${n2(y)})`);
-    this.body.setAttribute('transform', p.view === 'side' ? `scale(${flip.toFixed(3)},1)` : '');
-    if (opacity !== undefined) this.g.setAttribute('opacity', opacity.toFixed(2));
-    if (p.view !== this.view) {
-      this.view = p.view;
-      this.torso.setAttribute('stroke-width', n2((p.view === 'side' ? .165 : .205) * h));
-      const hc = p.view === 'back' && !look.hat ? look.hair : look.skin;
-      rememberColor(this.head, 'fill', hc); this.head.setAttribute('fill', grade(hc));
-    }
-    // בצד: 0 קרוב (A), 1 רחוק (B). מלפנים/מאחור: 0 שמאל (B), 1 ימין (A)
-    const [iA, iB] = p.view === 'side' ? [0, 1] : [1, 0];
-    const leg = (pe: any, se: any, L: any) => { pe.setAttribute('d', `M${P(L.hip)}L${P(L.knee)}L${P(L.ank)}`); se.setAttribute('d', `M${P(L.heel)}L${P(L.toe)}`); };
-    leg(this.legA, this.shoeA, p.legs[iA]); leg(this.legB, this.shoeB, p.legs[iB]);
-    const arm = (ue: any, fe: any, A: any) => {
-      const mid = [A.sh[0] + (A.elb[0] - A.sh[0]) * .7, A.sh[1] + (A.elb[1] - A.sh[1]) * .7];
-      ue.setAttribute('d', `M${P(A.sh)}L${P(mid)}`); fe.setAttribute('d', `M${P(mid)}L${P(A.elb)}L${P(A.hand)}`);
-    };
-    arm(this.armAu, this.armAf, p.arms[iA]); arm(this.armBu, this.armBf, p.arms[iB]);
-    this.torso.setAttribute('d', `M${P(p.torso[0])}L${P(p.torso[1])}`);
-    if (this.skirt) this.skirt.setAttribute('d', 'M' + p.skirt.map(P).join('L') + 'Z');
-    const [cx, cy] = p.head, r = look.headR * h;
-    this.head.setAttribute('cx', n2(cx)); this.head.setAttribute('cy', n2(cy));
+  /** שיער, כובע ופנים סביב מרכז הראש (0,0), לפי כיוון המבט. נבנה רק כשהכיוון משתנה */
+  private headShapes(view: View) {
+    const { look } = this, r = look.headR * look.h, hs = look.hairStyle, cx = 0, cy = 0;
     let hb = '', hf = '', face = '';
-    const hs = look.hairStyle;
-    if (p.view === 'side') {
+    if (view === 'side') {
       hb = circ(cx - .14 * r, cy - .14 * r, 1.07 * r);
       if (hs === 'long') hb += rrect(cx - 1.08 * r, cy - .3 * r, .95 * r, 1.65 * r, .45 * r);
       if (hs === 'bun') hb += circ(cx - .95 * r, cy - .6 * r, .42 * r);
       if (hs === 'pony') hb += rrect(cx - 1.55 * r, cy - .55 * r, .7 * r, 1.2 * r, .35 * r);
       face = circ(cx + .5 * r, cy - .02 * r, .1 * r);
       if (look.hat) hf = `M${n2(cx - 1.06 * r)},${n2(cy - .12 * r)}A${n2(1.06 * r)},${n2(1.06 * r)} 0 0 1 ${n2(cx + 1.06 * r)},${n2(cy - .12 * r)}Z` + rrect(cx + .2 * r, cy - .3 * r, 1.25 * r, .26 * r, .12 * r);
-    } else if (p.view === 'front') {
+    } else if (view === 'front') {
       hb = circ(cx, cy - .16 * r, 1.07 * r);
       if (hs === 'long') hb += rrect(cx - 1.12 * r, cy - .3 * r, 2.24 * r, 1.65 * r, .5 * r);
       if (hs === 'bun') hb += circ(cx, cy - 1.15 * r, .42 * r);
@@ -172,6 +166,33 @@ export class Figure {
       }
     }
     this.hairB.setAttribute('d', hb); this.hairF.setAttribute('d', hf); this.face.setAttribute('d', face);
+  }
+  render(p: Pose, x: number, y: number, flip: number, opacity?: number) {
+    const { look } = this, h = look.h;
+    place(this.g, x, y);
+    if (this.body instanceof VNode) { this.body.c.scale.set(p.view === 'side' ? flip : 1, 1); }
+    else this.body.setAttribute('transform', p.view === 'side' ? `scale(${flip.toFixed(3)},1)` : '');
+    if (opacity !== undefined) this.g.setAttribute('opacity', opacity.toFixed(2));
+    if (p.view !== this.view) {
+      this.view = p.view;
+      this.torso.setAttribute('stroke-width', n2((p.view === 'side' ? .165 : .205) * h));
+      const hc = p.view === 'back' && !look.hat ? look.hair : look.skin;
+      rememberColor(this.head, 'fill', hc); this.head.setAttribute('fill', grade(hc));
+      this.headShapes(p.view);
+    }
+    // בצד: 0 קרוב (A), 1 רחוק (B). מלפנים/מאחור: 0 שמאל (B), 1 ימין (A)
+    const [iA, iB] = p.view === 'side' ? [0, 1] : [1, 0];
+    const leg = (t: any, s: any, sh: any, L: any) => { bone(t, L.hip, L.knee); bone(s, L.knee, L.ank); bone(sh, L.heel, L.toe); };
+    leg(this.legA1, this.legA2, this.shoeA, p.legs[iA]); leg(this.legB1, this.legB2, this.shoeB, p.legs[iB]);
+    const arm = (u: any, f1: any, f2: any, A: any) => {
+      const mid = [A.sh[0] + (A.elb[0] - A.sh[0]) * .7, A.sh[1] + (A.elb[1] - A.sh[1]) * .7];
+      bone(u, A.sh, mid); bone(f1, mid, A.elb); bone(f2, A.elb, A.hand);
+    };
+    arm(this.armAu, this.armAf1, this.armAf2, p.arms[iA]); arm(this.armBu, this.armBf1, this.armBf2, p.arms[iB]);
+    bone(this.torso, p.torso[0], p.torso[1]);
+    if (this.skirt) this.skirt.setAttribute('d', 'M' + p.skirt.map(P).join('L') + 'Z');
+    const [cx, cy] = p.head;
+    for (const e of [this.hairB, this.head, this.face, this.hairF]) place(e, cx, cy);
     // נקודת היד המחזיקה, בקואורדינטות עולם (לבלון ולרצועה)
     const holdI = p.view === 'side' ? 0 : (p.view === 'front' ? 1 : 0), hp = p.arms[holdI].hand;
     this.hand = [x + (p.view === 'side' ? hp[0] * flip : hp[0]), y + hp[1]];

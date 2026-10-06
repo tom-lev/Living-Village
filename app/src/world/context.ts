@@ -1,6 +1,7 @@
 /* הקשר משותף לבניית הסצנה: שכבות, אזורים חסומים, גופי מים ואפקטים */
 import { el, wrap1, n2, at } from '../core/util';
 import type { Rect, WorldData } from './types';
+import { VNode, setDefs } from '../render/vnode';
 
 export interface Bounds { x0: number; y0: number; x1: number; y1: number }
 export interface Ellipse { cx: number; cy: number; rx: number; ry: number }
@@ -14,13 +15,15 @@ export const ctx = {
   worldS: null as any, worldD: null as any, defs: null as any,
   L: {} as Record<string, any>,
   named: {} as Record<string, any>,   // אובייקטים עם id
+  gpuDyn: false,                       // הדמויות והאפקטים בכרטיס הגרפי (VNode) במקום SVG
 };
 
 /* ───────── שכבות ───────── */
 export function initLayers(svgS: SVGSVGElement, svgD: SVGSVGElement) {
   ctx.svgS = svgS; ctx.svgD = svgD;
   ctx.defs = el('defs', null, svgD);
-  ctx.worldS = el('g', null, svgS); ctx.worldD = el('g', null, svgD);
+  setDefs(ctx.defs);
+  ctx.worldS = el('g', null, svgS); ctx.worldD = ctx.gpuDyn ? new VNode('g') : el('g', null, svgD);
   for (const n of ['ground', 'roads', 'groundProps', 'water', 'props']) ctx.L[n] = el('g', { 'data-layer': n }, ctx.worldS);
   for (const n of ['waterFx', 'cloudShadows', 'pad', 'fx', 'actors', 'air', 'clouds']) ctx.L[n] = el('g', { 'data-layer': n }, ctx.worldD);
   const g = el('radialGradient', { id: 'fireGlow' }, ctx.defs);

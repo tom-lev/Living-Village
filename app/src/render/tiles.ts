@@ -86,18 +86,28 @@ export const tileStats = { missing: 0, painted: 0, mode: '' };
 let sDirty = true, sRaf = 0, lastNeed = '';
 let wanted = new Set<string>();   // האריחים שהתצוגה הנוכחית צריכה או מכינה מראש: לא נזרקים מהמטמון
 
+/** מנסה להפעיל את הכרטיס הגרפי. נקרא לפני בניית העולם, כדי לדעת איפה הדמויות יחיו.
+ *  מחזיר את הקנבס לשימוש (קנבס חדש ונקי אם WebGL נכשל) */
+export async function prepareGpu(canvas: HTMLCanvasElement): Promise<HTMLCanvasElement> {
+  try {
+    gpu = await createGpuTiles(canvas, innerWidth, innerHeight, Math.min(devicePixelRatio || 1, 2), '#a6cc80', LMAX);
+    mode = 'gpu'; tileStats.mode = mode;
+    return canvas;
+  } catch (err) {
+    console.warn('אין WebGL בכרטיס גרפי, עוברים לקנבס רגיל', err);
+    const c = document.createElement('canvas'); c.id = canvas.id; canvas.replaceWith(c);   // קנבס נקי (בלי הקשר WebGL שנכשל)
+    mode = '2d'; tileStats.mode = mode;
+    return c;
+  }
+}
+export const gpuOverlay = (c: any) => gpu?.overlay(c);
+/** ציור פריים עכשיו (בכרטיס הגרפי: אריחים + דמויות ביחד) */
+export function renderNow() { sDirty = false; drawStatic(); }
+
 export function initTiles(canvas: HTMLCanvasElement) {
   cvS = canvas;
-  createGpuTiles(canvas, innerWidth, innerHeight, sdpr(), grade('#9cd162'), LMAX).then(g => {
-    gpu = g; mode = 'gpu'; tileStats.mode = mode;
-    if (view.vw) gpu.resize(view.vw, view.vh, sdpr());
-    for (const [k, bmp] of tiles) { const [l, x, y] = k.split('/').map(Number), t = TILE / tileScale(l); gpu.add(k, l, ctx.B.x0 + x * t, ctx.B.y0 + y * t, t, bmp); }
-    requestStatic();
-  }).catch(err => {
-    console.warn('WebGL לא זמין, עוברים לקנבס רגיל', err);
-    const c = document.createElement('canvas'); c.id = canvas.id; canvas.replaceWith(c);   // קנבס נקי (בלי הקשר WebGL שנכשל)
-    cvS = c; cs = c.getContext('2d'); mode = '2d'; tileStats.mode = mode; resizeCanvas(); requestStatic();
-  });
+  if (mode === '2d') cs = canvas.getContext('2d');
+  gpu?.setBackground(grade('#9cd162'));
   const DL = extractDisplayList();
   const onTile = (m: any) => { if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
   try {
@@ -203,7 +213,11 @@ function standIn(l: number, i: number, j: number, X: number, Y: number, Wd: numb
 
 function staticFrame() { sRaf = 0; if (sDirty) { sDirty = false; drawStatic(); } }
 /** בקשה לצייר מחדש את השכבה הסטטית בפריים הבא (זול: רק הרכבת אריחים) */
-export function requestStatic() { sDirty = true; if (!sRaf) sRaf = requestAnimationFrame(staticFrame); }
+export function requestStatic() {
+  sDirty = true;
+  if (gpu && view.live) return;   // הלולאה כבר מציירת פריים משותף בכל פעם
+  if (!sRaf) sRaf = requestAnimationFrame(staticFrame);
+}
 
 /** אחרי החלפת פלטה: זורקים את כל האריחים ומבקשים אותם מחדש בצבעים החדשים */
 export function repaintTiles() {
