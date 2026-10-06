@@ -137,12 +137,21 @@ export class Dog {
     dynamics.push(this); followable(this, this.g);
   }
   update(dt: number, t: number) {
-    const tgt = this.owner.pointBack(26), k = 1 - Math.exp(-dt * 8);
+    const o = this.owner, k = 1 - Math.exp(-dt * 8);
+    let tgt = o.pointBack(26);
+    // לא עוברים דרך הבעלים (למשל כשהוא מסתובב במבוי סתום): קרוב מדי → עוקפים אותו מהצד
+    const ox = this.x - o.x, oy = this.y - o.y, od = Math.hypot(ox, oy) || 1;
+    if (od < 18) {
+      const push = 18 - od, px = -o.hy, py = o.hx, side = ox * px + oy * py >= 0 ? 1 : -1;
+      tgt = [tgt[0] + (ox / od + px * side) * push, tgt[1] + (oy / od + py * side) * push * .6];
+    }
     const nx = this.x + (tgt[0] - this.x) * k, ny = this.y + (tgt[1] - this.y) * k, dx = nx - this.x, ds = Math.hypot(dx, ny - this.y);
     this.x = nx; this.y = ny;
-    if (ds > 1e-4) this.hx += (dx / ds - this.hx) * Math.min(1, ds / 4);
-    if (Math.abs(this.hx) > .25) this.flip += ((this.hx > 0 ? 1 : -1) - this.flip) * Math.min(1, dt * 12);
-    const moving = ds / dt > 3;
+    const moving = dt > 0 && ds / dt > 3;
+    // לאן פונים: כשזזים בעיקר לרוחב, לכיוון התנועה; אחרת (הולכים למעלה/למטה או עומדים) מסתכלים לכיוון הבעלים
+    if (moving && Math.abs(dx) > ds * .4) this.face = dx > 0 ? 1 : -1;
+    else if (Math.abs(o.x - this.x) > 4) this.face = o.x > this.x ? 1 : -1;
+    this.flip += ((this.face ?? 1) - this.flip) * Math.min(1, dt * 9);
     this.amp += ((moving ? 1 : 0) - this.amp) * Math.min(1, dt * 5);
     this.phase += ds / 13;
     this.collar = [this.x + 5.6 * this.flip, this.y - 10.5];
