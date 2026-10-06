@@ -1,0 +1,22 @@
+{
+ "_note": "סכמות צבעים שהוצאו מהתפריט. כדי להחזיר אחת: להעתיק את האובייקט שלה לרשימה palettes ב-world.json. 'פילם 90' נשענת על 'מאוזנת' (base).",
+ "palettes": [
+  {
+   "name": "מקורית"
+  },
+  {
+   "name": "פילם 90",
+   "base": "מאוזנת",
+   "saturation": 0.82,
+   "contrast": 0.86,
+   "lift": 0.01,
+   "tint": "#f3dcae",
+   "tintAmount": 0.07,
+   "highlightTint": "#ffd98c",
+   "shadowTint": "#2e6b66",
+   "splitAmount": 0.16,
+   "blackPoint": 38,
+   "grain": 0
+  }
+ ]
+}
