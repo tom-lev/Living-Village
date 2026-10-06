@@ -49,9 +49,10 @@ const SWATCH = ['#9cd162', '#5ec6e8', '#e2574c', '#f6d4b2', '#3d9bd9'];   // ד�
 function grainTexture() {
   const n = 192, c = document.createElement('canvas'); c.width = c.height = n;
   const g = c.getContext('2d'), img = g.createImageData(n, n);
+  // כל גרגר בהיר או כהה, עם שקיפות לפי עוצמתו: מיזוג רגיל וזול גם בטלפון
   for (let i = 0; i < n * n; i++) {
-    const v = 128 + ((Math.random() + Math.random() + Math.random() - 1.5) * 110);
-    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = Math.max(0, Math.min(255, v)); img.data[i * 4 + 3] = 255;
+    const v = (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v > 0 ? 255 : 30; img.data[i * 4 + 3] = Math.min(255, Math.abs(v) * 340);
   }
   g.putImageData(img, 0, 0);
   return c.toDataURL();

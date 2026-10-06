@@ -84,7 +84,7 @@ export function initTiles(canvas: HTMLCanvasElement) {
   try {
     if (typeof OffscreenCanvas === 'undefined' || !('transferToImageBitmap' in OffscreenCanvas.prototype)) throw 0;
     // כמה ציירים במקביל: אריחים של רמת זום חדשה מוכנים מהר יותר
-    const n = clamp(Math.floor((navigator.hardwareConcurrency || 4) / 2), 1, 3);
+    const n = clamp(Math.floor((navigator.hardwareConcurrency || 4) / 3), 1, 2);   // בטלפון: מעט ליבות חזקות, לא להתחרות בציור הפריימים
     for (let q = 0; q < n; q++) {
       const w = new Worker(new URL('./tileWorker.ts', import.meta.url), { type: 'module' });
       w.onmessage = e => onTile(e.data);
@@ -102,15 +102,18 @@ export function initTiles(canvas: HTMLCanvasElement) {
   return DL.length;
 }
 
+/* צפיפות הציור של השכבה הסטטית: עד פי 2. במסכי פי 3 זה חוסך יותר ממחצית העבודה,
+   וההבדל באיור רך כמעט לא נראה (הדמויות בשכבה הדינמית נשארות בצפיפות המלאה) */
+const sdpr = () => Math.min(view.dpr, 2);
 export function resizeCanvas() {
-  cvS.width = Math.round(view.vw * view.dpr); cvS.height = Math.round(view.vh * view.dpr);
+  cvS.width = Math.round(view.vw * sdpr()); cvS.height = Math.round(view.vh * sdpr());
 }
 
-const levelFor = (k: number) => clamp(Math.ceil(Math.log2(k * view.dpr / BASE) - .15), 0, LMAX);
+const levelFor = (k: number) => clamp(Math.ceil(Math.log2(k * sdpr() / BASE) - .15), 0, LMAX);
 
 /** מרכיב את האריחים המוכנים על הקנבס, ומבקש מה-Worker את החסרים (הקרובים למרכז קודם) */
 function drawStatic() {
-  const { B } = ctx, { cam, vw, vh, dpr } = view;
+  const { B } = ctx, { cam, vw, vh } = view, dpr = sdpr();
   cs.setTransform(1, 0, 0, 1, 0, 0);
   cs.fillStyle = grade('#9cd162'); cs.fillRect(0, 0, cvS.width, cvS.height);
   const l = levelFor(cam.k), tw = TILE / tileScale(l);
@@ -130,25 +133,21 @@ function drawStatic() {
   }
   tileStats.missing = need.length;
   need.sort((a, b) => a[3] - b[3]);
-  // מראש: טבעת סביב המסך, ואותו אזור ברמה גסה יותר (להתרחקות חלקה)
+  // מראש, לפי סדר חשיבות: טבעת סביב המסך, רמה אחת ושתיים פנימה (במרכז), רמה אחת ושתיים החוצה (על שטח רחב)
   const list = need.map(q => q.slice(0, 3));
-  if (l < LMAX) {                                         // הרמה הבאה למרכז המסך: התקרבות מוצאת אריחים חדים מוכנים
-    const tw2 = tw / 2, hx = (wx1 - wx0) * .3, hy = (wy1 - wy0) * .3, nx2 = nx * 2, ny2 = ny * 2;
-    const a0 = clamp(Math.floor((ccx - hx - B.x0) / tw2), 0, nx2 - 1), a1 = clamp(Math.floor((ccx + hx - B.x0) / tw2), 0, nx2 - 1);
-    const b0 = clamp(Math.floor((ccy - hy - B.y0) / tw2), 0, ny2 - 1), b1 = clamp(Math.floor((ccy + hy - B.y0) / tw2), 0, ny2 - 1);
-    for (let j = b0; j <= b1; j++) for (let i = a0; i <= a1; i++) if (!tiles.has(tkey(l + 1, i, j))) list.push([l + 1, i, j]);
-  }
-  for (let j = iy0 - 1; j <= iy1 + 1; j++) for (let i = ix0 - 1; i <= ix1 + 1; i++)
-    if (i >= 0 && j >= 0 && i < nx && j < ny && (i < ix0 || i > ix1 || j < iy0 || j > iy1) && !tiles.has(tkey(l, i, j))) list.push([l, i, j]);
-  if (l > 0) {                                            // הרמה הגסה יותר על שטח כפול מהמסך: התרחקות מוצאת אריחים מוכנים
-    const tw1 = tw * 2, nx1 = Math.ceil(nx / 2), ny1 = Math.ceil(ny / 2), hx = (wx1 - wx0), hy = (wy1 - wy0);
-    const a0 = clamp(Math.floor((ccx - hx - B.x0) / tw1), 0, nx1 - 1), a1 = clamp(Math.floor((ccx + hx - B.x0) / tw1), 0, nx1 - 1);
-    const b0 = clamp(Math.floor((ccy - hy - B.y0) / tw1), 0, ny1 - 1), b1 = clamp(Math.floor((ccy + hy - B.y0) / tw1), 0, ny1 - 1);
-    const ring: number[][] = [];
-    for (let j = b0; j <= b1; j++) for (let i = a0; i <= a1; i++) if (!tiles.has(tkey(l - 1, i, j)))
-      ring.push([l - 1, i, j, (B.x0 + (i + .5) * tw1 - ccx) ** 2 + (B.y0 + (j + .5) * tw1 - ccy) ** 2]);
-    ring.sort((a, b) => a[3] - b[3]); for (const q of ring) list.push(q.slice(0, 3));
-  }
+  const vwW = wx1 - wx0, vhW = wy1 - wy0;
+  const around = (lv: number, f: number) => {
+    if (lv < 0 || lv > LMAX) return;
+    const t = TILE / tileScale(lv), mx = Math.ceil((B.x1 - B.x0) / t), my = Math.ceil((B.y1 - B.y0) / t), hx = vwW * f / 2, hy = vhW * f / 2;
+    const a0 = clamp(Math.floor((ccx - hx - B.x0) / t), 0, mx - 1), a1 = clamp(Math.floor((ccx + hx - B.x0) / t), 0, mx - 1);
+    const b0 = clamp(Math.floor((ccy - hy - B.y0) / t), 0, my - 1), b1 = clamp(Math.floor((ccy + hy - B.y0) / t), 0, my - 1);
+    const q: number[][] = [];
+    for (let j = b0; j <= b1; j++) for (let i = a0; i <= a1; i++) if (!tiles.has(tkey(lv, i, j)))
+      q.push([lv, i, j, (B.x0 + (i + .5) * t - ccx) ** 2 + (B.y0 + (j + .5) * t - ccy) ** 2]);
+    q.sort((x, y) => x[3] - y[3]); for (const e of q) list.push(e.slice(0, 3));
+  };
+  around(l, 1 + 2 * tw / Math.min(vwW, vhW));   // טבעת של אריח סביב המסך
+  around(l + 1, .7); around(l - 1, 2); around(l + 2, .3); around(l - 2, 4);
   for (const k of L0_KEYS) if (!tiles.has(tkey(k[0], k[1], k[2]))) list.push(k);   // תמיד גם סקירה של כל העולם
   const sig = list.map(q => q.join('/')).join(' ');
   if (sig !== lastNeed) {
