@@ -114,7 +114,8 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 (() => {
 'use strict';
 const NS = 'http://www.w3.org/2000/svg';
-const W = 800, H = 1700;                  // גודל המפה ביחידות עולם: מפה לאורך, בפרופורציה של מסך טלפון
+const W = 800, H = 1700;                  // הכפר עצמו (מה שרואים בפתיחה): לאורך, בפרופורציה של מסך טלפון
+const B = { x0: -500, y0: -900, x1: 1300, y1: 2600 };   // גבולות העולם כולו: נוף סביב הכפר לכל הכיוונים
 const stage = document.getElementById('stage'), sWrap = document.getElementById('sWrap'), dWrap = document.getElementById('dWrap');
 const svgS = document.getElementById('mapS'), svgD = document.getElementById('mapD');
 
@@ -175,7 +176,7 @@ const NODES = {
   N4: [70, 830], N5: [400, 835], N6: [730, 825], N7: [75, 1180], N8: [400, 1185], N9: [725, 1175],
   BX: [410, 1694], LX: [6, 1330], RX: [794, 865],
 };
-const BORDER = new Set(['BX', 'LX', 'RX']);   // דרכים שיוצאות מהמפה: הולכים יוצאים ונכנסים שם
+const BORDER = new Set();   // המפה ממשיכה מעבר לכפר: ביציאות ההולכים מסתובבים וחוזרים   // דרכים שיוצאות מהמפה: הולכים יוצאים ונכנסים שם
 const EDGE_DEF = [
   ['TL', 'N1', 60, 200, 80, 330], ['N1', 'N2', 180, 470, 290, 450], ['N2', 'N3', 510, 460, 620, 470],
   ['N2', 'W', 330, 420, 320, 330], ['W', 'E', 320, 30, 740, 10], ['E', 'N3', 750, 330, 750, 400],
@@ -185,6 +186,23 @@ const EDGE_DEF = [
   ['N8', 'BX', 410, 1350, 380, 1530], ['N7', 'LX', 60, 1250, 30, 1300], ['N6', 'RX', 760, 830, 780, 850],
 ];
 /* טבלת אורך-קשת לכל קטע, כדי להתקדם לפי מרחק אמיתי (ולא לפי t של העקומה) */
+function bez(p0, c1x, c1y, c2x, c2y, p3) {
+  const N = 200, pts = [], acc = [0];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, u = 1 - t;
+    pts.push([u * u * u * p0[0] + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * p3[0],
+              u * u * u * p0[1] + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * p3[1]]);
+    if (i) acc.push(acc[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  }
+  return { pts, acc, len: acc[N], d: `M${P(p0)}C${c1x},${c1y} ${c2x},${c2y} ${P(p3)}` };
+}
+/* דרכים מחוץ לכפר: רק ציור (אין עליהן הולכים) */
+const OUTER_ROADS = [
+  [[90, 70], 100, -100, 250, -250, [300, -380]], [[300, -380], 320, -480, 380, -560, [420, -610]],
+  [[6, 1330], -100, 1345, -200, 1300, [-300, 1300]], [[-300, 1300], -330, 1000, -300, 700, [-280, 430]],
+  [[794, 865], 950, 885, 1150, 860, [1300, 880]], [[410, 1694], 400, 1850, 430, 2050, [410, 2235]],
+  [[405, 1955], 250, 1965, 0, 1995, [-230, 1985]],
+].map(([a, c1x, c1y, c2x, c2y, b]) => bez(a, c1x, c1y, c2x, c2y, b));
 const EDGES = EDGE_DEF.map(([a, b, c1x, c1y, c2x, c2y]) => {
   const p0 = NODES[a], p3 = NODES[b], N = 200, pts = [], acc = [0];
   for (let i = 0; i <= N; i++) {
@@ -209,7 +227,25 @@ EDGES.forEach((E, i) => {
   (ADJ[E.b] = ADJ[E.b] || []).push({ e: i, dir: -1 });
 });
 const ROAD_SAMPLES = [];
-EDGES.forEach(E => { for (let i = 0; i < E.pts.length; i += 5) ROAD_SAMPLES.push(E.pts[i]); });
+[...EDGES, ...OUTER_ROADS].forEach(E => { for (let i = 0; i < E.pts.length; i += 5) ROAD_SAMPLES.push(E.pts[i]); });
+/* נהר: מההרים בצפון-מזרח עד הים בדרום */
+const RIVER_PTS = [[1080, -640], [1110, -420], [1070, -150], [1130, 250], [1080, 650], [1140, 1050], [1090, 1500], [1150, 1900], [1100, 2400]];
+const RIVER_SAMPLES = [];
+for (let i = 0; i < RIVER_PTS.length - 1; i++)
+  for (let t = 0; t < 1; t += .05) RIVER_SAMPLES.push([RIVER_PTS[i][0] + (RIVER_PTS[i + 1][0] - RIVER_PTS[i][0]) * t, RIVER_PTS[i][1] + (RIVER_PTS[i + 1][1] - RIVER_PTS[i][1]) * t]);
+function riverDist(x, y) {
+  let m = 1e9;
+  for (const p of RIVER_SAMPLES) { const d = (p[0] - x) ** 2 + (p[1] - y) ** 2; if (d < m) m = d; }
+  return Math.sqrt(m);
+}
+function smoothOpen(pts) {
+  let d = `M${P(pts[0])}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+    d += `C${P([p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6])} ${P([p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6])} ${P(p2)}`;
+  }
+  return d;
+}
 function roadDist(x, y) {
   let m = 1e9;
   for (const p of ROAD_SAMPLES) { const d = (p[0] - x) ** 2 + (p[1] - y) ** 2; if (d < m) m = d; }
@@ -221,8 +257,10 @@ const NO_TREE = [];
 const block = (x0, y0, x1, y1) => NO_TREE.push([x0, y0, x1, y1]);
 const LAKE = { cx: 535, cy: 262, rx: 132, ry: 112 };
 function treeOk(x, y) {
-  if (x < 12 || x > W - 12 || y < 40 || y > H - 6) return false;
-  for (const [x0, y0, x1, y1] of NO_TREE) if (x > x0 && x < x1 && y > y0 && y < y1) return false;
+  if (x < B.x0 + 12 || x > B.x1 - 12 || y < -590 || y > 2190) return false;   // לא על ההרים ולא על החוף
+  if (riverDist(x, y) < 44) return false;
+  // גם הצמרת (עד 34 יחידות מעל הבסיס) לא מסתירה בית, שדה או מבנה
+  for (const [x0, y0, x1, y1] of NO_TREE) if (x > x0 - 8 && x < x1 + 8 && y > y0 && y - 34 < y1) return false;
   if (((x - LAKE.cx) / (LAKE.rx + 40)) ** 2 + ((y - LAKE.cy) / (LAKE.ry + 34)) ** 2 < 1) return false;
   // גם הצמרת (שמעל נקודת הבסיס) לא מסתירה את הדרך
   return roadDist(x, y) > 36 && roadDist(x, y - 30) > 34;
@@ -245,13 +283,13 @@ function sortDepth() {           // ממיין רק את הדמויות בשכב
 /* ═════════════════════ ציור המפה ═════════════════════ */
 
 /* קרקע */
-el('rect', { x: 0, y: 0, width: W, height: H, fill: '#9cd162' }, L.ground);
-for (let i = 0; i < 26; i++)
-  el('path', { d: blob(rand(40, W - 40), rand(40, H - 40), rand(40, 110), rand(25, 60), 7, .12, rand(0, 6)), fill: '#a9d96f', opacity: .7 }, L.ground);
+el('rect', { x: B.x0, y: B.y0, width: B.x1 - B.x0, height: B.y1 - B.y0, fill: '#9cd162' }, L.ground);
+for (let i = 0; i < 120; i++)
+  el('path', { d: blob(rand(B.x0 + 40, B.x1 - 40), rand(B.y0 + 40, B.y1 - 40), rand(40, 110), rand(25, 60), 7, .12, rand(0, 6)), fill: '#a9d96f', opacity: .7 }, L.ground);
 {
   let d = '';
-  for (let i = 0; i < 520; i++) {
-    const x = rand(14, W - 14), y = rand(14, H - 14);
+  for (let i = 0; i < 2400; i++) {
+    const x = rand(B.x0 + 14, B.x1 - 14), y = rand(B.y0 + 14, B.y1 - 14);
     if (roadDist(x, y) < 32) continue;
     d += `M${n2(x - 3)},${n2(y)}l1.6,-4.2l1.4,4.2l1.4,-3.2l1.2,3.2`;
   }
@@ -260,13 +298,13 @@ for (let i = 0; i < 26; i++)
 
 /* דרכים: שוליים, משטח ופס בהיר באמצע */
 {
-  const all = EDGES.map(E => E.d).join('');
+  const all = [...EDGES, ...OUTER_ROADS].map(E => E.d).join('');
   el('path', { d: all, fill: 'none', stroke: '#e2b087', 'stroke-width': 58, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.roads);
   el('path', { d: all, fill: 'none', stroke: '#f6d4b2', 'stroke-width': 50, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.roads);
   el('path', { d: all, fill: 'none', stroke: '#fbe2c9', 'stroke-width': 16, 'stroke-linecap': 'round', opacity: .55 }, L.roads);
   let pebbles = '';
-  for (let i = 0; i < 260; i++) {
-    const E = pick(EDGES), p = edgeAt(E, rand(0, E.len)), o = rand(-20, 20);
+  for (let i = 0; i < 520; i++) {
+    const E = pick([...EDGES, ...OUTER_ROADS]), p = edgeAt(E, rand(0, E.len)), o = rand(-20, 20);
     pebbles += circ(p.x - p.ty * o, p.y + p.tx * o, rand(.7, 1.5));
   }
   el('path', { d: pebbles, fill: '#e0b08a', opacity: .7 }, L.roads);
@@ -274,22 +312,24 @@ for (let i = 0; i < 26; i++)
 
 /* ───── עצים ───── */
 function pine(x, y, s) {
-  const g = prop(y), sw = el('g', null, g);
+  // מעט צורות לכל עץ (גוף אחד והדגשה אחת לכל שלוש הקומות), כדי שהשכבה הסטטית תצטייר מהר
+  const g = prop(y), sw = g;
   el('ellipse', { cx: x + 2 * s, cy: y, rx: 9 * s, ry: 2.6 * s, fill: 'rgba(40,70,20,.22)' }, g);
-  g.insertBefore(g.lastChild, sw);
   el('rect', { x: x - 1.4 * s, y: y - 6 * s, width: 2.8 * s, height: 6.5 * s, rx: .8 * s, fill: '#8b5a2b' }, sw);
   const tiers = [[5, 10.5, 14], [12, 8.5, 12], [18.5, 6.2, 10.5]];
   const c = pick(['#3f9150', '#3a8a4c', '#459a55']);
+  let body = '', hl = '';
   for (const [dy, hw, th] of tiers) {
     const by = y - dy * s;
-    el('path', { d: `M${n2(x - hw * s)},${n2(by)}L${n2(x)},${n2(by - th * s)}L${n2(x + hw * s)},${n2(by)}Z`, fill: c, 'stroke-linejoin': 'round', stroke: c, 'stroke-width': 1.5 }, sw);
-    el('path', { d: `M${n2(x)},${n2(by - th * s)}L${n2(x + hw * s)},${n2(by)}L${n2(x + 1)},${n2(by)}Z`, fill: shade(c, .12) }, sw);
+    body += `M${n2(x - hw * s)},${n2(by)}L${n2(x)},${n2(by - th * s)}L${n2(x + hw * s)},${n2(by)}Z`;
+    hl += `M${n2(x)},${n2(by - th * s)}L${n2(x + hw * s)},${n2(by)}L${n2(x + 1)},${n2(by)}Z`;
   }
+  el('path', { d: body, fill: c, 'stroke-linejoin': 'round', stroke: c, 'stroke-width': 1.5 }, sw);
+  el('path', { d: hl, fill: shade(c, .12) }, sw);
 }
-function roundTree(x, y, s) {
-  const g = prop(y), sw = el('g', null, g);
+function roundTree(x, y, s, fruit) {
+  const g = prop(y), sw = g;
   el('ellipse', { cx: x + 2 * s, cy: y, rx: 10 * s, ry: 3 * s, fill: 'rgba(40,70,20,.22)' }, g);
-  g.insertBefore(g.lastChild, sw);
   el('path', { d: `M${n2(x - 1.6 * s)},${n2(y)}L${n2(x - 1)},${n2(y - 14 * s)}L${n2(x + 1)},${n2(y - 14 * s)}L${n2(x + 1.6 * s)},${n2(y)}Z`, fill: '#8b5a2b' }, sw);
   const c = pick(['#5db85a', '#63bd5c', '#55ad55', '#7cc35a']);
   el('path', { d: circ(x, y - 22 * s, 10.5 * s) + circ(x - 6.5 * s, y - 16.5 * s, 7 * s) + circ(x + 6.5 * s, y - 17 * s, 7.5 * s), fill: c }, sw);
@@ -297,7 +337,7 @@ function roundTree(x, y, s) {
   let ticks = '';
   for (let i = 0; i < 3; i++) { const tx = x + rand(-6, 6) * s, ty = y - rand(14, 27) * s; ticks += `M${n2(tx)},${n2(ty)}q${n2(1.6 * s)},${n2(-1 * s)} ${n2(1.8 * s)},${n2(1 * s)}`; }
   el('path', { d: ticks, fill: 'none', stroke: shade(c, -.25), 'stroke-width': .9, 'stroke-linecap': 'round' }, sw);
-  if (R() < .22) {
+  if (fruit || R() < .22) {
     let fr = '';
     for (let i = 0; i < 5; i++) fr += circ(x + rand(-9, 9) * s, y - rand(15, 28) * s, 1.3 * s);
     el('path', { d: fr, fill: '#e8513f' }, sw);
@@ -310,7 +350,7 @@ function chimneySmoke(x, y, scale) {
     el('circle', { cx: x, cy: y, r: 5 * scale, fill: '#f4f1ea', class: 'smoke', style: `animation-delay:${(-i * 1.6 - rand(0, 1)).toFixed(2)}s` }, L.air);
 }
 function house(x, y, o) {
-  const { w, h, wall, roof, rh = w * .55, chimney = false, door = '#a86a3d', win = 2, attic = false } = o;
+  const { w, h, wall, roof, rh = w * .55, chimney = false, smoke = true, door = '#a86a3d', win = 2, attic = false } = o;
   const g = prop(y);
   el('ellipse', { cx: x + 4, cy: y + 1, rx: w * .62, ry: 5, fill: 'rgba(40,70,20,.2)' }, g);
   const st = { stroke: 'rgba(70,45,25,.35)', 'stroke-width': 1.2, 'stroke-linejoin': 'round' };
@@ -333,7 +373,7 @@ function house(x, y, o) {
     el('rect', { x: wx - ww / 2, y: wy - wh / 2, width: ww, height: wh, rx: 1.2, fill: '#bfe6fb', stroke: '#fff', 'stroke-width': 1.6 }, g);
     el('path', { d: `M${n2(wx)},${n2(wy - wh / 2)}v${n2(wh)}M${n2(wx - ww / 2)},${n2(wy)}h${n2(ww)}`, stroke: '#fff', 'stroke-width': 1.1 }, g);
   }
-  if (chimney) chimneySmoke(x + w * .255, y - h - rh * .9, Math.max(.7, w / 90));
+  if (chimney && smoke) chimneySmoke(x + w * .255, y - h - rh * .9, Math.max(.7, w / 90));
   block(x - w / 2 - 14, y - h - rh - 10, x + w / 2 + 14, y + 16);
   return g;
 }
@@ -561,19 +601,285 @@ house(306, 1342, { w: 86, h: 70, rh: 46, wall: '#fdeccc', roof: '#d9473d', win: 
 { const g = prop(1368); el('path', { d: 'M244,1368v-16', stroke: '#7a4f2a', 'stroke-width': 2.4 }, g);
   el('rect', { x: 237, y: 1344, width: 14, height: 9, rx: 4, fill: '#e2574c' }, g); }
 
+
+/* ═════════════════════ הנוף סביב הכפר (סטטי, בלי דמויות) ═════════════════════ */
+
+/* חוף וים (למטה) */
+{
+  const sand = [[B.x0, 2230]];
+  for (let x = B.x0; x <= B.x1; x += 120) sand.push([x, 2225 + Math.sin(x * .013) * 14]);
+  el('path', { d: smoothOpen(sand) + `L${B.x1},${B.y1}L${B.x0},${B.y1}Z`, fill: '#f3dfb0' }, L.ground);
+}
+/* הנהר (נמשך מעל החול אל הים) */
+{
+  const d = smoothOpen(RIVER_PTS);
+  el('path', { d, fill: 'none', stroke: '#e9dcae', 'stroke-width': 58, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.ground);
+  el('path', { d, fill: 'none', stroke: '#5ec6e8', 'stroke-width': 44, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.ground);
+  el('path', { d, fill: 'none', stroke: '#86d6f0', 'stroke-width': 14, 'stroke-linecap': 'round', opacity: .7 }, L.ground);
+  let w = '';
+  for (const p of RIVER_SAMPLES.filter((_, i) => i % 3 === 0)) w += `M${n2(p[0] - 6 + rand(-8, 8))},${n2(p[1])}q3,-2.5 6,0q3,2.5 6,0`;
+  el('path', { d: w, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 1.3, 'stroke-linecap': 'round', opacity: .8 }, L.ground);
+}
+{
+  const sea = [[B.x0, 2335]];
+  for (let x = B.x0; x <= B.x1; x += 90) sea.push([x, 2330 + Math.sin(x * .02 + 1) * 10]);
+  const top = smoothOpen(sea);
+  el('path', { d: top + `L${B.x1},${B.y1}L${B.x0},${B.y1}Z`, fill: '#4fb8de' }, L.ground);
+  el('path', { d: top, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 7, 'stroke-linecap': 'round', opacity: .85 }, L.ground);
+  let w = '';
+  for (let i = 0; i < 90; i++) { const x = rand(B.x0, B.x1), y = rand(2370, B.y1 - 10); w += `M${n2(x)},${n2(y)}q5,-4 10,0q5,4 10,0`; }
+  el('path', { d: w, fill: 'none', stroke: '#bfeafa', 'stroke-width': 1.6, 'stroke-linecap': 'round', opacity: .8 }, L.ground);
+}
+/* מזח */
+{
+  el('rect', { x: 690, y: 2290, width: 44, height: 200, fill: '#b98552', stroke: '#8a5f39', 'stroke-width': 1.5 }, L.groundProps);
+  let d = ''; for (let y = 2298; y < 2490; y += 9) d += `M692,${y}h40`;
+  el('path', { d, stroke: '#8a5f39', 'stroke-width': 1 }, L.groundProps);
+  for (const [x, y] of [[692, 2380], [732, 2380], [692, 2488], [732, 2488]]) el('circle', { cx: x, cy: y, r: 3.5, fill: '#6b4a2f' }, L.groundProps);
+}
+/* שמשיות ומגבות על החוף */
+[[-260, 2275, '#e2574c'], [-120, 2290, '#3d9bd9'], [40, 2268, '#f29e38'], [180, 2292, '#e96aa4'], [540, 2280, '#4caf50'], [860, 2270, '#7a52a8'], [980, 2296, '#e2574c']].forEach(([x, y, c], i) => {
+  el('rect', { x: x + 10, y: y + 6, width: 16, height: 26, rx: 2, fill: pick(['#ffd23f', '#9fd8ff', '#ff9fb8', '#b6f0a0']), transform: `rotate(${rand(-20, 20).toFixed(0)} ${x + 18} ${y + 19})` }, L.groundProps);
+  el('ellipse', { cx: x + 3, cy: y + 4, rx: 15, ry: 5, fill: 'rgba(120,90,40,.18)' }, L.groundProps);
+  let d = '';
+  for (let k = 0; k < 8; k += 2) { const a0 = k / 8 * Math.PI * 2, a1 = (k + 1) / 8 * Math.PI * 2; d += `M${x},${y}L${n2(x + Math.cos(a0) * 15)},${n2(y + Math.sin(a0) * 15)}A15,15 0 0 1 ${n2(x + Math.cos(a1) * 15)},${n2(y + Math.sin(a1) * 15)}Z`; }
+  el('circle', { cx: x, cy: y, r: 15, fill: '#fffaf0' }, L.groundProps);
+  el('path', { d, fill: c }, L.groundProps);
+  el('circle', { cx: x, cy: y, r: 1.8, fill: '#6b4a2f' }, L.groundProps);
+});
+/* סירות מפרש (עומדות) */
+for (const [x, y, c, f] of [[180, 2450, '#e2574c', 1], [920, 2510, '#3d9bd9', -1], [470, 2560, '#f29e38', 1], [-260, 2520, '#ffffff', -1]]) {
+  const g = prop(y), b = el('g', { transform: `translate(${x},${y}) scale(${f},1)` }, g);
+  el('ellipse', { cx: 0, cy: 2, rx: 22, ry: 4, fill: '#3fa9cc', opacity: .6 }, b);
+  el('path', { d: 'M-20,-6h40l-7,8h-26z', fill: '#8a5a35' }, b);
+  el('path', { d: 'M0,-6v-36', stroke: '#6b4a2f', 'stroke-width': 1.6 }, b);
+  el('path', { d: 'M1,-41l16,33h-16z', fill: c, stroke: shade(c, -.15), 'stroke-width': .8 }, b);
+  el('path', { d: 'M-1,-36l-12,28h12z', fill: '#fffaf0', stroke: '#ddd', 'stroke-width': .8 }, b);
+}
+/* מגדלור על סלעים */
+{
+  const x = -380, y = 2318, g = prop(y);
+  el('path', { d: blob(x, y + 4, 46, 16, 8, .12, 4), fill: '#9aa3a8' }, g);
+  el('path', { d: blob(x + 14, y - 2, 22, 9, 7, .12, 2), fill: '#b5bdc1' }, g);
+  el('path', { d: `M${x - 13},${y}L${x - 9},${y - 78}h18L${x + 13},${y}Z`, fill: '#fffaf0', stroke: 'rgba(70,45,25,.35)', 'stroke-width': 1.2 }, g);
+  for (const k of [0, 2]) el('path', { d: `M${x - 12.4 + k * 1},${y - 14 - k * 22}L${x - 11.6 + k},${y - 28 - k * 22}h${23.2 - k * 2}L${x + 12.4 - k},${y - 14 - k * 22}Z`, fill: '#e2574c' }, g);
+  el('rect', { x: x - 12, y: y - 96, width: 24, height: 18, rx: 2, fill: '#3b3b46' }, g);
+  el('rect', { x: x - 8, y: y - 93, width: 16, height: 12, rx: 2, fill: '#ffe680' }, g);
+  el('path', { d: `M${x - 14},${y - 96}L${x},${y - 110}L${x + 14},${y - 96}Z`, fill: '#e2574c' }, g);
+  el('path', { d: `M${x - 3},${y}v-14a3,3 0 0 1 6,0v14z`, fill: '#8a5a35' }, g);
+}
+
+/* חווה: שדות מפוספסים, אסם, ממגורה, חבילות חציר וטחנת רוח */
+function field(x, y, w, h, a, b, vertical) {
+  el('rect', { x, y, width: w, height: h, rx: 8, fill: a, stroke: shade(a, -.12), 'stroke-width': 2 }, L.groundProps);
+  let d = '';
+  if (vertical) for (let xx = x + 10; xx < x + w - 4; xx += 12) d += `M${xx},${y + 6}v${h - 12}`;
+  else for (let yy = y + 10; yy < y + h - 4; yy += 12) d += `M${x + 6},${yy}h${w - 12}`;
+  el('path', { d, stroke: b, 'stroke-width': 4, 'stroke-linecap': 'round' }, L.groundProps);
+  block(x - 8, y - 8, x + w + 8, y + h + 8);
+}
+field(-480, 1760, 250, 165, '#e2c95f', '#cfb247');
+field(-210, 1760, 270, 165, '#9ccc5a', '#86b847', true);
+field(-480, 2015, 360, 165, '#b9d36a', '#a6c25a', true);
+field(-100, 2025, 450, 155, '#e8d27a', '#d4bb59');
+field(470, 2010, 300, 170, '#7cb75a', '#689f48', true);
+field(800, 1990, 230, 190, '#d9c057', '#c4a945');
+for (const [x, y] of [[-420, 1810], [-330, 1870], [-380, 2080], [-250, 2120], [40, 2090], [190, 2140], [880, 2060], [960, 2140]]) {
+  const g = prop(y + 7);
+  el('ellipse', { cx: x + 2, cy: y + 7, rx: 10, ry: 3, fill: 'rgba(90,70,20,.25)' }, g);
+  el('circle', { cx: x, cy: y, r: 8, fill: '#f2cd5c', stroke: '#d6aa38', 'stroke-width': 1.2 }, g);
+  el('path', { d: `M${x},${y}m-4,0a4,4 0 1 1 4,4a2.4,2.4 0 1 1 -2.4,-2.4`, fill: 'none', stroke: '#c99a2a', 'stroke-width': 1 }, g);
+}
+{
+  // אסם אדום וממגורה
+  const x = 225, y = 1925, g = prop(y), st = { stroke: 'rgba(70,45,25,.35)', 'stroke-width': 1.2, 'stroke-linejoin': 'round' };
+  el('ellipse', { cx: x + 6, cy: y + 1, rx: 70, ry: 6, fill: 'rgba(40,70,20,.2)' }, g);
+  el('rect', { x: x + 40, y: y - 78, width: 26, height: 78, rx: 3, fill: '#c9d4dc', ...st }, g);
+  el('path', { d: `M${x + 40},${y - 78}a13,10 0 0 1 26,0z`, fill: '#9aa8b3', ...st }, g);
+  el('path', { d: `M${x + 40},${y - 52}h26M${x + 40},${y - 26}h26`, stroke: '#a3b1bb', 'stroke-width': 1.2 }, g);
+  el('rect', { x: x - 48, y: y - 52, width: 88, height: 52, fill: '#c0392b', ...st }, g);
+  el('path', { d: `M${x - 54},${y - 50}L${x - 34},${y - 82}H${x + 26}L${x + 46},${y - 50}Z`, fill: '#7a2a20', ...st }, g);
+  el('rect', { x: x - 18, y: y - 34, width: 28, height: 34, fill: '#fffaf0' }, g);
+  el('rect', { x: x - 15, y: y - 31, width: 22, height: 31, fill: '#a33223' }, g);
+  el('path', { d: `M${x - 15},${y - 31}l22,31M${x + 7},${y - 31}l-22,31`, stroke: '#fffaf0', 'stroke-width': 2.4 }, g);
+  el('rect', { x: x - 10, y: y - 72, width: 12, height: 10, fill: '#fffaf0' }, g);
+  block(x - 60, y - 95, x + 75, y + 14);
+}
+{
+  // טחנת רוח (עומדת)
+  const x = 650, y = 1940, g = prop(y), st = { stroke: 'rgba(70,45,25,.35)', 'stroke-width': 1.2, 'stroke-linejoin': 'round' };
+  el('ellipse', { cx: x + 4, cy: y + 1, rx: 26, ry: 5, fill: 'rgba(40,70,20,.2)' }, g);
+  el('path', { d: `M${x - 18},${y}L${x - 11},${y - 70}h22L${x + 18},${y}Z`, fill: '#fff3d6', ...st }, g);
+  el('path', { d: `M${x - 14},${y - 68}L${x},${y - 84}L${x + 14},${y - 68}Z`, fill: '#a0643a', ...st }, g);
+  el('path', { d: `M${x - 5},${y}v-14a5,5 0 0 1 10,0v14z`, fill: '#8a5a35' }, g);
+  el('circle', { cx: x, cy: y - 42, r: 4, fill: '#bfe6fb', stroke: '#fff', 'stroke-width': 1.2 }, g);
+  const hub = [x, y - 70];
+  for (let k = 0; k < 4; k++) {
+    const a = k * Math.PI / 2 + .35;
+    const g2 = el('g', { transform: `translate(${hub[0]},${hub[1]}) rotate(${(a * 180 / Math.PI).toFixed(1)})` }, g);
+    el('path', { d: 'M0,0h46', stroke: '#6b4a2f', 'stroke-width': 2.2 }, g2);
+    el('rect', { x: 12, y: 0, width: 34, height: 11, fill: '#fffaf0', stroke: '#c9b9a0', 'stroke-width': 1 }, g2);
+    el('path', { d: 'M20,0v11M29,0v11M38,0v11', stroke: '#d8cbb4', 'stroke-width': .8 }, g2);
+  }
+  el('circle', { cx: hub[0], cy: hub[1], r: 3.5, fill: '#6b4a2f' }, g);
+  block(x - 50, y - 125, x + 50, y + 12);
+}
+
+/* ימין: כנסייה עם מגדל פעמונים, גשר על הנהר וכרמים */
+{
+  const x = 935, y = 760, g = prop(y), st = { stroke: 'rgba(70,45,25,.35)', 'stroke-width': 1.2, 'stroke-linejoin': 'round' };
+  el('ellipse', { cx: x + 6, cy: y + 1, rx: 64, ry: 6, fill: 'rgba(40,70,20,.2)' }, g);
+  el('rect', { x: x - 40, y: y - 56, width: 70, height: 56, fill: '#fffaf2', ...st }, g);
+  el('path', { d: `M${x - 46},${y - 54}L${x - 5},${y - 86}L${x + 36},${y - 54}Z`, fill: '#8e6cc9', ...st }, g);
+  el('rect', { x: x + 26, y: y - 92, width: 26, height: 92, fill: '#fff3d6', ...st }, g);
+  el('path', { d: `M${x + 22},${y - 90}L${x + 39},${y - 130}L${x + 56},${y - 90}Z`, fill: '#7656b3', ...st }, g);
+  el('path', { d: `M${x + 39},${y - 130}v-14M${x + 33},${y - 138}h12`, stroke: '#b8860b', 'stroke-width': 2.4, 'stroke-linecap': 'round' }, g);
+  el('path', { d: `M${x + 32},${y - 72}v-8a7,7 0 0 1 14,0v8z`, fill: '#3b3b46' }, g);
+  el('circle', { cx: x + 39, cy: y - 74, r: 3, fill: '#e3a857' }, g);
+  el('circle', { cx: x - 5, cy: y - 40, r: 8, fill: '#bfe6fb', stroke: '#fff', 'stroke-width': 2 }, g);
+  el('path', { d: `M${x - 5},${y - 48}v16M${x - 13},${y - 40}h16`, stroke: '#fff', 'stroke-width': 1.2 }, g);
+  el('path', { d: `M${x - 12},${y}v-16a7,7 0 0 1 14,0v16z`, fill: '#8a5a35', ...st }, g);
+  for (const wx of [x - 30, x + 14]) el('path', { d: `M${wx - 4},${y - 14}v-12a4,4 0 0 1 8,0v12z`, fill: '#bfe6fb', stroke: '#fff', 'stroke-width': 1.2 }, g);
+  block(x - 60, y - 150, x + 70, y + 16);
+}
+{
+  // גשר אבן מעל הנהר, איפה שהדרך המזרחית חוצה אותו
+  const bx = 1108, by = 869;
+  el('rect', { x: bx - 46, y: by - 29, width: 92, height: 7, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, L.groundProps);
+  el('rect', { x: bx - 46, y: by + 22, width: 92, height: 7, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, L.groundProps);
+}
+{
+  let rows = '', grapes = '';
+  for (let x = 1192; x < 1290; x += 16) { rows += `M${x},300v520`; for (let y = 310; y < 815; y += 22) grapes += circ(x + (y % 44 ? 3 : -3), y, 3.2); }
+  el('path', { d: rows, stroke: '#8a5f39', 'stroke-width': 1.6 }, L.groundProps);
+  el('path', { d: grapes, fill: '#6aa84f' }, L.groundProps);
+  block(1180, 290, 1300, 830);
+}
+
+/* שמאל: כפר קטן עם באר, ומטע עצי פרי */
+[[-430, 1250], [-360, 1244], [-230, 1248], [-160, 1256], [-430, 1405], [-350, 1410], [-235, 1402], [-160, 1398]].forEach(([x, y], i) =>
+  house(x, y, { w: 40, h: 30, rh: 26, wall: pick(['#fff3d6', '#fffaf0', '#fde9c8']), roof: SMALL_ROOFS[(i + 3) % SMALL_ROOFS.length], win: 1, chimney: i % 2 === 0, smoke: false }));
+{
+  const x = -300, y = 1352, g = prop(y);
+  el('ellipse', { cx: x, cy: y, rx: 15, ry: 6, fill: '#9aa3a8', stroke: '#7d868b', 'stroke-width': 1.2 }, g);
+  el('ellipse', { cx: x, cy: y - 1, rx: 10, ry: 3.5, fill: '#3f7f99' }, g);
+  el('path', { d: `M${x - 12},${y}v-26M${x + 12},${y}v-26`, stroke: '#7a4f2a', 'stroke-width': 2.4 }, g);
+  el('path', { d: `M${x - 17},${y - 24}L${x},${y - 36}L${x + 17},${y - 24}Z`, fill: '#a0643a' }, g);
+  el('path', { d: `M${x},${y - 24}v12`, stroke: '#6b5a4a', 'stroke-width': .8 }, g);
+  el('rect', { x: x - 3, y: y - 13, width: 6, height: 5, fill: '#8a5a35' }, g);
+  block(x - 25, y - 45, x + 25, y + 12);
+}
+for (let r = 0; r < 12; r++) for (let c = 0; c < 6; c++) {
+  const x = -460 + c * 46 + (r % 2) * 23, y = 470 + r * 48;
+  if (Math.abs(x - (-295)) < 40) continue;   // משאירים מקום לדרך
+  roundTree(x, y, 1.15, true);
+}
+block(-490, 430, -60, 1050);
+
+/* למעלה: מסילת רכבת עם תחנה ורכבת חונה, בקתת עץ, אבנים וצבאים */
+{
+  const y = -380;
+  let sl = '';
+  for (let x = B.x0; x <= B.x1; x += 14) sl += rrect(x - 2.5, y - 11, 5, 22, 1);
+  el('path', { d: sl, fill: '#8a5f39' }, L.groundProps);
+  el('path', { d: `M${B.x0},${y - 6}H${B.x1}M${B.x0},${y + 6}H${B.x1}`, stroke: '#7d868b', 'stroke-width': 2.4 }, L.groundProps);
+  // גשר רכבת מעל הנהר
+  el('rect', { x: 1062, y: y - 16, width: 82, height: 4, fill: '#6b4a2f' }, L.groundProps);
+  el('rect', { x: 1062, y: y + 12, width: 82, height: 4, fill: '#6b4a2f' }, L.groundProps);
+  // מעבר מפלסי: פסים על הכביש
+  el('path', { d: `M${270},${y - 22}h60M${270},${y + 22}h60`, stroke: '#fffaf0', 'stroke-width': 4, 'stroke-dasharray': '6 5' }, L.groundProps);
+  block(B.x0, y - 30, B.x1, y + 26);
+  // תחנה
+  const sx = 170, sy = y - 26, g = prop(sy), st = { stroke: 'rgba(70,45,25,.35)', 'stroke-width': 1.2, 'stroke-linejoin': 'round' };
+  el('rect', { x: sx - 70, y: sy - 4, width: 140, height: 10, fill: '#d9c9ae', ...st }, g);
+  el('rect', { x: sx - 46, y: sy - 50, width: 92, height: 46, fill: '#fde9c8', ...st }, g);
+  el('path', { d: `M${sx - 56},${sy - 48}L${sx - 40},${sy - 72}H${sx + 40}L${sx + 56},${sy - 48}Z`, fill: '#3d7bd9', ...st }, g);
+  for (const wx of [sx - 32, sx + 18]) el('rect', { x: wx, y: sy - 38, width: 14, height: 14, rx: 1.5, fill: '#bfe6fb', stroke: '#fff', 'stroke-width': 1.6 }, g);
+  el('path', { d: `M${sx - 8},${sy - 4}v-22a8,8 0 0 1 16,0v22z`, fill: '#8a5a35' }, g);
+  el('rect', { x: sx - 24, y: sy - 90, width: 48, height: 15, rx: 7.5, fill: '#fffaf0', ...st }, g);
+  const t = el('text', { x: sx, y: sy - 79, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: '#2b5aa8' }, g); t.textContent = 'תחנה';
+  block(sx - 80, sy - 100, sx + 80, sy + 14);
+  // רכבת חונה
+  const tg = prop(y + 8);
+  const car = (x, w, c) => {
+    el('rect', { x, y: y - 30, width: w, height: 26, rx: 4, fill: c, stroke: shade(c, -.25), 'stroke-width': 1.2 }, tg);
+    for (let k = x + 8; k < x + w - 12; k += 18) el('rect', { x: k, y: y - 24, width: 12, height: 9, rx: 1.5, fill: '#cdeefa' }, tg);
+    for (const wx of [x + 10, x + w - 10]) el('circle', { cx: wx, cy: y - 2, r: 5, fill: '#3b3330' }, tg);
+  };
+  car(-330, 70, '#4f86c6'); car(-256, 70, '#4f86c6');
+  el('rect', { x: -182, y: y - 34, width: 64, height: 30, rx: 5, fill: '#e2574c', stroke: '#a33223', 'stroke-width': 1.2 }, tg);
+  el('rect', { x: -150, y: y - 50, width: 26, height: 18, rx: 3, fill: '#e2574c', stroke: '#a33223', 'stroke-width': 1.2 }, tg);
+  el('rect', { x: -146, y: y - 46, width: 18, height: 9, rx: 1.5, fill: '#cdeefa' }, tg);
+  el('rect', { x: -176, y: y - 48, width: 9, height: 16, fill: '#3b3b46' }, tg);
+  el('path', { d: `M-118,${y - 6}l10,6h-10z`, fill: '#3b3b46' }, tg);
+  for (const wx of [-170, -150, -130]) el('circle', { cx: wx, cy: y - 2, r: 6, fill: '#3b3330' }, tg);
+}
+house(-260, -170, { w: 70, h: 40, rh: 34, wall: '#a0643a', roof: '#5b3a22', win: 2, chimney: true, smoke: false, door: '#5b3a22' });
+{
+  let d = ''; for (let k = 1; k < 5; k++) d += `M-295,${-170 - k * 8}h70`;
+  el('path', { d, stroke: '#7a4a2a', 'stroke-width': 1.2 }, statics[statics.length - 1].el);
+}
+function deer(x, y, f, antlers) {
+  const g = prop(y), b = el('g', { transform: `translate(${x},${y}) scale(${f},1)` }, g), c = '#b5733a';
+  el('ellipse', { cx: 0, cy: 1, rx: 13, ry: 3, fill: 'rgba(40,70,20,.22)' }, b);
+  el('path', { d: 'M-8,-10v10M-4,-10v10M6,-10v10M9,-10v10', stroke: shade(c, -.25), 'stroke-width': 1.8, 'stroke-linecap': 'round' }, b);
+  el('ellipse', { cx: 0, cy: -13, rx: 12, ry: 5.5, fill: c }, b);
+  el('path', { d: circ(-3, -14, 1) + circ(3, -15, 1) + circ(-7, -12, .9), fill: '#fff3d6' }, b);
+  el('path', { d: 'M8,-15l5,-12l4,1l-3,12z', fill: c }, b);
+  el('ellipse', { cx: 17, cy: -27, rx: 5, ry: 3.2, fill: c, transform: 'rotate(15 17 -27)' }, b);
+  el('circle', { cx: 18, cy: -28, r: .7, fill: '#2b2220' }, b);
+  el('path', { d: 'M12,-30l-3,-3', stroke: c, 'stroke-width': 2, 'stroke-linecap': 'round' }, b);
+  if (antlers) el('path', { d: 'M14,-30l-2,-9l-3,-3M12,-37l3,-3M16,-30l2,-9l3,-2M18,-36l-3,-3', fill: 'none', stroke: '#8a5a35', 'stroke-width': 1.3, 'stroke-linecap': 'round' }, b);
+  el('path', { d: 'M-12,-15l-3,-2', stroke: '#fff3d6', 'stroke-width': 2, 'stroke-linecap': 'round' }, b);
+  block(x - 20, y - 45, x + 25, y + 8);
+}
+deer(620, -170, 1, true); deer(670, -150, -1, false); deer(590, -130, 1, false);
+deer(-150, 760, -1, true);
+for (let i = 0; i < 26; i++) {
+  const x = rand(B.x0 + 20, B.x1 - 20), y = rand(-610, -470);
+  el('path', { d: blob(x, y, rand(7, 16), rand(5, 9), 6, .15, rand(0, 6)), fill: pick(['#a9b2b7', '#9aa3a8', '#b5bdc1']), stroke: '#8a9398', 'stroke-width': .8 }, L.groundProps);
+}
+
+/* הרים מושלגים ומפל (הכי למעלה) */
+{
+  function mountains(baseY, hMin, hMax, col, snowCol, step) {
+    for (let x = B.x0 - 120; x < B.x1 + 120; x += step * rand(.75, 1.15)) {
+      const w = rand(240, 330), h = rand(hMin, hMax), px = x + rand(-20, 20), top = baseY - h;
+      el('path', { d: `M${n2(px - w / 2)},${baseY}L${n2(px)},${n2(top)}L${n2(px + w / 2)},${baseY}Z`, fill: col, stroke: shade(col, -.08), 'stroke-width': 1.5, 'stroke-linejoin': 'round' }, L.ground);
+      el('path', { d: `M${n2(px)},${n2(top)}L${n2(px + w / 2)},${baseY}L${n2(px + w * .08)},${baseY}Z`, fill: shade(col, -.1) }, L.ground);
+      const sh = h * .3, sw = w / 2 * .3;
+      el('path', { d: `M${n2(px - sw)},${n2(top + sh)}L${n2(px)},${n2(top)}L${n2(px + sw)},${n2(top + sh)}l-${n2(sw * .35)},${n2(-sh * .2)}l-${n2(sw * .35)},${n2(sh * .25)}l-${n2(sw * .3)},${n2(-sh * .3)}l-${n2(sw * .4)},${n2(sh * .2)}l-${n2(sw * .3)},${n2(-sh * .15)}Z`, fill: snowCol, 'stroke-linejoin': 'round' }, L.ground);
+    }
+  }
+  mountains(-640, 200, 280, '#a8c3d1', '#ffffff', 170);
+  mountains(-585, 140, 230, '#86aabd', '#f4fbff', 200);
+  // מפל שנשפך אל הנהר
+  el('path', { d: 'M1066,-700h28l4,70h-36z', fill: '#bfeafa' }, L.ground);
+  el('path', { d: 'M1072,-698v62M1080,-700v66M1088,-698v62', stroke: '#ffffff', 'stroke-width': 2, 'stroke-linecap': 'round', opacity: .9 }, L.ground);
+  el('ellipse', { cx: 1080, cy: -632, rx: 28, ry: 9, fill: '#e8f8fd' }, L.ground);
+}
+
 /* שתילת עצים */
 {
   const trees = [];
-  const forest = (x, y) => (x < 330 && y < 440) || y < 60 || x > 755 || x < 50 || (y > 1450 && x > 420) || y > 1660
+  const inVillage = (x, y) => x > 0 && x < W && y > 0 && y < H;
+  const forest = (x, y) => !inVillage(x, y) || (x < 330 && y < 440) || y < 60 || x > 755 || x < 50 || (y > 1450 && x > 420) || y > 1660
     || (y > 1200 && y < 1250);
-  for (let i = 0; i < 9000 && trees.length < 300; i++) {
-    const x = rand(0, W), y = rand(0, H);
-    if (R() > (forest(x, y) ? 1 : .18)) continue;
-    if (!treeOk(x, y)) continue;
-    if (trees.some(t => (t[0] - x) ** 2 + ((t[1] - y) * 1.4) ** 2 < 30 * 30)) continue;
+  const grid = new Map(), cell = 30, key = (x, y) => Math.floor(x / cell) + ',' + Math.floor(y / cell);
+  const near = (x, y) => {
+    const cx = Math.floor(x / cell), cy = Math.floor(y / cell);
+    for (let i = -1; i <= 1; i++) for (let j = -2; j <= 2; j++)
+      for (const t of grid.get((cx + i) + ',' + (cy + j)) || []) if ((t[0] - x) ** 2 + ((t[1] - y) * 1.4) ** 2 < 30 * 30) return true;
+    return false;
+  };
+  for (let i = 0; i < 40000 && trees.length < 1000; i++) {
+    const x = rand(B.x0, B.x1), y = rand(B.y0, B.y1);
+    if (R() > (forest(x, y) ? (inVillage(x, y) ? 1 : .7) : .18)) continue;
+    if (!treeOk(x, y) || near(x, y)) continue;
     trees.push([x, y]);
+    const k = key(x, y); (grid.get(k) || grid.set(k, []).get(k)).push([x, y]);
   }
-  for (const [x, y] of trees) (x < 330 && y < 440) || x > 755 || R() < .35 ? pine(x, y, rand(1.5, 2.1)) : roundTree(x, y, rand(1.3, 1.75));
+  for (const [x, y] of trees) (x < 330 && y < 440) || y < 0 || x > 1150 || R() < .35 ? pine(x, y, rand(1.5, 2.1)) : roundTree(x, y, rand(1.3, 1.75));
   // כמה עצים בכיכר
   roundTree(122, 1138, 1.4); roundTree(680, 1140, 1.5);
 }
@@ -1109,7 +1415,7 @@ const BUTTERFLIES = ['#ff9f43', '#ffffff', '#6fb7ff', '#ff7aa2'].map((c, i) => {
 });
 
 /* עננים וצלליהם */
-const CLOUDS = [[120, 180, 1], [620, 640, .9], [250, 1050, 1.1], [600, 1420, .9]].map(([x, y, s]) => {
+const CLOUDS = [[120, 180, 1], [620, 640, .9], [250, 1050, 1.1], [600, 1420, .9], [-300, -300, 1.2], [900, -500, 1], [1000, 1300, 1.1], [-350, 1700, 1], [300, 2100, 1.2], [-100, 600, .9]].map(([x, y, s]) => {
   const d = circ(0, 0, 26 * s) + circ(-26 * s, 8 * s, 17 * s) + circ(26 * s, 7 * s, 19 * s) + circ(-8 * s, 14 * s, 18 * s) + circ(12 * s, 14 * s, 17 * s);
   const sh = el('path', { d, fill: '#2f5a1a', opacity: .08 }, L.cloudShadows);
   const c = el('g', null, L.clouds);
@@ -1163,7 +1469,7 @@ sortDepth();
 
 /* ═════════════════════ מצלמה: זום וגרירה ═════════════════════ */
 const cam = { k: 1, x: 0, y: 0 };
-let fitK = 1, vw = 0, vh = 0, anim = null, following = null;
+let fitK = 1, minK = 1, vw = 0, vh = 0, anim = null, following = null;
 const zoomLbl = document.getElementById('zoomLbl');
 const ptrs = new Map();
 let down = null, pinch = null;
@@ -1172,8 +1478,9 @@ let gesturing = false, gestureMoved = false, wheelTimer = 0;
 function measure() {
   const r = stage.getBoundingClientRect(); vw = r.width; vh = r.height;
   // בטלפון לאורך המפה ממלאת את המסך (כיסוי, חיתוך קטן בקצוות); במסך רחב רואים את כולה
-  const contain = Math.min(vw / W, vh / H), cover = Math.max(vw / W, vh / H);
-  fitK = cover / contain < 1.2 ? cover : contain;
+  const fit = (w, h) => { const c = Math.min(vw / w, vh / h), v = Math.max(vw / w, vh / h); return v / c < 1.2 ? v : c; };
+  fitK = fit(W, H);                                              // תצוגת הבית: הכפר
+  minK = Math.min(fitK, fit(B.x1 - B.x0, B.y1 - B.y0));          // הכי רחוק: כל העולם
   // השכבות גדולות מהמסך בשוליים M, כדי שבזמן גרירה/הקטנה לא ייחשפו חורים לפני הציור מחדש
   M = Math.round(Math.max(vw, vh) * .35);
   for (const sv of [svgS, svgD]) {
@@ -1202,9 +1509,10 @@ function cssMove(wrap, base) {
   return true;
 }
 function clampCam() {
-  cam.k = clamp(cam.k, fitK, fitK * 24);
-  cam.x = W * cam.k <= vw ? (vw - W * cam.k) / 2 : clamp(cam.x, vw - W * cam.k, 0);
-  cam.y = H * cam.k <= vh ? (vh - H * cam.k) / 2 : clamp(cam.y, vh - H * cam.k, 0);
+  cam.k = clamp(cam.k, minK, fitK * 24);
+  const bw = (B.x1 - B.x0) * cam.k, bh = (B.y1 - B.y0) * cam.k;
+  cam.x = bw <= vw ? vw / 2 - (B.x0 + B.x1) / 2 * cam.k : clamp(cam.x, vw - B.x1 * cam.k, -B.x0 * cam.k);
+  cam.y = bh <= vh ? vh / 2 - (B.y0 + B.y1) / 2 * cam.k : clamp(cam.y, vh - B.y1 * cam.k, -B.y0 * cam.k);
 }
 function applyCam() {
   clampCam();
@@ -1229,7 +1537,7 @@ function endGesture() {
   if (gestureMoved) { commit(); commitD(); }
 }
 function zoomAt(sx, sy, f) {
-  const nk = clamp(cam.k * f, fitK, fitK * 24), wx = (sx - cam.x) / cam.k, wy = (sy - cam.y) / cam.k;
+  const nk = clamp(cam.k * f, minK, fitK * 24), wx = (sx - cam.x) / cam.k, wy = (sy - cam.y) / cam.k;
   cam.k = nk; cam.x = sx - wx * nk; cam.y = sy - wy * nk; applyCam();
 }
 function animateTo(k, wx, wy, ms = 420) {        // wx,wy: נקודת עולם שתהיה במרכז המסך
@@ -1303,7 +1611,7 @@ function startFollow(f) {
 function stopFollow() { following = null; followEl.classList.remove('on'); }
 document.getElementById('unfollow').onclick = stopFollow;
 document.getElementById('zin').onclick = () => { const c = center(); animateTo(Math.min(cam.k * 1.8, fitK * 24), c[0], c[1], 300); };
-document.getElementById('zout').onclick = () => { const c = center(); animateTo(Math.max(cam.k / 1.8, fitK), c[0], c[1], 300); };
+document.getElementById('zout').onclick = () => { const c = center(); animateTo(Math.max(cam.k / 1.8, minK), c[0], c[1], 300); };
 document.getElementById('zfit').onclick = () => { stopFollow(); fitAll(); };
 const card = document.getElementById('card');
 document.getElementById('cardToggle').onclick = e => { card.classList.toggle('min'); e.currentTarget.textContent = card.classList.contains('min') ? '?' : '–'; };
@@ -1364,15 +1672,15 @@ function tick(now) {
   }
   // עננים
   for (const c of CLOUDS) {
-    c.x += c.v * dt; if (c.x > W + 160) c.x = -160;
+    c.x += c.v * dt; if (c.x > B.x1 + 160) c.x = B.x0 - 160;
     c.c.setAttribute('transform', `translate(${n2(c.x)},${n2(c.y)})`);
     c.sh.setAttribute('transform', `translate(${n2(c.x + 40)},${n2(c.y + 110)})`);
   }
   // להקת ציפורים
-  if (FLOCK.x > W + 80 || FLOCK.g.getAttribute('display') === 'none') {
+  if (FLOCK.x > B.x1 + 80 || FLOCK.g.getAttribute('display') === 'none') {
     FLOCK.wait -= dt;
-    if (FLOCK.wait <= 0) { FLOCK.x = -60; FLOCK.y = rand(150, H - 250); FLOCK.wait = rand(18, 30); FLOCK.g.setAttribute('display', 'inline'); }
-    else if (FLOCK.x > W + 80) FLOCK.g.setAttribute('display', 'none');
+    if (FLOCK.wait <= 0) { FLOCK.x = B.x0 - 60; FLOCK.y = rand(B.y0 + 300, B.y1 - 400); FLOCK.wait = rand(18, 30); FLOCK.g.setAttribute('display', 'inline'); }
+    else if (FLOCK.x > B.x1 + 80) FLOCK.g.setAttribute('display', 'none');
   }
   if (FLOCK.g.getAttribute('display') !== 'none') {
     FLOCK.x += 60 * dt; FLOCK.y -= 6 * dt;
