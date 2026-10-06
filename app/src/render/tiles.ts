@@ -66,7 +66,7 @@ function getTile(l: number, x: number, y: number) {
 }
 function putTile(l: number, x: number, y: number, bmp: any) {
   tiles.set(tkey(l, x, y), bmp);
-  for (const [k, v] of tiles) { if (tiles.size <= TILE_CAP) break; if (!k.startsWith('0/')) { tiles.delete(k); v.close?.(); } }
+  for (const [k, v] of tiles) { if (tiles.size <= TILE_CAP) break; if (!k.startsWith('0/') && !wanted.has(k)) { tiles.delete(k); v.close?.(); } }
 }
 
 let painters: { postMessage(m: any): void }[] = [];
@@ -74,13 +74,14 @@ let gen = 0, colors: string[] = [];
 const colorMap = () => Object.fromEntries(colors.map(c => [c, grade(c)]));
 let cvS: HTMLCanvasElement, cs: CanvasRenderingContext2D;
 const L0_KEYS: number[][] = [];
-export const tileStats = { missing: 0 };
+export const tileStats = { missing: 0, painted: 0 };
 let sDirty = true, sRaf = 0, lastNeed = '';
+let wanted = new Set<string>();   // האריחים שהתצוגה הנוכחית צריכה או מכינה מראש: לא נזרקים מהמטמון
 
 export function initTiles(canvas: HTMLCanvasElement) {
   cvS = canvas; cs = canvas.getContext('2d');
   const DL = extractDisplayList();
-  const onTile = (m: any) => { if (m.type === 'tile' && m.gen === gen) { putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
+  const onTile = (m: any) => { if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
   try {
     if (typeof OffscreenCanvas === 'undefined' || !('transferToImageBitmap' in OffscreenCanvas.prototype)) throw 0;
     // כמה ציירים במקביל: אריחים של רמת זום חדשה מוכנים מהר יותר
@@ -132,9 +133,16 @@ function drawStatic() {
     standIn(l, i, j, X, Y, Wd, Ht);
   }
   tileStats.missing = need.length;
-  need.sort((a, b) => a[3] - b[3]);
-  // מראש, לפי סדר חשיבות: טבעת סביב המסך, רמה אחת ושתיים פנימה (במרכז), רמה אחת ושתיים החוצה (על שטח רחב)
-  const list = need.map(q => q.slice(0, 3));
+  // את רשימת ההכנה בונים מחדש רק כשהאזור הנראה משתנה (לא בכל פריים של גרירה)
+  const key = `${l}|${ix0}|${ix1}|${iy0}|${iy1}|${Math.round(ccx / tw * 2)}|${Math.round(ccy / tw * 2)}`;
+  if (key === lastNeed) return;
+  lastNeed = key;
+  // לפי סדר חשיבות: המסך, טבעת סביבו, רמה אחת ושתיים פנימה (במרכז), אחת ושתיים החוצה (על שטח רחב).
+  // הכול נחתך לתקציב שנכנס במטמון, אחרת אריחים נזרקים ומצוירים שוב בלי סוף.
+  const want: number[][] = [];
+  for (let j = iy0; j <= iy1; j++) for (let i = ix0; i <= ix1; i++)
+    want.push([l, i, j, (B.x0 + (i + .5) * tw - ccx) ** 2 + (B.y0 + (j + .5) * tw - ccy) ** 2]);
+  want.sort((a, b) => a[3] - b[3]);
   const vwW = wx1 - wx0, vhW = wy1 - wy0;
   const around = (lv: number, f: number) => {
     if (lv < 0 || lv > LMAX) return;
@@ -142,21 +150,21 @@ function drawStatic() {
     const a0 = clamp(Math.floor((ccx - hx - B.x0) / t), 0, mx - 1), a1 = clamp(Math.floor((ccx + hx - B.x0) / t), 0, mx - 1);
     const b0 = clamp(Math.floor((ccy - hy - B.y0) / t), 0, my - 1), b1 = clamp(Math.floor((ccy + hy - B.y0) / t), 0, my - 1);
     const q: number[][] = [];
-    for (let j = b0; j <= b1; j++) for (let i = a0; i <= a1; i++) if (!tiles.has(tkey(lv, i, j)))
-      q.push([lv, i, j, (B.x0 + (i + .5) * t - ccx) ** 2 + (B.y0 + (j + .5) * t - ccy) ** 2]);
-    q.sort((x, y) => x[3] - y[3]); for (const e of q) list.push(e.slice(0, 3));
+    for (let j = b0; j <= b1; j++) for (let i = a0; i <= a1; i++)
+      if (lv !== l || i < ix0 || i > ix1 || j < iy0 || j > iy1) q.push([lv, i, j, (B.x0 + (i + .5) * t - ccx) ** 2 + (B.y0 + (j + .5) * t - ccy) ** 2]);
+    q.sort((x, y) => x[3] - y[3]); for (const e of q) want.push(e);
   };
   around(l, 1 + 2 * tw / Math.min(vwW, vhW));   // טבעת של אריח סביב המסך
-  around(l + 1, .7); around(l - 1, 2); around(l + 2, .3); around(l - 2, 4);
+  around(l - 1, 2); around(l + 1, .7); around(l - 2, 4); around(l + 2, .3);
+  const budget = TILE_CAP - L0_KEYS.length - 16;
+  if (want.length > budget) want.length = Math.max(budget, need.length);
+  wanted = new Set(want.map(q => tkey(q[0], q[1], q[2])));
+  const list = want.filter(q => !tiles.has(tkey(q[0], q[1], q[2]))).map(q => q.slice(0, 3));
   for (const k of L0_KEYS) if (!tiles.has(tkey(k[0], k[1], k[2]))) list.push(k);   // תמיד גם סקירה של כל העולם
-  const sig = list.map(q => q.join('/')).join(' ');
-  if (sig !== lastNeed) {
-    lastNeed = sig;
-    // כל אריח שייך תמיד לאותו צייר, כדי שלא יצויר פעמיים
-    const parts: number[][][] = painters.map(() => []);
-    for (const q of list) parts[(q[1] * 7 + q[2] * 13 + q[0]) % painters.length].push(q);
-    painters.forEach((p, n) => p.postMessage({ type: 'need', list: parts[n] }));
-  }
+  // כל אריח שייך תמיד לאותו צייר, כדי שלא יצויר פעמיים
+  const parts: number[][][] = painters.map(() => []);
+  for (const q of list) parts[(q[1] * 7 + q[2] * 13 + q[0]) % painters.length].push(q);
+  painters.forEach((p, n) => p.postMessage({ type: 'need', list: parts[n] }));
 }
 
 /** ממלא זמנית מקום של אריח חסר: מאריח של רמה גסה יותר, או מארבעה של רמה חדה יותר */
