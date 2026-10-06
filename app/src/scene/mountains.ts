@@ -1,8 +1,8 @@
 /* הרים ועמק.
-   כל רכס בנוי מ"מסות" ברוחב משתנה, עם 1–4 פסגות, רכס משונן, שלושה גוונים (צד מואר, בסיס, צד מוצל),
-   כיפות שלג לא אחידות, ערוצים, ולפעמים מדף שטוח (מקום לבקתה או למטיילים בעתיד).
+   סגנון שטוח כמו שאר האיור: כל רכס בנוי מ"מסות" ברוחב משתנה, עם 1–3 פסגות רחבות, צבע אחד, צל עדין אחד
+   וכיפות שלג לא אחידות. המדרונות רחבים, כדי שאפשר יהיה להוסיף עליהם בתים ושבילים עם אנשים.
    בין המסות יש לפעמים מעבר, כדי שהרכס לא ייראה כמו שורה אחידה.
-   העמק שבין שני הרכסים: מדרון מוצל שיורד אליו מכל צד, ופלג קפוא לאורך קרקעית העמק,
+   העמק שבין שני הרכסים: גבעות מושלגות בבסיס הרכס הצפוני, ופלג קפוא לאורך קרקעית העמק,
    עם גשרים אוטומטיים בכל מקום שדרך או שביל חוצים אותו. */
 import { el, n2, blob, shade, smoothOpen } from '../core/util';
 import { rand, rngAt, type LocalRng } from '../core/rng';
@@ -37,7 +37,7 @@ function jag(a: Pt, b: Pt, base: number, rg: LocalRng, rough: number, depth = 3)
 /** מסה אחת של הר */
 function massif(x0: number, x1: number, base: number, m: any, rg: LocalRng, foot: string): Massif {
   const L = ctx.L.ground, W = x1 - x0, color = shade(m.color, rg.rand(-.05, .05));
-  const n = Math.max(1, Math.min(4, Math.round(W / rg.rand(150, 230))));
+  const n = Math.max(1, Math.min(3, Math.round(W / rg.rand(210, 300))));   // פסגות רחבות: מדרונות שאפשר לשים עליהם בתים ושבילים
   const peaks = Array.from({ length: n }, (_, i) => {
     const h = rg.rand(m.hMin * .6, m.hMax * 1.1);
     return { x: x0 + W * (i + .5) / n + rg.rand(-.15, .15) * W / n, y: base - h, h };
@@ -53,26 +53,16 @@ function massif(x0: number, x1: number, base: number, m: any, rg: LocalRng, foot
   const ridge: Pt[] = [];
   for (let i = 0; i < keys.length - 1; i++) {
     if (i > 0 && i % 2 === 1) peakAt.push(ridge.length); else if (i > 0) saddleAt.push(ridge.length);
-    ridge.push(...jag(keys[i], keys[i + 1], base, rg, .1));
+    ridge.push(...jag(keys[i], keys[i + 1], base, rg, .05, 2));
   }
   saddleAt.push(ridge.length); ridge.push([x1, base]);
   // הגוף
   el('path', { d: poly([...ridge, [x1, base + 2], [x0, base + 2]]), fill: color, stroke: shade(color, -.1), 'stroke-width': 1.2, 'stroke-linejoin': 'round' }, L);
   peaks.forEach((p, i) => {
     const pi = peakAt[i], l = saddleAt[i], r = saddleAt[i + 1];
-    // צד מואר (שמאל) וצד מוצל (ימין): השמש מגיעה ממערב, כמו הצללים של העצים
-    const footL = p.x - (p.x - ridge[l][0]) * rg.rand(.1, .3), footR = p.x + (ridge[r][0] - p.x) * rg.rand(.05, .3);
-    el('path', { d: poly([[ridge[l][0], base], ...ridge.slice(l, pi + 1), [footL, base]]), fill: shade(color, .08), opacity: .55 }, L);
-    el('path', { d: poly([...ridge.slice(pi, r + 1), [ridge[r][0], base], [footR, base]]), fill: shade(color, -.13) }, L);
-    // ערוצים: קווים שיורדים מהרכס
-    let gul = '';
-    for (let k = 0; k < 3; k++) {
-      const s = ridge[Math.max(l + 1, Math.min(r - 1, pi + Math.round(rg.rand(-1, 1) * (r - l) * .35)))];
-      if (!s || base - s[1] < 40) continue;
-      const len = (base - s[1]) * rg.rand(.25, .5), dx = rg.rand(-.2, .2) * len;
-      gul += `M${n2(s[0])},${n2(s[1] + 6)}q${n2(dx * .3)},${n2(len * .5)} ${n2(dx)},${n2(len)}`;
-    }
-    el('path', { d: gul, fill: 'none', stroke: shade(color, -.22), 'stroke-width': 1.3, 'stroke-linecap': 'round', opacity: .45 }, L);
+    // סגנון שטוח כמו שאר האיור: צבע אחד וצל עדין אחד בצד המזרחי (השמש ממערב, כמו הצללים של העצים)
+    const footR = p.x + (ridge[r][0] - p.x) * rg.rand(.15, .35);
+    el('path', { d: poly([...ridge.slice(pi, r + 1), [ridge[r][0], base], [footR, base]]), fill: shade(color, -.06) }, L);
     // כיפת שלג עם "טפטופים" לא אחידים במורד
     if (p.h > m.hMin * .7) {
       const sy = p.y + p.h * rg.rand(.22, .4);
@@ -82,22 +72,8 @@ function massif(x0: number, x1: number, base: number, m: any, rg: LocalRng, foot
       const a = ridge[li], b = ridge[ri], edge: Pt[] = [];
       for (let xx = b[0] - rg.rand(4, 8); xx > a[0] + 4; xx -= rg.rand(7, 13)) edge.push([xx, sy + (rg.chance(.3) ? rg.rand(9, 24) : rg.rand(-3, 5))]);
       el('path', { d: poly([...ridge.slice(li, ri + 1), ...edge]), fill: m.snow, 'stroke-linejoin': 'round' }, L);
-      el('path', { d: poly([...ridge.slice(pi, ri + 1), [p.x + (b[0] - p.x) * .25, sy + 6]]), fill: '#dbe7ee' }, L);
     }
   });
-  // מדף שטוח באמצע הגובה: מקום לבקתה, לספסל או למטיילים בעתיד
-  if (W > 360 && rg.chance(.75)) {
-    const p = peaks[Math.floor(rg.r() * n)], lx = p.x + rg.rand(-.25, .25) * W / n, ly = base - p.h * rg.rand(.16, .28), top = ridgeAt({ x0, x1, base, ridge, peaks }, lx);
-    if (top !== null && ly > top + 30) {
-      // משטח שטוח (בהיר) עם דופן קדמית כהה שמראה את העובי שלו, שלג דק ושני סלעים
-      const rx = rg.rand(34, 48), dep = rg.rand(9, 13), th = rg.rand(6, 8);
-      const top2 = `M${n2(lx - rx)},${n2(ly)}C${n2(lx - rx * .6)},${n2(ly - dep)} ${n2(lx + rx * .6)},${n2(ly - dep)} ${n2(lx + rx)},${n2(ly)}`;
-      el('path', { d: top2 + `C${n2(lx + rx * .6)},${n2(ly + dep * .6)} ${n2(lx - rx * .6)},${n2(ly + dep * .6)} ${n2(lx - rx)},${n2(ly)}Z`, fill: shade(color, .1) }, L);
-      el('path', { d: `M${n2(lx - rx)},${n2(ly)}C${n2(lx - rx * .6)},${n2(ly + dep * .6)} ${n2(lx + rx * .6)},${n2(ly + dep * .6)} ${n2(lx + rx)},${n2(ly)}l-3,${n2(th)}C${n2(lx + rx * .5)},${n2(ly + dep * .6 + th)} ${n2(lx - rx * .5)},${n2(ly + dep * .6 + th)} ${n2(lx - rx + 3)},${n2(ly + th)}Z`, fill: shade(color, -.2) }, L);
-      el('path', { d: blob(lx - rx * .25, ly - 1.5, rx * .3, dep * .2, 7, .2, 3), fill: '#ffffff', opacity: .55 }, L);
-      el('path', { d: blob(lx + rx * .45, ly - 2, 4, 2.6, 6, .2, 1) + blob(lx + rx * .62, ly, 2.6, 1.8, 6, .2, 2), fill: shade(color, -.1), stroke: shade(color, -.3), 'stroke-width': .6 }, L);
-    }
-  }
   // גבעות למרגלות ההר וכמה סלעים
   let hills = '', rocks = '';
   for (let xx = x0 + rg.rand(10, 40); xx < x1 - 20; xx += rg.rand(60, 120)) hills += blob(xx, base + 3, rg.rand(34, 70), rg.rand(12, 22), 8, .12, rg.rand(0, 6));
@@ -123,31 +99,6 @@ function range(m: any, idx: number, foot: string): Massif[] {
   for (const a of anchors) if (!spans.some(([s0, s1]) => a > s0 + 60 && a < s1 - 60)) spans.push([a - 190, a + 190]);
   for (const [s0, s1] of spans) out.push(massif(s0, s1, m.baseY, m, rg, foot));
   return out;
-}
-
-/** מדרון מוצל שיורד אל העמק: רצועה רכה לאורך הצד של הרכס שפונה לעמק, עם קווי מדרון עדינים */
-function valleySlope(L: any, M: Massif[], dir: number, depth: number, rg: LocalRng) {
-  for (const k of [1, .62, .3]) {
-    let d = '';
-    for (const S of M) {
-      const pts: Pt[] = [];
-      for (let x = S.x0 + 10; x <= S.x1 - 10; x += 24) {
-        const top = dir < 0 ? (ridgeAt(S, x) ?? S.base) : S.base;
-        pts.push([x, top + dir * depth * k * rg.rand(.75, 1.1)]);
-      }
-      if (pts.length < 3) continue;
-      const edgeY = dir < 0 ? S.base - 30 : S.base;
-      d += smoothOpen([[S.x0 + 10, edgeY], ...pts, [S.x1 - 10, edgeY]]) + 'Z';
-    }
-    el('path', { d, fill: k === 1 ? '#e2ecf1' : k > .5 ? '#d7e3ea' : '#cbdae3', opacity: .9 }, L);
-  }
-  // קווי מדרון קצרים בכיוון הירידה
-  let h = '';
-  for (const S of M) for (let x = S.x0 + 20; x < S.x1 - 20; x += rg.rand(14, 26)) {
-    const top = dir < 0 ? (ridgeAt(S, x) ?? S.base) : S.base, y0 = top + dir * rg.rand(10, depth * .45);
-    h += `M${n2(x)},${n2(y0)}l${n2(rg.rand(-1.5, 1.5))},${n2(dir * rg.rand(5, 11))}`;
-  }
-  el('path', { d: h, fill: 'none', stroke: '#bfd1dc', 'stroke-width': 1.1, 'stroke-linecap': 'round', opacity: .55 }, L);
 }
 
 /** פלג קפוא בקרקעית העמק, עם גשרים במקומות שבהם דרכים ושבילים חוצים אותו */
@@ -187,15 +138,11 @@ function creek(pts: Pt[], trails: Pt[][]) {
   }
 }
 
-/** ההרים. המדרונות שיורדים לעמק נכנסים לקבוצה שנוצרת לפני ההרים, כדי שיהיו מאחוריהם */
+/** ההרים, ואחריהם הפלג שבעמק */
 export function buildMountains(w: WorldData) {
   const T = w.terrain, { B } = ctx;
   // הרכסים הישנים צרכו מספרים מהמחולל הכללי; צורכים אותם גם עכשיו, כדי שהיער ושאר העולם יישארו במקומם
   for (const m of T.mountains) for (let x = B.x0 - 120; x < B.x1 + 120; x += m.step * rand(.75, 1.15)) { rand(240, 330); rand(m.hMin, m.hMax); rand(-20, 20); }
-  const slopes = el('g', null, ctx.L.ground), rg = rngAt(0, 0, 61);
-  T.mountains.forEach((m: any, i: number) => {
-    const M = range(m, i, m.foot || (m.valley === 1 ? '#e2edf2' : '#a9bfa6'));
-    if (m.valley) valleySlope(slopes, M, m.valley, m.slope ?? (m.valley < 0 ? 180 : 150), rg);
-  });
+  T.mountains.forEach((m: any, i: number) => range(m, i, m.foot || (m.valley === 1 ? '#e2edf2' : '#a9bfa6')));
   if (T.creek) creek(T.creek, w.trails);
 }
