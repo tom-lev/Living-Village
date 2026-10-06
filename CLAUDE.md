@@ -46,6 +46,11 @@ This file is the complete handoff. Work on this project so far happened in one l
   - full zoom-out showing the whole world, but with no empty bands.
 - **UI:**
   - Hebrew/RTL.
+  - **Object names.** Any object in `world.json` can have a unique English `name`, such as "Carter House", "Duck Lake" or "Old Stone Farm".
+    - The name shows as a small label under the object once zoom passes about 3× the home view, and it keeps a constant screen size (`world/labels.ts`, dynamic layer `labels`).
+    - Use these names when talking with the owner about fixes.
+    - Shops and the station show their name on their own sign, so they get no label. `labelAt: [x, y]` overrides the label position.
+    - About 99 initial names exist. Houses use surnames, and snowy ones are "… Lodge". Trees and small props have no names.
   - **Text inside the world is English only:** shop signs, the station and character names (Noa, Itai, Grandpa Moshe…). The UI chrome stays Hebrew.
   - Bottom-left: + − (hidden on touch), ⤢ (home view), ❚❚/▶ (pause), 🎨 (palette menu). Bottom-right: the zoom label.
   - The follow pill appears when you tap a character.

@@ -26,7 +26,7 @@ export function initLayers(svgS: SVGSVGElement, svgD: SVGSVGElement) {
   setDefs(ctx.defs);
   ctx.worldS = el('g', null, svgS); ctx.worldD = ctx.gpuDyn ? new VNode('g') : el('g', null, svgD);
   for (const n of ['ground', 'roads', 'groundProps', 'water', 'props']) ctx.L[n] = el('g', { 'data-layer': n }, ctx.worldS);
-  for (const n of ['waterFx', 'cloudShadows', 'pad', 'fx', 'actors', 'air', 'clouds']) ctx.L[n] = el('g', { 'data-layer': n }, ctx.worldD);
+  for (const n of ['waterFx', 'cloudShadows', 'pad', 'fx', 'actors', 'air', 'clouds', 'labels']) ctx.L[n] = el('g', { 'data-layer': n }, ctx.worldD);
   const g = el('radialGradient', { id: 'fireGlow' }, ctx.defs);
   el('stop', { offset: '0%', 'stop-color': '#ffcf6b', 'stop-opacity': .9 }, g);
   el('stop', { offset: '100%', 'stop-color': '#ffcf6b', 'stop-opacity': 0 }, g);

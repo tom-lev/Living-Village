@@ -4,6 +4,7 @@ import { Walker, Dog, Sitter, Balloon, Leash, sortDepth } from './people';
 import { Horse, Sheep, ducks, fish, butterflies } from './animals';
 import { clouds, flock } from './ambient';
 import { updateSeen } from '../camera/view';
+import { updateLabels } from '../world/labels';
 
 export { followables } from './people';
 
@@ -43,6 +44,7 @@ export function buildActors(A: Record<string, any>) {
     walkers,
     update(dt: number, T: number) {
       updateSeen();   // מה רואים בפריים הזה: מה שמחוץ למסך לא מצויר
+      updateLabels(); // שמות האובייקטים: מופיעים בזום קרוב
       for (const f of FX) f(T, dt);
       for (const u of updates) u(dt, T);
       if (++frame % 6 === 0) sortDepth();

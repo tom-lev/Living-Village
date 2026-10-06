@@ -1584,7 +1584,8 @@
   {
    "type": "fountain",
    "x": 560,
-   "y": 776
+   "y": 776,
+   "name": "Roundabout Fountain"
   },
   {
    "type": "shop",
@@ -1676,12 +1677,14 @@
    "x": 420,
    "y": 600,
    "rx": 62,
-   "ry": 30
+   "ry": 30,
+   "name": "Church Square"
   },
   {
    "type": "church",
    "x": 418,
-   "y": 585
+   "y": 585,
+   "name": "Village Church"
   },
   {
    "type": "paddock",
@@ -1689,14 +1692,16 @@
    "x0": 25,
    "y0": 470,
    "x1": 240,
-   "y1": 720
+   "y1": 720,
+   "name": "Horse Paddock"
   },
   {
    "type": "vegGarden",
    "x": 40,
    "y": 780,
    "w": 200,
-   "h": 70
+   "h": 70,
+   "name": "Village Vegetable Garden"
   },
   {
    "type": "scarecrow",
@@ -1706,13 +1711,15 @@
   {
    "type": "tent",
    "x": 110,
-   "y": 270
+   "y": 270,
+   "name": "Tamar's Tent"
   },
   {
    "type": "campfire",
    "id": "campfire",
    "x": 180,
-   "y": 292
+   "y": 292,
+   "name": "Campfire"
   },
   {
    "type": "flowerField",
@@ -1720,7 +1727,8 @@
    "x": 150,
    "y": 1625,
    "rx": 105,
-   "ry": 45
+   "ry": 45,
+   "name": "Butterfly Meadow"
   },
   {
    "type": "mailbox",
@@ -1790,7 +1798,8 @@
    "wall": "#fff3d6",
    "roof": "#4caf50",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Miller House"
   },
   {
    "type": "roundTree",
@@ -1821,7 +1830,8 @@
    "wall": "#fde9c8",
    "roof": "#3d9bd9",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Baker House"
   },
   {
    "type": "plot",
@@ -1846,7 +1856,8 @@
    "wall": "#fde9c8",
    "roof": "#f29e38",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Carter House"
   },
   {
    "type": "roundTree",
@@ -1877,7 +1888,8 @@
    "wall": "#fffaf0",
    "roof": "#3d6fd0",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Fisher House"
   },
   {
    "type": "roundTree",
@@ -1908,7 +1920,8 @@
    "wall": "#fde9c8",
    "roof": "#3d6fd0",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Hill House"
   },
   {
    "type": "roundTree",
@@ -1939,7 +1952,8 @@
    "wall": "#fdeccc",
    "roof": "#f29e38",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Brooks House"
   },
   {
    "type": "roundTree",
@@ -1970,7 +1984,8 @@
    "wall": "#fff3d6",
    "roof": "#f29e38",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Wood House"
   },
   {
    "type": "plot",
@@ -1995,7 +2010,8 @@
    "wall": "#fde9c8",
    "roof": "#3d9bd9",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Green House"
   },
   {
    "type": "roundTree",
@@ -2026,7 +2042,8 @@
    "wall": "#fffaf0",
    "roof": "#d9473d",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Hale House"
   },
   {
    "type": "roundTree",
@@ -2057,7 +2074,8 @@
    "wall": "#fde9c8",
    "roof": "#4caf50",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Rowe House"
   },
   {
    "type": "roundTree",
@@ -2088,7 +2106,8 @@
    "wall": "#fde9c8",
    "roof": "#f29e38",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Lane House"
   },
   {
    "type": "roundTree",
@@ -2119,7 +2138,8 @@
    "wall": "#fffaf2",
    "roof": "#f29e38",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Ford House"
   },
   {
    "type": "roundTree",
@@ -2150,7 +2170,8 @@
    "wall": "#fffaf0",
    "roof": "#d9473d",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Marsh House"
   },
   {
    "type": "plot",
@@ -2175,7 +2196,8 @@
    "wall": "#fff3d6",
    "roof": "#3d9bd9",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Cole House"
   },
   {
    "type": "plot",
@@ -2200,7 +2222,8 @@
    "wall": "#fffaf0",
    "roof": "#e96aa4",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Reed House"
   },
   {
    "type": "roundTree",
@@ -2231,7 +2254,8 @@
    "wall": "#fffaf2",
    "roof": "#d9473d",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Shaw House"
   },
   {
    "type": "roundTree",
@@ -2262,7 +2286,8 @@
    "wall": "#fdeccc",
    "roof": "#e2574c",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Wells House"
   },
   {
    "type": "roundTree",
@@ -2293,7 +2318,8 @@
    "wall": "#fff3d6",
    "roof": "#7a52a8",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Hart House"
   },
   {
    "type": "plot",
@@ -2318,7 +2344,8 @@
    "wall": "#fde9c8",
    "roof": "#3d9bd9",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Price House"
   },
   {
    "type": "roundTree",
@@ -2349,7 +2376,8 @@
    "wall": "#fffaf2",
    "roof": "#f29e38",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Grant House"
   },
   {
    "type": "roundTree",
@@ -2380,7 +2408,8 @@
    "wall": "#fffaf2",
    "roof": "#3d6fd0",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Moss House"
   },
   {
    "type": "roundTree",
@@ -2411,7 +2440,8 @@
    "wall": "#fffaf2",
    "roof": "#f29e38",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Blake House"
   },
   {
    "type": "plot",
@@ -2436,7 +2466,8 @@
    "wall": "#fffaf0",
    "roof": "#7a52a8",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Pike House"
   },
   {
    "type": "plot",
@@ -2461,7 +2492,8 @@
    "wall": "#fde9c8",
    "roof": "#3d6fd0",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Dale House"
   },
   {
    "type": "roundTree",
@@ -2492,7 +2524,8 @@
    "wall": "#fffaf0",
    "roof": "#4caf50",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Fox House"
   },
   {
    "type": "roundTree",
@@ -2523,7 +2556,8 @@
    "wall": "#fffaf2",
    "roof": "#e2574c",
    "win": 1,
-   "chimney": true
+   "chimney": true,
+   "name": "Lowe House"
   },
   {
    "type": "roundTree",
@@ -2554,7 +2588,8 @@
    "wall": "#fffaf0",
    "roof": "#7a52a8",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Gray House"
   },
   {
    "type": "plot",
@@ -2579,7 +2614,8 @@
    "wall": "#fff3d6",
    "roof": "#d9473d",
    "win": 1,
-   "chimney": false
+   "chimney": false,
+   "name": "Holt House"
   },
   {
    "type": "roundTree",
@@ -2683,14 +2719,16 @@
      641,
      169
     ]
-   ]
+   ],
+   "name": "Duck Lake"
   },
   {
    "type": "pier",
    "x": 690,
    "y": 2290,
    "w": 44,
-   "h": 200
+   "h": 200,
+   "name": "Pier"
   },
   {
    "type": "umbrella",
@@ -2779,7 +2817,8 @@
   {
    "type": "lighthouse",
    "x": -380,
-   "y": 2318
+   "y": 2318,
+   "name": "Point Lighthouse"
   },
   {
    "type": "field",
@@ -2789,7 +2828,8 @@
    "h": 165,
    "a": "#e2c95f",
    "b": "#cfb247",
-   "vertical": false
+   "vertical": false,
+   "name": "Wheat Field"
   },
   {
    "type": "field",
@@ -2799,7 +2839,8 @@
    "h": 165,
    "a": "#9ccc5a",
    "b": "#86b847",
-   "vertical": true
+   "vertical": true,
+   "name": "Cabbage Field"
   },
   {
    "type": "field",
@@ -2809,7 +2850,8 @@
    "h": 165,
    "a": "#b9d36a",
    "b": "#a6c25a",
-   "vertical": true
+   "vertical": true,
+   "name": "Barley Field"
   },
   {
    "type": "field",
@@ -2819,7 +2861,8 @@
    "h": 155,
    "a": "#e8d27a",
    "b": "#d4bb59",
-   "vertical": false
+   "vertical": false,
+   "name": "Oat Field"
   },
   {
    "type": "field",
@@ -2829,7 +2872,8 @@
    "h": 170,
    "a": "#7cb75a",
    "b": "#689f48",
-   "vertical": true
+   "vertical": true,
+   "name": "Potato Field"
   },
   {
    "type": "field",
@@ -2839,7 +2883,8 @@
    "h": 190,
    "a": "#d9c057",
    "b": "#c4a945",
-   "vertical": false
+   "vertical": false,
+   "name": "Corn Field"
   },
   {
    "type": "haybale",
@@ -2884,19 +2929,22 @@
   {
    "type": "barn",
    "x": 225,
-   "y": 1925
+   "y": 1925,
+   "name": "Red Barn"
   },
   {
    "type": "windmill",
    "x": 650,
-   "y": 1940
+   "y": 1940,
+   "name": "Old Windmill"
   },
   {
    "type": "vineyard",
    "x0": 1192,
    "x1": 1290,
    "y0": 300,
-   "y1": 820
+   "y1": 820,
+   "name": "Vineyard"
   },
   {
    "type": "orchard",
@@ -2906,13 +2954,15 @@
    "cols": 6,
    "dx": 46,
    "dy": 48,
-   "skipX": -295
+   "skipX": -295,
+   "name": "Orchard"
   },
   {
    "type": "railway",
    "y": -380,
    "crossingX": 300,
-   "bridgeX": 1037
+   "bridgeX": 1037,
+   "name": "Railway"
   },
   {
    "type": "station",
@@ -2929,7 +2979,8 @@
   {
    "type": "logCabin",
    "x": -260,
-   "y": -170
+   "y": -170,
+   "name": "Woodcutter's Cabin"
   },
   {
    "type": "deer",
@@ -3039,7 +3090,8 @@
    "cx": 280,
    "cy": -1180,
    "rx": 160,
-   "ry": 75
+   "ry": 75,
+   "name": "Mountain Lake"
   },
   {
    "type": "house",
@@ -3053,7 +3105,8 @@
    "win": 4,
    "chimney": true,
    "smoke": false,
-   "door": "#5b3a22"
+   "door": "#5b3a22",
+   "name": "Webb House"
   },
   {
    "type": "cableCar",
@@ -3064,7 +3117,8 @@
    "b": [
     980,
     -1420
-   ]
+   ],
+   "name": "Cable Car"
   },
   {
    "type": "noTrees",
@@ -3085,33 +3139,39 @@
    "wall": "#c9a27a",
    "roof": "#6b4a2f",
    "win": 1,
-   "door": "#5b3a22"
+   "door": "#5b3a22",
+   "name": "Ash House"
   },
   {
    "type": "cave",
    "x": -400,
-   "y": -1395
+   "y": -1395,
+   "name": "Cave"
   },
   {
    "type": "lookoutTower",
    "x": -800,
-   "y": -500
+   "y": -500,
+   "name": "Lookout Tower"
   },
   {
    "type": "stoneFarm",
    "x": -950,
-   "y": 180
+   "y": 180,
+   "name": "Old Stone Farm"
   },
   {
    "type": "ruins",
    "x": -1050,
-   "y": 860
+   "y": 860,
+   "name": "Roman Ruins"
   },
   {
    "type": "beehives",
    "x": -640,
    "y": 700,
-   "count": 5
+   "count": 5,
+   "name": "Beehives"
   },
   {
    "type": "picnicTable",
@@ -3141,33 +3201,38 @@
   {
    "type": "playground",
    "x": -700,
-   "y": 1500
+   "y": 1500,
+   "name": "Playground"
   },
   {
    "type": "fishingPond",
    "cx": -1050,
    "cy": 1560,
    "rx": 110,
-   "ry": 66
+   "ry": 66,
+   "name": "Fishing Pond"
   },
   {
    "type": "footballPitch",
    "x": -1130,
    "y": 1975,
    "w": 260,
-   "h": 150
+   "h": 150,
+   "name": "Football Pitch"
   },
   {
    "type": "maze",
    "x": 1570,
    "y": 70,
    "n": 9,
-   "cell": 18
+   "cell": 18,
+   "name": "Hedge Maze"
   },
   {
    "type": "waterTower",
    "x": 1500,
-   "y": 560
+   "y": 560,
+   "name": "Water Tower"
   },
   {
    "type": "house",
@@ -3181,22 +3246,26 @@
    "win": 4,
    "chimney": true,
    "smoke": false,
-   "door": "#a86a3d"
+   "door": "#a86a3d",
+   "name": "Finch House"
   },
   {
    "type": "greenhouse",
    "x": 1520,
-   "y": 1235
+   "y": 1235,
+   "name": "West Greenhouse"
   },
   {
    "type": "greenhouse",
    "x": 1605,
-   "y": 1235
+   "y": 1235,
+   "name": "Middle Greenhouse"
   },
   {
    "type": "greenhouse",
    "x": 1690,
-   "y": 1235
+   "y": 1235,
+   "name": "East Greenhouse"
   },
   {
    "type": "sunflowerField",
@@ -3205,7 +3274,8 @@
    "w": 340,
    "h": 250,
    "rows": 9,
-   "cols": 15
+   "cols": 15,
+   "name": "Sunflower Field"
   },
   {
    "type": "field",
@@ -3215,7 +3285,8 @@
    "h": 190,
    "a": "#b79be0",
    "b": "#9576c9",
-   "vertical": false
+   "vertical": false,
+   "name": "Lavender Field"
   },
   {
    "type": "island",
@@ -3253,17 +3324,20 @@
    "hut": [
     402,
     2960
-   ]
+   ],
+   "name": "Palm Island"
   },
   {
    "type": "rockIslet",
    "x": -640,
-   "y": 2820
+   "y": 2820,
+   "name": "Rock Islet"
   },
   {
    "type": "ship",
    "x": 1350,
-   "y": 2760
+   "y": 2760,
+   "name": "Ship"
   },
   {
    "type": "buoy",
@@ -3298,80 +3372,92 @@
   {
    "type": "tunnelPortal",
    "x": 700,
-   "y": -1418
+   "y": -1418,
+   "name": "Tunnel (south end)"
   },
   {
    "type": "tunnelPortal",
    "x": 720,
-   "y": -1772
+   "y": -1772,
+   "name": "Tunnel (north end)"
   },
   {
    "type": "chalet",
    "x": 440,
    "y": -2010,
    "wall": "#a0643a",
-   "chimney": true
+   "chimney": true,
+   "name": "Fir Chalet"
   },
   {
    "type": "chalet",
    "x": 530,
    "y": -1975,
    "wall": "#8a5a35",
-   "chimney": false
+   "chimney": false,
+   "name": "Spruce Chalet"
   },
   {
    "type": "chalet",
    "x": 360,
    "y": -2060,
    "wall": "#a0643a",
-   "chimney": false
+   "chimney": false,
+   "name": "Larch Chalet"
   },
   {
    "type": "chalet",
    "x": 430,
    "y": -2300,
    "wall": "#8a5a35",
-   "chimney": true
+   "chimney": true,
+   "name": "Edelweiss Chalet"
   },
   {
    "type": "chalet",
    "x": 530,
    "y": -2330,
    "wall": "#a0643a",
-   "chimney": false
+   "chimney": false,
+   "name": "Alpine Chalet"
   },
   {
    "type": "chalet",
    "x": 350,
    "y": -2380,
    "wall": "#8a5a35",
-   "chimney": false
+   "chimney": false,
+   "name": "Snowberry Chalet"
   },
   {
    "type": "chalet",
    "x": 880,
    "y": -1880,
    "wall": "#a0643a",
-   "chimney": true
+   "chimney": true,
+   "name": "Ridge Chalet"
   },
   {
    "type": "chalet",
    "x": 960,
    "y": -2200,
    "wall": "#8a5a35",
-   "chimney": false
+   "chimney": false,
+   "name": "Juniper Chalet"
   },
   {
    "type": "chapel",
    "x": 250,
-   "y": -2420
+   "y": -2420,
+   "name": "Snow Chapel"
   },
   {
    "type": "frozenLake",
    "cx": -260,
    "cy": -2430,
    "rx": 210,
-   "ry": 105
+   "ry": 105,
+   "name": "Frozen Lake"
   },
   {
    "type": "iceHut",
@@ -3417,7 +3503,8 @@
     -2660
    ],
    "w0": 70,
-   "w1": 50
+   "w1": 50,
+   "name": "Ski Slope"
   },
   {
    "type": "house",
@@ -3429,7 +3516,8 @@
    "wall": "#a0643a",
    "roof": "#ffffff",
    "win": 4,
-   "door": "#5b3a22"
+   "door": "#5b3a22",
+   "name": "North Lodge"
   },
   {
    "type": "house",
@@ -3441,7 +3529,8 @@
    "wall": "#8a5a35",
    "roof": "#e2574c",
    "win": 2,
-   "door": "#5b3a22"
+   "door": "#5b3a22",
+   "name": "Vale House"
   },
   {
    "type": "igloo",
@@ -3488,7 +3577,8 @@
   {
    "type": "observatory",
    "x": 1560,
-   "y": -2790
+   "y": -2790,
+   "name": "Star Observatory"
   },
   {
    "type": "turbine",
@@ -3511,7 +3601,8 @@
   {
    "type": "hotSpring",
    "x": -500,
-   "y": -2700
+   "y": -2700,
+   "name": "Hot Spring"
   },
   {
    "type": "deer",
@@ -3545,20 +3636,23 @@
    "type": "modernHouse",
    "x": -600,
    "y": 1640,
-   "upper": true
+   "upper": true,
+   "name": "Glass House"
   },
   {
    "type": "modernHouse",
    "x": -470,
    "y": 1700,
-   "w": 80
+   "w": 80,
+   "name": "Cedar House"
   },
   {
    "type": "modernHouse",
    "x": 1650,
    "y": 1080,
    "w": 84,
-   "wood": "#a0643a"
+   "wood": "#a0643a",
+   "name": "Sun House"
   },
   {
    "type": "bike",

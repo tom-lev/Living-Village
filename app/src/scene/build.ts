@@ -12,6 +12,7 @@ import '../prefabs/areas';
 import '../prefabs/village';
 import { buildTerrain } from './terrain';
 import { GENERATORS } from './generators';
+import { addLabel } from '../world/labels';
 
 const rect = ([x0, y0, x1, y1]: number[]) => ({ x0, y0, x1, y1 });
 
@@ -27,6 +28,7 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
     if (!f) { console.warn('אין prefab בשם', o.type, o); continue; }
     if (o.id) ctx.named[o.id] = o;
     f(o);
+    if (o.name && o.type !== 'shop') addLabel(o);   // לחנות כבר יש שלט עם השם
   }
   for (const g of w.generators) {
     const f = GENERATORS[g.type];
