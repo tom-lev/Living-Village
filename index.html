@@ -8,13 +8,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="./assets/index-D8PcSNOL.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BQIFQCfc.css">
+  <script type="module" crossorigin src="./assets/index-BYIUrqZp.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-bf7CHSvW.css">
 </head>
 <body>
 <div id="stage" role="img" aria-label="מפה מצוירת של כפר">
   <canvas id="mapC"></canvas><svg id="mapS"></svg>
   <div id="dWrap"><svg id="mapD"></svg></div>
+  <div id="grain" hidden></div>
 </div>
 
 <div class="controls">
@@ -22,10 +23,10 @@
   <button id="zout" aria-label="התרחקות">−</button>
   <button id="zfit" aria-label="חזרה לתצוגה המלאה">⤢</button>
   <button id="play" aria-label="עצירה">❚❚</button>
-  <button id="pal" aria-label="החלפת סכימת צבעים">🎨</button>
+  <button id="pal" aria-label="סכימת צבעים" aria-haspopup="menu" aria-expanded="false">🎨</button>
 </div>
 <div class="zoom" id="zoomLbl">×1.0</div>
-<div class="toast" id="toast" role="status"></div>
+<div class="palMenu" id="palMenu" role="menu" aria-label="סכימת צבעים" hidden></div>
 <div class="follow" id="follow"><span id="followName"></span><button id="unfollow" aria-label="הפסקת מעקב">✕</button></div>
 
 </body>
