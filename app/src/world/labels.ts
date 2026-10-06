@@ -129,6 +129,7 @@ export function openRename(l: Label) {
       setTimeout(close, 1400);
     } catch (e: any) {
       note.textContent = e?.message || 'השמירה נכשלה';
+      // מפתח שבור או מוגבל: מוחקים אותו מהמכשיר, כדי שבלחיצה הבאה אפשר יהיה להדביק מפתח מתוקן
       if (/מפתח/.test(note.textContent || '')) setToken('');
     }
   };
