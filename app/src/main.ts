@@ -3,7 +3,7 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
-import { initTiles } from './render/tiles';
+import { initTiles, tileStats } from './render/tiles';
 import { buildActors, followables } from './actors';
 import { initCamera, cameraTick, loopState, zoomAt, animateTo } from './camera/camera';
 import { view } from './camera/view';
@@ -42,4 +42,4 @@ actors.update(.016, 0);
 setRunning(!matchMedia('(prefers-reduced-motion: reduce)').matches);
 
 // לבדיקות אוטומטיות
-(window as any).__village = { cam: view.cam, walkers: actors.walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => view.fitK, items };
+(window as any).__village = { cam: view.cam, walkers: actors.walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => view.fitK, items, tileStats };
