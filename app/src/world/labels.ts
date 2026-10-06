@@ -120,6 +120,8 @@ export function openRename(l: Label) {
   input.value = l.text.textContent; input.focus(); input.select();
   const apply = async (name: string) => {
     const value = name && name !== l.original ? name : '';
+    // שמות ייחודיים: כך כשמדברים על "Green House" ברור לאיזה מקום הכוונה
+    if (name && labels.some(o => o !== l && o.text.textContent.toLowerCase() === name.toLowerCase())) { note.textContent = 'השם הזה כבר שייך למקום אחר. בחר שם אחר.'; return; }
     note.textContent = 'שומר…';
     try {
       await saveName(l.key, value);
