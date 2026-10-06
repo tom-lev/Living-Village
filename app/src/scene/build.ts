@@ -9,6 +9,7 @@ import '../prefabs/nature';
 import '../prefabs/buildings';
 import '../prefabs/props';
 import '../prefabs/areas';
+import '../prefabs/village';
 import { buildTerrain } from './terrain';
 import { GENERATORS } from './generators';
 

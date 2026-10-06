@@ -201,9 +201,10 @@ function footbridge(o: any) {
 
 /** מעקות אבן של גשר דרך מעל הנהר */
 function stoneBridge(o: any) {
-  const { x, y } = o, G = ctx.L.groundProps;
-  el('rect', { x: x - 46, y: y - 29, width: 92, height: 7, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, G);
-  el('rect', { x: x - 46, y: y + 22, width: 92, height: 7, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, G);
+  const { x, y, angle = 0 } = o, G = el('g', { transform: `translate(${x},${y}) rotate(${angle})` }, ctx.L.groundProps);
+  el('rect', { x: -40, y: -27, width: 80, height: 54, fill: '#e9dcc6' }, G);   // סיפון הגשר מעל המים
+  el('rect', { x: -46, y: -31, width: 92, height: 7, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, G);
+  el('rect', { x: -46, y: 24, width: 92, height: 7, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, G);
 }
 
 function pier(o: any) {
