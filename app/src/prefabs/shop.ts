@@ -267,10 +267,11 @@ export function shop(o: any) {
   }
 
   // חזית החנות: דלת בצד אחד וחלון ראווה בשאר
-  const side = o.door === 'left' ? -1 : o.door === 'right' ? 1 : (rg.chance(.5) ? -1 : 1), dw = 14, dh = rg.rand(25, 28);
+  const side = o.door === 'left' ? -1 : o.door === 'right' ? 1 : (rg.chance(.5) ? -1 : 1), dw = 14, dh = Math.min(rg.rand(25, 28), gh - 19);
   const dx = x + side * (w / 2 - dw / 2 - (form === 'pavilion' ? 10 : 7));
   const fx0 = side > 0 ? x0 + 6 : dx + dw / 2 + 5, fx1 = side > 0 ? dx - dw / 2 - 5 : x1 - 6;
-  const ftop = y - gh + (form === 'glassfront' ? 8 : 14), fr: Front = { x0: fx0, x1: fx1, top: ftop, y: y - 4 };
+  // רצועה שמורה לשלט בראש קומת החנות (מתחת לגג או לקומה העליונה); החלון, הדלת והגגון מתחתיה
+  const signY = y - gh + 9, ftop = y - gh + 19, fr: Front = { x0: fx0, x1: fx1, top: ftop, y: y - 4 };
   const frameC = shade(c, -.3);
   if (form === 'glassfront') {
     // כל החזית זכוכית עם מסגרת עץ צבועה
@@ -301,8 +302,7 @@ export function shop(o: any) {
     el('path', { d: `M${n2(bx - 9)},${n2(hy)}v4M${n2(bx + 9)},${n2(hy)}v4`, stroke: '#55555f', 'stroke-width': .6, 'stroke-dasharray': '1 .6' }, g);
     shopSign(g, bx, hy + 11, name, kit, 'hanging', c, rg, 46);
   } else {
-    const cy = form === 'townhouse' ? y - gh - 7 : top + 7.5;
-    shopSign(g, x, cy, name, kit, sign === 'painted' ? 'painted' : 'fascia', c, rg, w - 4);
+    shopSign(g, x, sign === 'painted' ? signY - 2 : signY, name, kit, sign === 'painted' ? 'painted' : 'fascia', c, rg, w - 4);
   }
 
   if (kit.extra && o.variant !== 'bakery') kit.extra(g, x, y, roofTop, w, c, rg);
