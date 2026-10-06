@@ -8,7 +8,7 @@ import { view } from '../camera/view';
 import { VNode } from '../render/vnode';
 import { requestStatic } from '../render/tiles';
 
-const FS = 10, PX = 15;                 // גודל הגופן ביחידות עולם, והגודל הרצוי על המסך בפיקסלים
+const FS = 10, PX = 20;                 // גודל הגופן ביחידות עולם, והגודל הרצוי על המסך בפיקסלים
 const SHOW_FROM = 4.2, FULL_AT = 5;     // יחס לזום הבית: מתחילים להופיע, ונראים במלואם
 /* סוגים שבהם x,y הוא הפינה השמאלית העליונה של מלבן (ולא המרכז או קו הקרקע) */
 const TOP_LEFT = new Set(['vegGarden', 'field', 'footballPitch', 'pier']);
@@ -41,7 +41,7 @@ export function addLabel(o: any, top?: number) {
   const key = keyOf(o, p), name = saved[key] ?? o.name;
   const g = el('g', { transform: `translate(${n2(p[0])},${n2(p[1] - 4)})` }, ctx.L.labels), inner = el('g', null, g);
   const text = el('text', { x: 0, y: 0, 'text-anchor': 'middle', 'font-size': FS, 'font-weight': 700, 'font-style': 'italic',
-    'font-family': 'Georgia, "Times New Roman", serif', fill: '#5b4630', stroke: '#fffaf0', 'stroke-width': 2.6 }, inner);
+    'font-family': 'Georgia, "Times New Roman", serif', fill: '#5b4630', stroke: '#fffaf0', 'stroke-width': 3 }, inner);
   text.textContent = name;
   labels.push({ o, key, original: o.name, x: p[0], y: p[1] - 4, inner, text });
 }
