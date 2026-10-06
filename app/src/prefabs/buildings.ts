@@ -1,7 +1,7 @@
 /* מבנים: בתים, חנויות, כנסייה, טירה ועוד */
 import { el, n2, circ, shade, wrap1, blob, ST } from '../core/util';
 import { rand } from '../core/rng';
-import { ctx, prop, block, FX, smokeFx, WATERS } from '../world/context';
+import { ctx, prop, block, fxAt, smokeFx, WATERS } from '../world/context';
 import { register } from './registry';
 
 function chimneySmoke(x: number, y: number, scale: number) {
@@ -97,7 +97,7 @@ const SHOP_EXTRAS: Record<string, (g: any, x: number, y: number, w: number, h: n
     el('rect', { x: px - 3, y: y - 34, width: 6, height: 24, rx: 3 }, cp);
     el('rect', { x: px - 3, y: y - 34, width: 6, height: 24, rx: 3, fill: '#fff', stroke: '#9aa', 'stroke-width': .8 }, g);
     const sg = el('g', { 'clip-path': 'url(#poleClip)' }, ctx.L.fx), sp = el('g', null, sg);
-    FX.push(t => sp.setAttribute('transform', `translate(0,${n2(-8 * wrap1(t / 2.6))})`));
+    fxAt(px, y - 22, 30, t => sp.setAttribute('transform', `translate(0,${n2(-8 * wrap1(t / 2.6))})`));
     let d = '';
     for (let k = -2; k < 6; k++) d += `M${px - 4},${y - 30 + k * 8}l8,-5v3l-8,5z`;
     el('path', { d, fill: '#e2574c' }, sp);

@@ -121,6 +121,12 @@ Order:
 
 ### Code modules
 - `prefabs/` draw with `el(tag, attrs, parent)` from `core/util.ts`. Static drawing goes into `ctx.L.ground/roads/groundProps/water/props`; animated drawing into `waterFx/cloudShadows/pad/fx/actors/air/clouds`. **All animation is JS** through the `FX` list (`world/context.ts`) or actor `update()`. Never use CSS/SMIL animation.
+- **Culling (off-screen work is skipped).** `camera/view.ts` has `updateSeen()` (called once per frame in `actors.update`) and `inView(x, y, r)`.
+  - A **fixed-position effect** must register with `fxAt(x, y, r, fn)`, not `FX.push`. It then runs only when visible. Effects depend only on time `t`, so they are correct the moment they come back on screen.
+  - **Moving things** keep their logic running off screen (walking, turning at junctions, sheep wandering). They skip only drawing, and are hidden with `show(el, false)` from `core/util.ts`. Hiding matters: otherwise a stale drawing stays on screen at its old position.
+  - Dog, leash and balloon follow their owner's `shown` (the owner's `cullR` is enlarged for them).
+  - `ripple()` does nothing off screen.
+  - While paused, `onStaticFrame` runs `actors.update(0, T)` before each redraw, so things that scroll into view appear.
 - `scene/build.ts` order: setSeed → setPalette → initLayers → buildGeometry → buildTerrain → objects → generators (`forest` uses `villageForest` rects inside `home`, density, `pineZones`, `snowLine`) → sortStatics.
 - `world/geometry.ts`: Bézier helpers, an occupancy grid (road/river/trail bits) and `treeOk()`.
 - `core/palette.ts`: every color passes `grade()` in `el()`; the original color is remembered per element.
@@ -236,7 +242,12 @@ Order:
 - **Large retina screens:** cutting the tile list to the cache budget dropped visible edge tiles once more than about 276 cells were on screen, so those tiles stayed blurry forever. The cache cap now grows with the screen.
 - Still open: at 3200×2000 device px this Intel GPU is fill-bound (clearing and presenting alone take about 7 ms). Real 2× screens with weak GPUs could benefit from a lower canvas resolution during gestures.
 
-The original plan follows. Steps 2–5 are optional now; measure before doing them.
+- **Plan step 3 (culling) is done** (2026-10-06).
+  - Zoomed in on a quiet area: JS per frame went from 5.7 to 1.6 ms, and shape rebuilds from about 23 per frame to 0.
+  - In the home view, where almost everything is on screen, nothing changes, as expected.
+  - All three architecture steps are now complete.
+
+The original plan follows. Steps 2, 4 and 5 are optional now; measure before doing them.
 1. **Measure first, on this machine's GPU:**
    - `npm run build && npm run preview`, then `node tools/perf.mjs zoom http://localhost:4173/ --headed` and `drag`;
    - Chrome DevTools Performance during fast wheel zooms.

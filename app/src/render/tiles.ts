@@ -215,7 +215,10 @@ function standIn(l: number, i: number, j: number, X: number, Y: number, Wd: numb
     for (let q = 0; q < 4; q++) { const c = getTile(l + 1, 2 * i + (q & 1), 2 * j + (q >> 1)); if (c) cs.drawImage(c, X + (q & 1) * Wd / 2, Y + (q >> 1) * Ht / 2, Wd / 2, Ht / 2); }
 }
 
-function staticFrame() { sRaf = 0; if (sDirty) { sDirty = false; drawStatic(); } }
+let beforeStatic: () => void = () => {};
+/** נקרא לפני ציור כשהלולאה עצורה (מעדכן מה נראה, כדי שדמויות שנכנסות למסך יופיעו גם בהשהיה) */
+export const onStaticFrame = (f: () => void) => { beforeStatic = f; };
+function staticFrame() { sRaf = 0; if (sDirty) { sDirty = false; beforeStatic(); drawStatic(); } }
 /** בקשה לצייר מחדש את השכבה הסטטית בפריים הבא (זול: רק הרכבת אריחים) */
 export function requestStatic() {
   sDirty = true;

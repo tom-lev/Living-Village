@@ -16,7 +16,10 @@ export function el(tag: string, a?: Record<string, any> | null, parent?: Element
   return e;
 }
 
-export const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+/** מציג או מסתיר (מה שזז ויצא מהמסך מוסתר, כדי שלא יישאר מצויר קפוא במקום הישן) */
+export const show = (e: any, on: boolean) => e.setAttribute('display', on ? 'inline' : 'none');
+
+export const clamp =(v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 export const wrap1 = (v: number) => v - Math.floor(v);
 export const n2 = (v: number) => Math.round(v * 100) / 100;
 export const P = (p: number[]) => n2(p[0]) + ',' + n2(p[1]);

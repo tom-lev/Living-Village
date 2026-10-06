@@ -3,7 +3,7 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
-import { initTiles, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow } from './render/tiles';
+import { initTiles, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame } from './render/tiles';
 import { ctx } from './world/context';
 import { vstats } from './render/vnode';
 import { setPalette, regrade, grade, currentPalette } from './core/palette';
@@ -48,6 +48,8 @@ async function boot() {
     if (on) { last = performance.now(); requestAnimationFrame(tick); }
   }
   playBtn.onclick = () => setRunning(!loopState.running);
+  // בהשהיה: גרירה מציירת בלי לקדם זמן, אבל מה שנכנס למסך צריך להופיע (מחוץ למסך הוא מוסתר)
+  onStaticFrame(() => { if (!loopState.running) actors.update(0, T); });
 
   /* ───────── בחירת סכימת צבעים ───────── */
   const palBtn = document.getElementById('pal'), palMenu = document.getElementById('palMenu'), grainEl = document.getElementById('grain');

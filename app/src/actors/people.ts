@@ -1,5 +1,6 @@
 /* אנשים ובני לוויה: הולכים על רשת הדרכים, כלב עם רצועה, בלון, יושבים */
-import { el, n2, P, clamp, shade } from '../core/util';
+import { el, n2, P, clamp, shade, show } from '../core/util';
+import { inView } from '../camera/view';
 import { rand, pick, R } from '../core/rng';
 import { ctx } from '../world/context';
 import { geo, edgeAt } from '../world/geometry';
@@ -60,6 +61,7 @@ export class Walker {
     this.view = 'side' as View; this.pend = 0; this.flip = 1;
     this.phase = R(); this.amp = 1; this.sf = 1; this.state = 'walk'; this.wait = 0; this.alpha = 1;
     this.trail = [[this.x, this.y, 0]]; this.dist = 0;
+    this.cullR = 50; this.shown = true;   // רדיוס לבדיקת "נראה" (גדל כשיש כלב או בלון)
     dynamics.push(this); followable(this, this.fig.g);
   }
   update(dt: number, t: number) {
@@ -92,6 +94,9 @@ export class Walker {
     this.amp += ((this.state === 'walk' ? .35 + .65 * this.sf : 0) - this.amp) * Math.min(1, dt * 6);
     const A = PR.A * this.look.h * Math.max(this.amp, .35);
     this.phase += this.view === 'side' ? ds * Math.abs(this.hx) / (4 * A) : ds * Math.abs(this.hy) / (4 * A * PR.KF);
+    // מחוץ למסך ממשיכים ללכת (כל מה שלמעלה), רק לא מציירים את השלד
+    this.shown = inView(this.x, this.y - 16, this.cullR); show(this.el, this.shown);
+    if (!this.shown) return;
     this.fig.render(walkPose(this.look, this.view, this.phase, this.amp, t), this.x, this.y, this.flip, this.alpha);
   }
   /** נקודה על המסלול שעבר, back יחידות אחורה (לכלב) */
@@ -127,6 +132,7 @@ export class Dog {
     el('path', { d: 'M7,-15.6q-2.4,1 -1.6,5.6q2,-1 3,-4z', fill: dk }, hd);
     el('path', { d: 'M5.2,-11.4l1,2.6', stroke: '#e2574c', 'stroke-width': 1.6, 'stroke-linecap': 'round' }, this.b);
     el('rect', { x: -14, y: -22, width: 30, height: 24, fill: 'transparent' }, this.g);
+    owner.cullR = 90;   // הכלב והרצועה נראים יחד עם הבעלים
     const p = owner.pointBack(24); this.x = p[0]; this.y = p[1]; this.flip = 1; this.phase = 0; this.amp = 1; this.hx = 1;
     dynamics.push(this); followable(this, this.g);
   }
@@ -139,6 +145,9 @@ export class Dog {
     const moving = ds / dt > 3;
     this.amp += ((moving ? 1 : 0) - this.amp) * Math.min(1, dt * 5);
     this.phase += ds / 13;
+    this.collar = [this.x + 5.6 * this.flip, this.y - 10.5];
+    show(this.g, this.owner.shown);
+    if (!this.owner.shown) return;
     // טרוט: רגל קדמית ואחורית אלכסונית זזות יחד
     const leg = (pe: any, hx: number, off: number) => {
       const q = (this.phase + off) * Math.PI * 2, fx = hx + Math.sin(q) * 2.6 * this.amp, fy = -Math.max(0, Math.cos(q)) * 1.8 * this.amp;
@@ -149,7 +158,6 @@ export class Dog {
     this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y)})`);
     this.g.setAttribute('opacity', this.owner.alpha.toFixed(2));
     this.b.setAttribute('transform', `scale(${this.flip.toFixed(3)},1)`);
-    this.collar = [this.x + 5.6 * this.flip, this.y - 10.5];
   }
 }
 
@@ -171,14 +179,17 @@ export class Sitter {
     this.fig = new Figure(ctx.L.actors, look); this.el = this.fig.g; this.name = look.name;
     dynamics.push(this); followable(this, this.fig.g);
   }
-  update(dt: number, t: number) { this.fig.render(sitPose(this.look, this.seat, this.hands(t, this.look.h), t), this.x, this.y, this.flip); }
+  update(dt: number, t: number) {
+    const on = inView(this.x, this.y - 16, 50); show(this.el, on);
+    if (on) this.fig.render(sitPose(this.look, this.seat, this.hands(t, this.look.h), t), this.x, this.y, this.flip);
+  }
 }
 
 /** בלון: קפיץ מרוסן שקשור ליד */
 export class Balloon {
   [k: string]: any;
   constructor(owner: Walker, color: string) {
-    this.owner = owner; this.len = 30;
+    this.owner = owner; this.len = 30; owner.cullR = 80;
     this.str = el('path', { fill: 'none', stroke: '#6b5a4a', 'stroke-width': .7 }, ctx.L.air);
     this.g = el('g', null, ctx.L.air);
     el('ellipse', { cx: 0, cy: 0, rx: 6.4, ry: 7.8, fill: color }, this.g);
@@ -187,6 +198,9 @@ export class Balloon {
     this.x = 0; this.y = 0; this.vx = 0; this.vy = 0; this.init = false;
   }
   update(dt: number, t: number) {
+    // הבלון נראה יחד עם הבעלים; בחזרה למסך הוא מתחיל שוב מעל היד
+    const on = this.owner.shown; show(this.g, on); show(this.str, on);
+    if (!on) { this.init = false; return; }
     const h = this.owner.fig.hand; if (!h) return;
     if (!this.init) { this.x = h[0]; this.y = h[1] - this.len; this.init = true; }
     const tx = h[0] + Math.sin(t * .9) * 5 - this.owner.hx * 6, ty = h[1] - this.len;
@@ -206,6 +220,7 @@ export class Leash {
   [k: string]: any;
   constructor(owner: Walker, dog: Dog) { this.owner = owner; this.dog = dog; this.p = el('path', { fill: 'none', stroke: '#c0392b', 'stroke-width': .9 }, ctx.L.air); }
   update() {
+    show(this.p, this.owner.shown); if (!this.owner.shown) return;
     const a = this.owner.fig.hand, b = this.dog.collar; if (!a || !b) return;
     const d = Math.hypot(b[0] - a[0], b[1] - a[1]), sag = Math.max(0, 30 - d) * .35 + 2;
     this.p.setAttribute('d', `M${P(a)}Q${n2((a[0] + b[0]) / 2)},${n2((a[1] + b[1]) / 2 + sag)} ${P(b)}`);

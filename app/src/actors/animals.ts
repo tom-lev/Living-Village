@@ -1,7 +1,8 @@
 /* חיות: סוסים וכבשים במכלאה, ברווזים ודג באגם, פרפרים מעל השדה */
-import { el, n2, circ, rrect, shade, wrap1, clamp } from '../core/util';
+import { el, n2, circ, rrect, shade, wrap1, clamp, show } from '../core/util';
+import { inView } from '../camera/view';
 import { rand, pick } from '../core/rng';
-import { ctx, FX, ripple } from '../world/context';
+import { ctx, fxAt, ripple } from '../world/context';
 
 /** סוס: רועה ומרים ראש מדי פעם; הזנב מתנופף לאט */
 export class Horse {
@@ -9,11 +10,11 @@ export class Horse {
   constructor(o: any) {
     const { x, y, color, mane, flip = 1, scale = 1 } = o;
     const g = el('g', { transform: `translate(${x},${y}) scale(${flip * scale},${scale})` }, ctx.L.pad);
-    this.g = g; this.y = y;
+    this.g = g; this.x = x; this.y = y;
     el('ellipse', { cx: 0, cy: 1, rx: 30, ry: 5, fill: 'rgba(60,40,10,.22)' }, g);
     const dk = shade(color, -.2), st = { stroke: 'rgba(60,30,10,.35)', 'stroke-width': 1, 'stroke-linejoin': 'round' };
     const tail = el('g', { transform: 'translate(-24,-34)' }, g), tl = el('g', null, tail), d0 = rand(0, 2.6);
-    FX.push(t => tl.setAttribute('transform', `rotate(${(1 - 9 * Math.cos(wrap1((t + d0) / 2.6) * Math.PI * 2)).toFixed(1)})`));
+    fxAt(x, y - 30, 50, t => tl.setAttribute('transform', `rotate(${(1 - 9 * Math.cos(wrap1((t + d0) / 2.6) * Math.PI * 2)).toFixed(1)})`));
     el('path', { d: 'M0,0q-8,6 -6,22q4,-8 6,-14z', fill: mane }, tl);
     el('path', { d: 'M-18,-30v28M14,-30v28', stroke: dk, 'stroke-width': 5, 'stroke-linecap': 'round' }, g);
     el('path', { d: 'M-18,-1h3M14,-1h3', stroke: '#3b2f2a', 'stroke-width': 4, 'stroke-linecap': 'round' }, g);
@@ -34,6 +35,7 @@ export class Horse {
     this.timer -= dt;
     if (this.timer <= 0) { this.graze = !this.graze; this.timer = this.graze ? rand(5, 11) : rand(2, 4); }
     this.a += ((this.graze ? 75 : 0) - this.a) * Math.min(1, dt * 2.2);
+    if (!inView(this.x, this.y - 30, 50)) return;   // הסוס לא זז ממקומו: מספיק לא לעדכן את הצוואר
     this.neck.setAttribute('transform', `translate(18,${(-42 + this.a / 75 * 16).toFixed(1)}) rotate(${this.a.toFixed(1)})`);
   }
 }
@@ -65,12 +67,14 @@ export class Sheep {
     }
     if (this.fd) this.flip += (this.fd - this.flip) * Math.min(1, dt * 6);
     this.phase += ds / 6;
+    this.head += ((this.state === 'graze' ? 1 : 0) - this.head) * Math.min(1, dt * 3);
+    const on = inView(this.x, this.y - 8, 30); show(this.g, on);
+    if (!on) return;
     const hx = [-7, -4, 4, 7], off = [0, .5, .5, 0];
     this.legs.forEach((l: any, i: number) => {
       const s = Math.sin((this.phase + off[i]) * Math.PI * 2) * 1.6 * (this.state === 'walk' ? 1 : 0);
       l.setAttribute('d', `M${hx[i]},-6L${n2(hx[i] + s)},0`);
     });
-    this.head += ((this.state === 'graze' ? 1 : 0) - this.head) * Math.min(1, dt * 3);
     this.hg.setAttribute('transform', `rotate(${(this.head * 40).toFixed(1)} 8 -11) translate(0,${(this.head * 3).toFixed(1)})`);
     this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y)}) scale(${this.scale})`);
     this.b.setAttribute('transform', `scale(${this.flip.toFixed(3)},1)`);
@@ -97,6 +101,8 @@ export function ducks(o: any) {
     list.forEach((d: any, i: number) => {
       const th = T * o.speed - i * .085 - (i ? .05 : 0), p = path(th), q = path(th + .01), f = q[0] >= p[0] ? 1 : -1;
       d.flip += (f - d.flip) * Math.min(1, dt * 4);
+      const on = inView(p[0], p[1], 15); show(d.g, on);
+      if (!on) return;
       d.g.setAttribute('transform', `translate(${n2(p[0])},${n2(p[1] + Math.sin(T * 3 + i) * .6)}) scale(${d.flip.toFixed(3)},1)`);
       if (i === 0 && frame % 50 === 0) ripple(p[0] - f * 8, p[1], 9, 3);
     });
@@ -115,13 +121,14 @@ export function fish(o: any) {
       S.wait -= dt;
       if (S.wait <= 0) {
         const a = rand(0, 6.28), r = rand(.2, .6), x = lake.cx + Math.cos(a) * lake.rx * r, y = lake.cy + Math.sin(a) * lake.ry * r;
-        Object.assign(S, { t: 0, x, y, dx: pick([-1, 1]) * rand(30, 44) }); g.setAttribute('display', 'inline'); ripple(x, y, 9, 3.5);
+        Object.assign(S, { t: 0, x, y, dx: pick([-1, 1]) * rand(30, 44) }); ripple(x, y, 9, 3.5);
       }
     } else {
       S.t += dt / 1.5;
       const u = Math.min(1, S.t), x = S.x + S.dx * u, y = S.y - 34 * 4 * u * (1 - u), vy = -34 * 4 * (1 - 2 * u);
-      g.setAttribute('transform', `translate(${n2(x)},${n2(y)}) scale(${S.dx > 0 ? 1 : -1},1) rotate(${(Math.atan2(vy, Math.abs(S.dx)) * 180 / Math.PI).toFixed(1)})`);
-      if (u >= 1) { S.t = -1; S.wait = rand(o.waitMin, o.waitMax); g.setAttribute('display', 'none'); ripple(x, S.y, 10, 3.5); ripple(x, S.y, 5, 2); }
+      const on = u < 1 && inView(x, y, 20); show(g, on);
+      if (on) g.setAttribute('transform', `translate(${n2(x)},${n2(y)}) scale(${S.dx > 0 ? 1 : -1},1) rotate(${(Math.atan2(vy, Math.abs(S.dx)) * 180 / Math.PI).toFixed(1)})`);
+      if (u >= 1) { S.t = -1; S.wait = rand(o.waitMin, o.waitMax); ripple(x, S.y, 10, 3.5); ripple(x, S.y, 5, 2); }
     }
   };
 }
@@ -138,6 +145,8 @@ export function butterflies(o: any) {
   return (dt: number, T: number) => {
     for (const b of list) {
       const s = b.s + T, x = b.cx + Math.sin(s * .37) * 60 + Math.sin(s * 1.3) * 14, y = b.cy + Math.sin(s * .53) * 45 + Math.cos(s * 1.7) * 8 - 10;
+      const on = inView(x, y, 10); show(b.g, on);
+      if (!on) continue;
       const flap = (Math.abs(Math.sin(s * 8)) * .8 + .2).toFixed(2);
       b.g.setAttribute('transform', `translate(${n2(x)},${n2(y)})`);
       b.wl.setAttribute('transform', `scale(${flap},1)`); b.wr.setAttribute('transform', `scale(${flap},1)`);

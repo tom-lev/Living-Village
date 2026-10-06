@@ -1,7 +1,7 @@
 /* חפצים קטנים: ספסלים, פנסים, אופניים, שלטים, שמשיות, סירות ועוד */
 import { el, n2, circ, shade, wrap1, rrect, ST } from '../core/util';
 import { rand, pick } from '../core/rng';
-import { ctx, prop, block, FX } from '../world/context';
+import { ctx, prop, block, fxAt } from '../world/context';
 import { register } from './registry';
 
 export function bench(o: any) {
@@ -223,7 +223,7 @@ function pigeon(o: any) {
   el('path', { d: 'M-5,-4l-3,-1.5l1,3z', fill: '#8b919c' }, b);
   const head = el('g', null, b), d0 = rand(0, 1.4);
   const KEYS = [[0, 0], [.55, 0], [.7, 38], [.8, 5], [.88, 36], [1, 0]];
-  FX.push(t => {
+  fxAt(x, y - 5, 15, t => {
     const p = wrap1((t + d0) / 1.4); let k = 1; while (KEYS[k][0] < p) k++;
     const [p0, a0] = KEYS[k - 1], [p1, a1] = KEYS[k], u = (p - p0) / (p1 - p0), e = u * u * (3 - 2 * u);
     head.setAttribute('transform', `rotate(${(a0 + (a1 - a0) * e).toFixed(1)} 5.5 -5.5)`);

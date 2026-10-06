@@ -1,7 +1,7 @@
 /* אזורים: מכלאה, אגמים, כיכר, שדות, מסילה, אי, אתר סקי ועוד */
 import { el, n2, circ, shade, wrap1, blob, rrect, at, ST } from '../core/util';
 import { rand, pick, R } from '../core/rng';
-import { ctx, prop, block, FX, WATERS, smokeFx } from '../world/context';
+import { ctx, prop, block, fxAt, WATERS, smokeFx } from '../world/context';
 import { register } from './registry';
 import { palm, roundTree } from './nature';
 import { house } from './buildings';
@@ -43,7 +43,7 @@ function lake(o: any) {
     const a = rand(0, Math.PI * 2), r = Math.sqrt(R()) * .78, x = cx + Math.cos(a) * rx * r, y = cy + Math.sin(a) * ry * r;
     const e = el('path', { d: `M${n2(x)},${n2(y)}q4,-3 8,0q4,3 8,0`, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 1.6, 'stroke-linecap': 'round', opacity: 0 }, L.waterFx);
     const ph = rand(0, 6);
-    FX.push(t => { const q = Math.sin(wrap1((t + ph) / 6) * Math.PI); e.setAttribute('opacity', (q * q * .9).toFixed(2)); e.setAttribute('transform', `translate(${n2(q * 6)},0)`); });
+    fxAt(x + 8, y, 20, t => { const q = Math.sin(wrap1((t + ph) / 6) * Math.PI); e.setAttribute('opacity', (q * q * .9).toFixed(2)); e.setAttribute('transform', `translate(${n2(q * 6)},0)`); });
   }
   for (const [x, y] of o.reeds || []) {
     for (let i = 0; i < 5; i++) {
@@ -73,11 +73,11 @@ function fountain(o: any) {
   for (let i = 0; i < 12; i++) {
     const dx = (i % 2 ? 1 : -1) * rand(12, 24);
     const e = el('circle', { cx: fx, cy: fy - 24, r: rand(1.1, 1.8), fill: '#bfeafa' }, F), d0 = i * .11;
-    FX.push(t => { const p = wrap1((t + d0) / 1.3); e.setAttribute('transform', `translate(${n2(dx * p)},${n2(-80 * p * (1 - p) + 22 * p * p)})`); e.setAttribute('opacity', (1 - .8 * p).toFixed(2)); });
+    fxAt(fx, fy - 40, 50, t => { const p = wrap1((t + d0) / 1.3); e.setAttribute('transform', `translate(${n2(dx * p)},${n2(-80 * p * (1 - p) + 22 * p * p)})`); e.setAttribute('opacity', (1 - .8 * p).toFixed(2)); });
   }
   for (let i = 0; i < 3; i++) {
     const cx = fx + (i - 1) * 9, e = el('ellipse', { cx, cy: fy, rx: 6, ry: 2.2, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 1 }, F);
-    FX.push(t => { const p = wrap1((t + i * .8) / 2.4), q = 1 - (1 - p) ** 2, s = .25 + 1.45 * q; e.setAttribute('transform', at(cx, fy, s, s)); e.setAttribute('opacity', (.9 * (1 - q)).toFixed(2)); });
+    fxAt(cx, fy, 20, t => { const p = wrap1((t + i * .8) / 2.4), q = 1 - (1 - p) ** 2, s = .25 + 1.45 * q; e.setAttribute('transform', at(cx, fy, s, s)); e.setAttribute('opacity', (.9 * (1 - q)).toFixed(2)); });
   }
 }
 
@@ -128,7 +128,7 @@ function campfire(o: any) {
   const glow = el('circle', { cx: fx, cy: fy - 6, r: 26, fill: 'url(#fireGlow)', opacity: .4 }, f);
   el('path', { d: `M${fx - 11},${fy + 2}l22,-6M${fx - 11},${fy - 4}l22,6`, stroke: '#7a4f2a', 'stroke-width': 4, 'stroke-linecap': 'round' }, f);
   const fl = el('g', null, f), bx = fx, by = fy - 2;
-  FX.push(t => {
+  fxAt(fx, fy - 6, 40, t => {
     const u = (Math.sin(t * 2.6) + 1) / 2, w = (Math.sin(t * 3.4) + 1) / 2;
     fl.setAttribute('transform', `translate(${bx},${by}) scale(${(.92 + .14 * u).toFixed(3)},${(.9 + .22 * w).toFixed(3)}) skewX(${(-4 + 9 * u).toFixed(1)}) translate(${-bx},${-by})`);
     glow.setAttribute('opacity', (.35 + .25 * (Math.sin(t * 2) + 1) / 2).toFixed(2));

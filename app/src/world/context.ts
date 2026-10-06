@@ -2,6 +2,7 @@
 import { el, wrap1, n2, at } from '../core/util';
 import type { Rect, WorldData } from './types';
 import { VNode, setDefs } from '../render/vnode';
+import { inView } from '../camera/view';
 
 export interface Bounds { x0: number; y0: number; x1: number; y1: number }
 export interface Ellipse { cx: number; cy: number; rx: number; ry: number }
@@ -55,8 +56,10 @@ export const inWater = (x: number, y: number, m = 0) =>
 /* ───────── אפקטים קטנים: מונפשים מ-JS (אנימציית CSS על SVG מתפקסלת בזום) ───────── */
 export type FxFn = (t: number, dt: number) => void;
 export const FX: FxFn[] = [];
+/** אפקט במקום קבוע: רץ רק כשהעיגול (x, y, r) נראה. האפקטים תלויים רק בזמן, אז בחזרה למסך הם מיד במצב הנכון */
+export const fxAt = (x: number, y: number, r: number, f: FxFn) => FX.push((t, dt) => { if (inView(x, y, r)) f(t, dt); });
 export function smokeFx(e: any, cx: number, cy: number, delay: number, dur = 4.8, dx = 16, dy = -52) {
-  FX.push(t => {
+  fxAt(cx + dx / 2, cy + dy / 2, 40 + Math.hypot(dx, dy) / 2, t => {
     const p = wrap1((t + delay) / dur), s = .35 + 1.25 * p;
     e.setAttribute('transform', `translate(${n2(dx * p)},${n2(dy * p)}) ` + at(cx, cy, s, s));
     e.setAttribute('opacity', (p < .12 ? p / .12 * .8 : .8 * (1 - (p - .12) / .88)).toFixed(2));
@@ -66,6 +69,7 @@ export function smokeFx(e: any, cx: number, cy: number, delay: number, dur = 4.8
 /* אדוות שנוצרות ונעלמות (ברווזים, דג) */
 const RIPPLES: { e: any; x: number; y: number; age: number }[] = [];
 export function ripple(x: number, y: number, rx: number, ry: number, parent?: any) {
+  if (!inView(x, y, 2 * rx)) return;   // מחוץ למסך: אף אחד לא יראה אותה
   RIPPLES.push({ e: el('ellipse', { cx: n2(x), cy: n2(y), rx, ry, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 1.2 }, parent || ctx.L.waterFx), x, y, age: 0 });
 }
 FX.push((t, dt) => {
