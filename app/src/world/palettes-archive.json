@@ -2,11 +2,11 @@
  "_note": "סכמות צבעים שהוצאו מהתפריט. כדי להחזיר אחת: להעתיק את האובייקט שלה לרשימה palettes ב-world.json. 'פילם 90' נשענת על 'מאוזנת' (base).",
  "palettes": [
   {
-   "name": "מקורית"
+   "name": "Original"
   },
   {
-   "name": "פילם 90",
-   "base": "מאוזנת",
+   "name": "Film 90",
+   "base": "Balanced",
    "saturation": 0.82,
    "contrast": 0.86,
    "lift": 0.01,

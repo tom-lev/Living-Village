@@ -13,6 +13,7 @@ let M = 0, dcam = { k: 1, x: 0, y: 0 };
 let gesturing = false, gestureMoved = false, wheelTimer: any = 0;
 export let anim: ((now: number) => void) | null = null;
 export let following: any = null;
+let followText = '';
 export const loopState = { running: false };
 const ptrs = new Map<number, number[]>();
 let down: any = null, pinch: any = null;
@@ -92,6 +93,9 @@ export function animateTo(k: number, wx: number, wy: number, ms = 420) {
 export function cameraTick(now: number, dt: number) {
   if (anim) anim(now);
   else if (following) {
+    // מה הדמות עושה עכשיו (בדרך אל..., בבית, בחנות...)
+    const st = 'Following ' + (following.status || following.name);
+    if (st !== followText) { followText = st; document.getElementById('followName').textContent = st; }
     const { vw, vh } = view, k = 1 - Math.exp(-dt * 4), tx = vw / 2 - following.x * cam.k, ty = vh / 2 - (following.y - 15) * cam.k;
     cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; applyCam();
   }
@@ -119,7 +123,7 @@ export function initCamera(followables: any[]) {
   zoomLbl = document.getElementById('zoomLbl'); followEl = document.getElementById('follow');
   const startFollow = (f: any) => {
     following = f;
-    document.getElementById('followName').textContent = 'עוקבים אחרי ' + f.name;
+    followText = ''; document.getElementById('followName').textContent = 'Following ' + f.name;
     followEl.classList.add('on');
     if (cam.k < view.fitK * 4) animateTo(view.fitK * 5, f.x, f.y - 15, 650);
   };

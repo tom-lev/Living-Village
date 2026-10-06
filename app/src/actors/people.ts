@@ -1,9 +1,10 @@
 /* אנשים ובני לוויה: הולכים על רשת הדרכים, כלב עם רצועה, בלון, יושבים */
 import { el, n2, P, clamp, shade, show } from '../core/util';
-import { inView } from '../camera/view';
-import { rand, pick, R } from '../core/rng';
+import { inView, view } from '../camera/view';
+import { R, rngAt } from '../core/rng';
+import { KINDS, type Place } from '../world/places';
+import { roleOf, routeTo, routeAt, chooseNext, durOf, surnameOf } from './agenda';
 import { ctx } from '../world/context';
-import { geo, edgeAt } from '../world/geometry';
 import type { Look } from '../world/types';
 import { Figure, PR, walkPose, sitPose, type View } from './figure';
 
@@ -23,59 +24,79 @@ export function sortDepth() {
   }
 }
 
-/** מניע על גרף הדרכים: מתקדם לפי מרחק, ובצומת בוחר המשך אקראי (בלי לחזור אחורה) */
-class Rover {
-  constructor(public e: number, public dir: number, public s: number) {}
-  get E() { return geo.EDGES[this.e]; }
-  endNode() { return this.dir > 0 ? this.E.b : this.E.a; }
-  remaining() { return this.E.len - this.s; }
-  at(lane: number) {
-    const E = this.E, p = edgeAt(E, this.dir > 0 ? this.s : E.len - this.s), tx = p.tx * this.dir, ty = p.ty * this.dir;
-    return [p.x - ty * lane, p.y + tx * lane];      // lane>0 = צד ימין של כיוון ההליכה
-  }
-  /** מחזיר true בהגעה למבוי סתום */
-  advance(ds: number) {
-    this.s += ds;
-    while (this.s >= this.E.len) {
-      const over = this.s - this.E.len, opts = geo.ADJ[this.endNode()].filter(o => o.e !== this.e);
-      if (!opts.length) { this.s = this.E.len; return true; }
-      const nx = pick(opts);
-      this.e = nx.e; this.dir = nx.dir; this.s = over;
-    }
-    return false;
-  }
-  turnAround() { this.dir = -this.dir; this.s = this.E.len - this.s; }
-}
-
-/** הולך רגל: צעדים לפי מרחק, מבט מהצד/מלפנים/מאחור, ובמבוי סתום עוצר ומסתובב */
+/** הולך רגל עם אג'נדה: הולך ליעד (בית, חנות, שדה, יער, ים...), נכנס ונעלם או נשאר שם, ואחר כך ממשיך.
+ *  מצבים: walk → (enter → inside → exit) או stay → walk ... ; צעדים לפי מרחק, מבט מהצד/מלפנים/מאחור */
 export class Walker {
   [k: string]: any;
   constructor(look: Look, speed: number) {
-    this.look = look; this.name = look.name; this.speed = speed;
-    const ei = Math.floor(R() * geo.EDGES.length);
-    this.rv = new Rover(ei, R() < .5 ? 1 : -1, rand(0, geo.EDGES[ei].len));
-    this.lane = look.hold === 'leash' ? 8 : (R() < .5 ? 1 : -1) * rand(4, 9);   // בתוך הדרך הצרה (לא על הדשא)
+    this.look = look; this.first = look.name; this.speed = speed; this.role = roleOf(look);
+    this.rg = rngAt(look.h * 97, speed * 13, 23);
+    this.laneOff = look.hold === 'leash' ? 6 : (this.rg.chance(.5) ? 1 : -1) * this.rg.rand(3, 8);   // צד קבוע בתוך הדרך
     this.fig = new Figure(ctx.L.actors, look); this.el = this.fig.g;
-    const p = this.rv.at(this.lane);
-    this.x = p[0]; this.y = p[1]; this.hx = 1; this.hy = 0;
+    this.x = 0; this.y = 0; this.hx = 1; this.hy = 0;
     this.view = 'side' as View; this.pend = 0; this.flip = 1;
-    this.phase = R(); this.amp = 1; this.sf = 1; this.state = 'walk'; this.wait = 0; this.alpha = 1;
-    this.trail = [[this.x, this.y, 0]]; this.dist = 0;
+    this.phase = R(); this.amp = 1; this.sf = 1; this.alpha = 1;
+    this.trail = [[0, 0, 0]]; this.dist = 0;
     this.cullR = 50; this.shown = true;   // רדיוס לבדיקת "נראה" (גדל כשיש כלב או בלון)
+    this.state = 'inside'; this.timer = 0; this.place = null; this.route = null; this.s = 0;
+    this.recent = [] as number[]; this.outings = 0;
     dynamics.push(this); followable(this, this.fig.g);
   }
+  /** התחלה: חלק מהדמויות בבית (יוצאות בהדרגה), וחלק כבר בדרך למקום כלשהו */
+  start() {
+    const d = this.home.door;
+    this.place = this.home; this.x = d[0]; this.y = d[1];
+    if (this.rg.chance(.4)) { this.state = 'inside'; this.alpha = 0; this.timer = this.rg.rand(0, 25); }
+    else { this.go(chooseNext(this, this.rg), this.home); this.s = this.rg.rand(0, this.route.len * .7); const p = routeAt(this.route, this.s); this.x = p.x; this.y = p.y; }
+    this.trail = [[this.x, this.y, 0]];
+  }
+  /** יוצאים ליעד: מסלול מהמקום הנוכחי (מהדלת, אם יוצאים ממבנה) */
+  go(to: Place, from: Place | null) {
+    this.route = routeTo(from?.door ? from.door : [this.x, this.y], from?.door ? from : null, to);
+    this.place = to; this.s = 0; this.state = 'walk'; this.sf = .2;
+    this.recent.push(to.id); if (this.recent.length > 4) this.recent.shift();
+    if (to !== this.home) this.outings++;
+  }
+  /** שם מלא: השם הפרטי ושם המשפחה של הבית (משתנה אם שם הבית משתנה) */
+  get name() { const s = surnameOf(this.home); return s ? `${this.first} ${s}` : this.first; }
+  /** לאן הדמות הולכת / מה היא עושה (מוצג כשעוקבים אחריה) */
+  get status() {
+    const p = this.place, n = p?.name ? ` (${p.name})` : '';
+    if (!p) return this.name;
+    if (this.state === 'walk' || this.state === 'exit') return `${this.name} · ${p === this.home ? 'walking home' : 'on the way to ' + (p.name || KINDS[p.kind].label)}`;
+    return `${this.name} · ${p === this.home ? 'at home' : KINDS[p.kind].label}${p === this.home ? '' : n}`;
+  }
   update(dt: number, t: number) {
+    let tx = this.x, ty = this.y, walking = false;
     if (this.state === 'walk') {
-      const rem = this.rv.remaining(), dead = geo.ADJ[this.rv.endNode()].length === 1;
-      const mul = dead ? clamp(rem / 26, .12, 1) : 1;   // מאטים לאט לפני מבוי סתום
+      const left = this.route.len - this.s;
       this.sf = Math.min(1, this.sf + dt * 1.1);
-      if (this.rv.advance(this.speed * Math.min(mul, this.sf) * dt)) { this.state = 'idle'; this.wait = rand(2.5, 6); }
-    } else {
-      this.wait -= dt;
-      if (this.wait <= 0) { this.rv.turnAround(); this.state = 'walk'; this.sf = .15; }
+      this.s = Math.min(this.route.len, this.s + this.speed * Math.min(this.sf, clamp(left / 24, .15, 1)) * dt);   // מאטים לפני היעד
+      const p = routeAt(this.route, this.s), off = this.laneOff * p.lane;
+      tx = p.x - p.ty * off; ty = p.y + p.tx * off; walking = true;
+      if (left < .5) {
+        if (KINDS[this.place.kind].enter) this.state = 'enter';
+        else { this.state = 'stay'; this.timer = durOf(this.place, this.rg); }
+      }
+    } else if (this.state === 'enter') {
+      this.alpha = Math.max(0, this.alpha - dt / .8);
+      if (!this.alpha) { this.state = 'inside'; this.timer = durOf(this.place, this.rg); }
+    } else if (this.state === 'inside') {
+      this.timer -= dt;
+      if (this.timer <= 0) {
+        const from = this.place; this.state = 'exit';
+        const d = from.door; this.x = d[0]; this.y = d[1];
+        this.go(chooseNext(this, this.rg), from); this.state = 'exit';
+      }
+    } else if (this.state === 'exit') {
+      this.alpha = Math.min(1, this.alpha + dt / .8);
+      if (this.alpha >= 1) this.state = 'walk';
+    } else if (this.state === 'stay') {
+      this.timer -= dt;
+      if (this.timer <= 0) this.go(chooseNext(this, this.rg), null);
     }
-    const tgt = this.rv.at(this.lane), k = 1 - Math.exp(-dt * 7);
-    const nx = this.x + (tgt[0] - this.x) * k, ny = this.y + (tgt[1] - this.y) * k;
+    const k = 1 - Math.exp(-dt * 7);
+    const nx = this.x + (tx - this.x) * k, ny = this.y + (ty - this.y) * k;
     const dx = nx - this.x, dy = ny - this.y, ds = Math.hypot(dx, dy);
     this.x = nx; this.y = ny;
     if (ds > 1e-4) {
@@ -91,12 +112,15 @@ export class Walker {
     else this.pend = 0;
     if (this.view === 'side' && Math.abs(this.hx) > .2) this.flip += ((this.hx > 0 ? 1 : -1) - this.flip) * Math.min(1, dt * 14);
     // צעדים לפי מרחק: כף הרגל שעל הקרקע נשארת במקום
-    this.amp += ((this.state === 'walk' ? .35 + .65 * this.sf : 0) - this.amp) * Math.min(1, dt * 6);
+    this.amp += ((walking ? .35 + .65 * this.sf : 0) - this.amp) * Math.min(1, dt * 6);
     const A = PR.A * this.look.h * Math.max(this.amp, .35);
     this.phase += this.view === 'side' ? ds * Math.abs(this.hx) / (4 * A) : ds * Math.abs(this.hy) / (4 * A * PR.KF);
-    // מחוץ למסך ממשיכים ללכת (כל מה שלמעלה), רק לא מציירים את השלד
-    this.shown = inView(this.x, this.y - 16, this.cullR); show(this.el, this.shown);
+    // מחוץ למסך (או בפנים) ממשיכים לחיות, רק לא מציירים את השלד
+    this.shown = this.alpha > 0 && inView(this.x, this.y - 16, this.cullR); show(this.el, this.shown);
     if (!this.shown) return;
+    // דמות קטנה על המסך (פחות מ-30 פיקסלים): התנוחה מתעדכנת בכל פריים שני, וההזזה בכל פריים. ההבדל לא נראה, והחיסכון כפול
+    this.tick = (this.tick || 0) + 1;
+    if (this.look.h * view.cam.k < 30 && this.alpha >= 1 && (this.tick & 1)) { this.fig.move(this.x, this.y); return; }
     this.fig.render(walkPose(this.look, this.view, this.phase, this.amp, t), this.x, this.y, this.flip, this.alpha);
   }
   /** נקודה על המסלול שעבר, back יחידות אחורה (לכלב) */
@@ -114,7 +138,7 @@ export class Walker {
 export class Dog {
   [k: string]: any;
   constructor(owner: Walker, color: string, name: string) {
-    this.owner = owner; this.name = `${name} (${owner.name}'s dog)`;
+    this.owner = owner; this.dogName = name;
     this.g = el('g', { class: 'who' }, ctx.L.actors); this.el = this.g;
     el('ellipse', { rx: 10, ry: 2.6, fill: 'rgba(40,70,20,.25)' }, this.g);
     this.b = el('g', null, this.g);
@@ -136,9 +160,14 @@ export class Dog {
     const p = owner.pointBack(24); this.x = p[0]; this.y = p[1]; this.flip = 1; this.phase = 0; this.amp = 1; this.hx = 1;
     dynamics.push(this); followable(this, this.g);
   }
+  get name() { return `${this.dogName} (${this.owner.name}'s dog)`; }
   update(dt: number, t: number) {
     const o = this.owner, k = 1 - Math.exp(-dt * 8);
-    let tgt = o.pointBack(26);
+    // הבעלים בתוך מבנה שאינו הבית (חנות, כנסייה): הכלב מחכה בחוץ ליד הדלת. בבית: נכנס איתו
+    const inside = o.state === 'enter' || o.state === 'inside' || o.state === 'exit';
+    this.waiting = inside && o.place !== o.home && !!o.place?.door;
+    this.alpha = this.waiting ? 1 : o.alpha;
+    let tgt = this.waiting ? [o.place.door[0] + 16, o.place.door[1] + 9] : o.pointBack(26);
     // לא עוברים דרך הבעלים (למשל כשהוא מסתובב במבוי סתום): קרוב מדי → עוקפים אותו מהצד
     const ox = this.x - o.x, oy = this.y - o.y, od = Math.hypot(ox, oy) || 1;
     if (od < 18) {
@@ -155,8 +184,9 @@ export class Dog {
     this.amp += ((moving ? 1 : 0) - this.amp) * Math.min(1, dt * 5);
     this.phase += ds / 13;
     this.collar = [this.x + 5.6 * this.flip, this.y - 10.5];
-    show(this.g, this.owner.shown);
-    if (!this.owner.shown) return;
+    const vis = this.waiting ? this.alpha > 0 && inView(this.x, this.y - 10, 30) : this.owner.shown && this.alpha > 0;
+    show(this.g, vis);
+    if (!vis) return;
     // טרוט: רגל קדמית ואחורית אלכסונית זזות יחד
     const leg = (pe: any, hx: number, off: number) => {
       const q = (this.phase + off) * Math.PI * 2, fx = hx + Math.sin(q) * 2.6 * this.amp, fy = -Math.max(0, Math.cos(q)) * 1.8 * this.amp;
@@ -165,7 +195,7 @@ export class Dog {
     leg(this.legsNear[0], 6, 0); leg(this.legsNear[1], -6, .5); leg(this.legsFar[0], 4.5, .5); leg(this.legsFar[1], -7.5, 0);
     this.tail.setAttribute('transform', `translate(-8,-10) rotate(${(Math.sin(t * (moving ? 7 : 4)) * 16).toFixed(1)})`);
     this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y)})`);
-    this.g.setAttribute('opacity', this.owner.alpha.toFixed(2));
+    this.g.setAttribute('opacity', this.alpha.toFixed(2));
     this.b.setAttribute('transform', `scale(${this.flip.toFixed(3)},1)`);
   }
 }
@@ -184,10 +214,11 @@ const SIT_BEHAVIORS: Record<string, (t: number, h: number) => number[][]> = {
 export class Sitter {
   [k: string]: any;
   constructor(look: Look, x: number, y: number, seat: number, flip: number, behavior: string) {
-    this.look = look; this.x = x; this.y = y; this.seat = seat * look.h; this.flip = flip; this.hands = SIT_BEHAVIORS[behavior];
-    this.fig = new Figure(ctx.L.actors, look); this.el = this.fig.g; this.name = look.name;
+    this.look = look; this.first = look.name; this.role = roleOf(look); this.x = x; this.y = y; this.seat = seat * look.h; this.flip = flip; this.hands = SIT_BEHAVIORS[behavior];
+    this.fig = new Figure(ctx.L.actors, look); this.el = this.fig.g;
     dynamics.push(this); followable(this, this.fig.g);
   }
+  get name() { const s = surnameOf(this.home); return s ? `${this.first} ${s}` : this.first; }
   update(dt: number, t: number) {
     const on = inView(this.x, this.y - 16, 50); show(this.el, on);
     if (on) this.fig.render(sitPose(this.look, this.seat, this.hands(t, this.look.h), t), this.x, this.y, this.flip);
@@ -229,7 +260,7 @@ export class Leash {
   [k: string]: any;
   constructor(owner: Walker, dog: Dog) { this.owner = owner; this.dog = dog; this.p = el('path', { fill: 'none', stroke: '#c0392b', 'stroke-width': .9 }, ctx.L.air); }
   update() {
-    show(this.p, this.owner.shown); if (!this.owner.shown) return;
+    const on = this.owner.shown && !this.dog.waiting && this.owner.alpha > 0; show(this.p, on); if (!on) return;
     const a = this.owner.fig.hand, b = this.dog.collar; if (!a || !b) return;
     const d = Math.hypot(b[0] - a[0], b[1] - a[1]), sag = Math.max(0, 30 - d) * .35 + 2;
     this.p.setAttribute('d', `M${P(a)}Q${n2((a[0] + b[0]) / 2)},${n2((a[1] + b[1]) / 2 + sag)} ${P(b)}`);

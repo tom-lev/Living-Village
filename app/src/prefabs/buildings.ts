@@ -3,6 +3,7 @@ import { el, n2, circ, shade, blob, ST } from '../core/util';
 import { rngAt } from '../core/rng';
 import { ctx, prop, block, smokeFx } from '../world/context';
 import { register } from './registry';
+import { addPlace } from '../world/places';
 import { house, roofTexture, windowAt, poly, type Pt } from './house';
 import { shop } from './shop';
 
@@ -113,7 +114,7 @@ function windmill(o: any) {
 }
 
 function station(o: any) {
-  const { x: sx, y: sy, name = 'תחנה' } = o, g = prop(sy);
+  const { x: sx, y: sy, name = 'Station' } = o, g = prop(sy);
   el('rect', { x: sx - 70, y: sy - 4, width: 140, height: 10, fill: '#d9c9ae', ...ST }, g);
   el('rect', { x: sx - 46, y: sy - 50, width: 92, height: 46, fill: '#fde9c8', ...ST }, g);
   el('path', { d: `M${sx - 56},${sy - 48}L${sx - 40},${sy - 72}H${sx + 40}L${sx + 56},${sy - 48}Z`, fill: '#3d7bd9', ...ST }, g);
@@ -207,6 +208,8 @@ function stoneFarm(o: any) {
   for (let t = 0; t < 1; t += .14) flag += blob(x + 30 + t * 72, y + 6 + t * 50 + rg.rand(-1, 1), rg.rand(3.6, 5), rg.rand(2.4, 3.2), 6, .12, rg.rand(0, 6));
   el('path', { d: flag, fill: '#e3dac8', stroke: '#b8ab92', 'stroke-width': .6 }, G);
 
+  addPlace({ kind: 'home', name: o.name, door: [x - 10, y - 8], vertical: true });
+  addPlace({ kind: 'work', name: o.name, at: [x - 60, y + 58] });
   // ── גינת ירק: ערוגות משני צדי השביל ──
   const bedY = y + 14, bedH = 38, beds: [number, number][] = [[X0 + 16, x - 24], [x + 6, x + 80]];
   for (const [bx0, bx1] of beds) {

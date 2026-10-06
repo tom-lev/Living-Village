@@ -1,9 +1,9 @@
 {
  "seed": 20261006,
- "palette": "מאוזנת",
+ "palette": "Balanced",
  "palettes": [
   {
-   "name": "רכה",
+   "name": "Soft",
    "saturation": 0.68,
    "contrast": 0.9,
    "lift": 0.03,
@@ -40,7 +40,7 @@
    }
   },
   {
-   "name": "מאוזנת",
+   "name": "Balanced",
    "saturation": 0.86,
    "contrast": 0.97,
    "lift": 0.02,
@@ -1447,7 +1447,12 @@
    "tufts": 8000
   },
   "beach": {
-   "y": 2225
+   "y": 2225,
+   "swim": [
+    300,
+    410,
+    540
+   ]
   },
   "sea": {
    "y": 2330,
@@ -1678,7 +1683,11 @@
    "y": 600,
    "rx": 62,
    "ry": 30,
-   "name": "Church Square"
+   "name": "Church Square",
+   "labelAt": [
+    420,
+    646
+   ]
   },
   {
    "type": "church",
@@ -3783,7 +3792,8 @@
      "hair": "#6b3e26",
      "hairStyle": "long",
      "shirt": "#e85d75",
-     "pants": "#3d5a80"
+     "pants": "#3d5a80",
+     "age": 34
     },
     "speed": 13.2
    },
@@ -3797,7 +3807,8 @@
      "hairStyle": "short",
      "shirt": "#3aa0d8",
      "pants": "#59463a",
-     "hold": "leash"
+     "hold": "leash",
+     "age": 41
     },
     "speed": 13.8
    },
@@ -3812,13 +3823,14 @@
      "shirt": "#ffcc33",
      "pants": "#f1c7a5",
      "skirt": "#ff7aa2",
-     "hold": "balloon"
+     "hold": "balloon",
+     "age": 7
     },
     "speed": 10.8
    },
    {
     "look": {
-     "name": "Grandma Rachel",
+     "name": "Rachel",
      "h": 31,
      "headR": 0.1,
      "skin": "#f1c7a5",
@@ -3826,7 +3838,8 @@
      "hairStyle": "bun",
      "shirt": "#8e6cc9",
      "pants": "#f1c7a5",
-     "skirt": "#7656b3"
+     "skirt": "#7656b3",
+     "age": 74
     },
     "speed": 8.4
    },
@@ -3840,7 +3853,8 @@
      "hairStyle": "short",
      "shirt": "#f28c28",
      "pants": "#2f4858",
-     "hat": "#2e86de"
+     "hat": "#2e86de",
+     "age": 29
     },
     "speed": 13.8
    },
@@ -3854,7 +3868,8 @@
      "hairStyle": "bun",
      "shirt": "#fff7e6",
      "pants": "#8d5a3b",
-     "skirt": "#2bb3a0"
+     "skirt": "#2bb3a0",
+     "age": 26
     },
     "speed": 12.6
    },
@@ -3867,7 +3882,8 @@
      "hair": "#c0392b",
      "hairStyle": "short",
      "shirt": "#6abf4b",
-     "pants": "#4a4a55"
+     "pants": "#4a4a55",
+     "age": 38
     },
     "speed": 14.4
    },
@@ -3880,7 +3896,8 @@
      "hair": "#4a2c1a",
      "hairStyle": "pony",
      "shirt": "#5b7bd5",
-     "pants": "#e9e4dc"
+     "pants": "#e9e4dc",
+     "age": 45
     },
     "speed": 12.0
    },
@@ -3893,9 +3910,140 @@
      "hair": "#1e1612",
      "hairStyle": "short",
      "shirt": "#e2574c",
-     "pants": "#3b3b46"
+     "pants": "#3b3b46",
+     "age": 52
     },
     "speed": 13.2
+   },
+   {
+    "look": {
+     "name": "Eli",
+     "h": 35,
+     "headR": 0.097,
+     "skin": "#e0ac85",
+     "hair": "#3b2f2a",
+     "hairStyle": "short",
+     "shirt": "#6c8ebf",
+     "pants": "#4a4a55",
+     "age": 36
+    },
+    "speed": 12.6
+   },
+   {
+    "look": {
+     "name": "Sara",
+     "h": 32,
+     "headR": 0.1,
+     "skin": "#ffdbc1",
+     "hair": "#e3c16f",
+     "hairStyle": "bun",
+     "shirt": "#9bc49b",
+     "pants": "#5a4a3a",
+     "skirt": "#c97b63",
+     "age": 31
+    },
+    "speed": 11.4
+   },
+   {
+    "look": {
+     "name": "Ben",
+     "h": 36,
+     "headR": 0.095,
+     "skin": "#8d5a3b",
+     "hair": "#2b2220",
+     "hairStyle": "short",
+     "shirt": "#d9a441",
+     "pants": "#3d5a80",
+     "hat": "#5b6b7a",
+     "age": 44
+    },
+    "speed": 13.8
+   },
+   {
+    "look": {
+     "name": "Rina",
+     "h": 31,
+     "headR": 0.1,
+     "skin": "#c58c66",
+     "hair": "#2b2220",
+     "hairStyle": "long",
+     "shirt": "#b48ad6",
+     "pants": "#3d4a5a",
+     "age": 27
+    },
+    "speed": 12.0
+   },
+   {
+    "look": {
+     "name": "Tom",
+     "h": 34,
+     "headR": 0.097,
+     "skin": "#f1c7a5",
+     "hair": "#b5651d",
+     "hairStyle": "short",
+     "shirt": "#e2574c",
+     "pants": "#59463a",
+     "age": 33
+    },
+    "speed": 13.2
+   },
+   {
+    "look": {
+     "name": "Mia",
+     "h": 25,
+     "headR": 0.12,
+     "skin": "#a86f4c",
+     "hair": "#2b2220",
+     "hairStyle": "pony",
+     "shirt": "#7ad0c4",
+     "pants": "#3d5a80",
+     "age": 8
+    },
+    "speed": 10.2
+   },
+   {
+    "look": {
+     "name": "Yossi",
+     "h": 32,
+     "headR": 0.096,
+     "skin": "#e0ac85",
+     "hair": "#d9d4cc",
+     "hairStyle": "short",
+     "shirt": "#a3896b",
+     "pants": "#4a4a55",
+     "hat": "#7a5a3a",
+     "age": 78
+    },
+    "speed": 8.6
+   },
+   {
+    "look": {
+     "name": "Dana",
+     "h": 33,
+     "headR": 0.1,
+     "skin": "#f6d5bd",
+     "hair": "#8a5a35",
+     "hairStyle": "pony",
+     "shirt": "#f2a65a",
+     "pants": "#3d5a80",
+     "age": 39
+    },
+    "speed": 12.9
+   },
+   {
+    "look": {
+     "name": "Ella",
+     "h": 23,
+     "headR": 0.125,
+     "skin": "#ffdbc1",
+     "hair": "#e3c16f",
+     "hairStyle": "long",
+     "shirt": "#ff9fb6",
+     "pants": "#f1c7a5",
+     "skirt": "#7aa7e0",
+     "age": 6
+    },
+    "speed": 9.8
    }
   ],
   "companions": [
@@ -3914,7 +4062,7 @@
   "sitters": [
    {
     "look": {
-     "name": "Grandpa Moshe",
+     "name": "Moshe",
      "h": 33,
      "headR": 0.095,
      "skin": "#f1c7a5",
@@ -3922,7 +4070,8 @@
      "hairStyle": "short",
      "shirt": "#8a9a5b",
      "pants": "#5a4a3a",
-     "hat": "#6b4a2f"
+     "hat": "#6b4a2f",
+     "age": 81
     },
     "x": 473,
     "y": 812,
@@ -3939,7 +4088,8 @@
      "hair": "#2b2220",
      "hairStyle": "long",
      "shirt": "#2bb3a0",
-     "pants": "#3d5a80"
+     "pants": "#3d5a80",
+     "age": 24
     },
     "x": 214,
     "y": 293,

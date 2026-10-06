@@ -13,6 +13,7 @@ import '../prefabs/village';
 import { buildTerrain } from './terrain';
 import { GENERATORS } from './generators';
 import { addLabel } from '../world/labels';
+import { places, autoPlace } from '../world/places';
 
 const rect = ([x0, y0, x1, y1]: number[]) => ({ x0, y0, x1, y1 });
 
@@ -27,8 +28,9 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
     const f = PREFABS[o.type];
     if (!f) { console.warn('אין prefab בשם', o.type, o); continue; }
     if (o.id) ctx.named[o.id] = o;
-    const n0 = NO_TREE.length, s0 = statics.length;
+    const n0 = NO_TREE.length, s0 = statics.length, p0 = places.length;
     f(o);
+    if (places.length === p0) autoPlace(o);   // כל אובייקט (גם עתידי) הוא יעד, אלא אם הוא נוף בלבד
     // התווית יושבת ממש מעל האובייקט: הקצה העליון של החלק הגדול שצויר (גג, ארובה). אם אין ציור גבוה, השטח שהאובייקט חסם
     let top: number | undefined;
     if (o.name) {

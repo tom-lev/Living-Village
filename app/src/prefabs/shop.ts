@@ -8,6 +8,7 @@
 import { el, n2, circ, shade, wrap1, ST } from '../core/util';
 import { rngAt, type LocalRng } from '../core/rng';
 import { ctx, prop, block, fxAt, smokeFx } from '../world/context';
+import { addPlace } from '../world/places';
 import { poly, roofTexture, wallTexture, windowAt, doorAt, FLOWERS, type Pt } from './house';
 
 interface Front { x0: number; x1: number; top: number; y: number }   // חלון הראווה
@@ -287,6 +288,7 @@ export function shop(o: any) {
     el('path', { d: m, stroke: frameC, 'stroke-width': .9 }, g);
   }
   (kit.display || GENERIC.display)!(g, fr, c, rg);
+  addPlace({ kind: 'shop', name, door: [dx, y], trade: o.variant, vertical: true });
   doorAt(g, dx, y, dw, dh, rg.pick(['glass', 'glass', 'panel', 'round']), shade(c, rg.rand(-.2, 0)));
   // גגון מעל החלון (לפעמים גם מעל הדלת)
   const aw: string = o.awning ?? (form === 'pavilion' ? 'none' : rg.pick(['scallop', 'stripes', 'plain', 'pergola', 'none']));

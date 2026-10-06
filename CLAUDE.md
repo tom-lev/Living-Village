@@ -45,7 +45,7 @@ This file is the complete handoff. Work on this project so far happened in one l
   - the soft/balanced palette;
   - full zoom-out showing the whole world, but with no empty bands.
 - **UI:**
-  - Hebrew/RTL.
+  - **Everything on the site is English, LTR (owner's request):** buttons, aria labels, the follow pill, palette names (Soft, Balanced), the rename dialog and error messages. Code comments stay Hebrew, and you still talk to the owner in Hebrew.
   - **Object names.** Any object in `world.json` can have a unique English `name`, such as "Carter House", "Duck Lake" or "Old Stone Farm". About 99 initial names exist; houses use surnames and snowy ones are "… Lodge".
     - The label sits **above** the object. Its top comes from the `block()` rects the prefab registered while drawing (computed in `scene/build.ts`). `labelAt: [x, y]` overrides the position.
     - The look: a map-style italic serif, warm brown with a light halo. Labels appear only at about 4.5× the home view and keep a constant screen size (`world/labels.ts`, dynamic layer `labels`).
@@ -57,7 +57,7 @@ This file is the complete handoff. Work on this project so far happened in one l
       - From time to time you may fold `names.json` into `world.json` and empty the file.
     - Label position: the top of the largest prop group the prefab drew (via `getBBox` in `scene/build.ts`). If there is none, the top of its `block()` rects is used. Labels are 26 px on screen.
     - Use these names when talking with the owner about fixes.
-  - **Text inside the world is English only:** shop signs, the station and character names (Noa, Itai, Grandpa Moshe…). The UI chrome stays Hebrew.
+  - **Text inside the world is English only:** shop signs, the station and character names. A character's full name is the first name from the data plus the surname of their home: "Noa Fisher" lives in Fisher House. A home without a surname gives "Noa of Old Stone Farm". The surname follows renames (`surnameOf` in `actors/agenda.ts`). Children live with an adult, so they share the family name.
   - Bottom-left: + − (hidden on touch), ⤢ (home view), ❚❚/▶ (pause), 🎨 (palette menu). Bottom-right: the zoom label.
   - The follow pill appears when you tap a character.
   - There is no title card (removed at their request).
@@ -135,6 +135,20 @@ Order:
   - A house on a plot is a `plot`, a `house` whose door sits about 13 above the plot's bottom edge, and optionally a small `roundTree` (s 0.7–0.9) in the back corner.
   - Buildings call `block()` so the forest generator doesn't plant trees over them.
 - `y` is the ground line. Objects are depth-sorted by y (`prop(y)`).
+
+### Characters with an agenda (`world/places.ts`, `world/nav.ts`, `actors/agenda.ts`)
+- **Places (destinations):** built automatically.
+  - Every object that is not pure scenery becomes a destination through `autoPlace()` in `scene/build.ts`. Its kind comes from `KIND_OF_TYPE`: home, shop, church, train, workIn, work, play, animals, shore, stroll, view or rest. An unknown type with a name becomes 'visit' (come, stand and look). **Never require the owner to declare destinations.**
+  - Prefabs that know their real door call `addPlace` themselves: `shop` and `stoneFarm`. The beach registers swim spots from `terrain.beach.swim`. Dead-end forest trails become 'hike' destinations.
+  - `KINDS` defines whether you enter (fade out at the door and stay inside) and for how long.
+- **Walk network:** all village roads, outer roads and trails, resampled every 14 units and joined at ends and crossings. Routes use A*. A door is reached from the node *in front* of it (`frontNode`: buildings face south) through a straight garden path (`vertical`).
+- **Choosing a destination happens in two stages.** First the activity kind, weighted by the role's `LIKES`. Then a place of that kind, where closer is better ('hike', 'train' and 'swim' tolerate long trips). Recent places are skipped, and after a few outings the character goes home.
+- **Role comes from `look.age`:** under 13 is a child, 65 and over is an elder. A dog owner gets the 'dog' role. Ages are in `world.json`.
+- **Walker states:** walk → enter → inside → exit, or walk → stay. 18 walkers.
+  - The dog waits outside the door while its owner is in a shop, and goes in at home.
+  - The follow pill shows live status, for example "Following Noa Fisher · on the way to Bakery".
+  - Stage 2 (poses for work, sitting, swimming and sport) and stage 3 (more trail use) are in `TODO.md`.
+- **LOD:** figures under 30 px tall update their pose every second frame, but move every frame.
 
 ### Code modules
 - `prefabs/` draw with `el(tag, attrs, parent)` from `core/util.ts`. Static drawing goes into `ctx.L.ground/roads/groundProps/water/props`; animated drawing into `waterFx/cloudShadows/pad/fx/actors/air/clouds`. **All animation is JS** through the `FX` list (`world/context.ts`) or actor `update()`. Never use CSS/SMIL animation.

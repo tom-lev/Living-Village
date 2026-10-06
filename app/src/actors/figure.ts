@@ -196,5 +196,11 @@ export class Figure {
     // נקודת היד המחזיקה, בקואורדינטות עולם (לבלון ולרצועה)
     const holdI = p.view === 'side' ? 0 : (p.view === 'front' ? 1 : 0), hp = p.arms[holdI].hand;
     this.hand = [x + (p.view === 'side' ? hp[0] * flip : hp[0]), y + hp[1]];
+    this.handRel = [this.hand[0] - x, this.hand[1] - y];
+  }
+  /** רק הזזה של כל הדמות, בלי לעדכן את התנוחה (לדמויות קטנות על המסך, בכל פריים שני) */
+  move(x: number, y: number) {
+    place(this.g, x, y);
+    if (this.handRel) this.hand = [x + this.handRel[0], y + this.handRel[1]];
   }
 }

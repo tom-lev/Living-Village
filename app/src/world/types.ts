@@ -14,6 +14,7 @@ export interface WorldObject {
 export interface Look {
   name: string; h: number; headR: number; skin: string; hair: string; hairStyle: string;
   shirt: string; pants: string; skirt?: string; hat?: string; hold?: 'leash' | 'balloon';
+  age?: number;   // הגיל: קובע את האופי (ילד, בוגר, מבוגר) ומה הדמות אוהבת לעשות
 }
 
 import type { PaletteSpec } from '../core/palette';

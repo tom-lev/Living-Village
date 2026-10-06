@@ -23,19 +23,19 @@ const unb64 = (s: string) => new TextDecoder().decode(Uint8Array.from(atob(s.rep
 async function diagnose(headers: Record<string, string>, status: number, write: boolean): Promise<string> {
   try {
     const u = await fetch('https://api.github.com/user', { headers });
-    if (u.status === 401) return `המפתח עצמו לא תקין (אולי הועתק חלקית, או שפג תוקפו). [${status}]`;
+    if (u.status === 401) return `The key itself is not valid (maybe only part of it was copied, or it expired). [${status}]`;
     const r = await fetch(`https://api.github.com/repos/${REPO}`, { headers });
-    if (!r.ok) return `המפתח תקין, אבל אין לו גישה לפרויקט Living-Village. בהגדרות המפתח: Only select repositories ← Living-Village. [${status}/${r.status}]`;
+    if (!r.ok) return `The key works but has no access to Living-Village. In the key settings: Only select repositories → Living-Village. [${status}/${r.status}]`;
     const perms = (await r.json()).permissions;
-    if (write && perms && !perms.push) return `למפתח יש רק הרשאת קריאה. בהגדרות המפתח: Contents ← Read and write. [${status}]`;
-    return write ? `אין למפתח הרשאת כתיבה לקבצים. בהגדרות המפתח: Contents ← Read and write. [${status}]`
-      : `אין למפתח הרשאת Contents. בהגדרות המפתח: Add permissions ← Contents ← Read and write. [${status}]`;
-  } catch { return `לא הצלחתי לבדוק את המפתח (בעיית רשת?). [${status}]`; }
+    if (write && perms && !perms.push) return `The key can only read. In the key settings: Contents → Read and write. [${status}]`;
+    return write ? `The key cannot write files. In the key settings: Contents → Read and write. [${status}]`
+      : `The key has no Contents permission. In the key settings: Add permissions → Contents → Read and write. [${status}]`;
+  } catch { return `Could not check the key (network problem?). [${status}]`; }
 }
 
 /** שומר שם אחד (או מוחק, אם name ריק) ישר לקובץ ב-GitHub. זורק שגיאה עם הודעה בעברית אם נכשל */
 export async function saveName(key: string, name: string) {
-  const token = getToken(); if (!token) throw new Error('אין מפתח');
+  const token = getToken(); if (!token) throw new Error('No key on this device');
   const api = `https://api.github.com/repos/${REPO}/contents/${PATH}`;
   const headers: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -52,7 +52,7 @@ export async function saveName(key: string, name: string) {
     if (res.ok) return;
     if (res.status === 409 || res.status === 422) continue;   // מישהו שמר בדיוק עכשיו: מנסים שוב על הגרסה החדשה
     if (res.status === 401 || res.status === 403 || res.status === 404) throw new Error(await diagnose(headers, res.status, true));
-    throw new Error(`השמירה נכשלה (${res.status}): ${(await res.json().catch(() => ({}))).message || ''}`);
+    throw new Error(`Saving failed (${res.status}): ${(await res.json().catch(() => ({}))).message || ''}`);
   }
-  throw new Error('השמירה נכשלה, נסה שוב');
+  throw new Error('Saving failed, please try again');
 }

@@ -2,6 +2,7 @@
 import { el, n2, circ, blob, smoothOpen, clamp } from '../core/util';
 import { rand, pick, rngAt } from '../core/rng';
 import { buildMountains } from './mountains';
+import { addPlace } from '../world/places';
 import { ctx } from '../world/context';
 import { geo, edgeAt, occ, O_ROAD, O_RIVER, ROAD_W } from '../world/geometry';
 import type { WorldData } from '../world/types';
@@ -65,6 +66,8 @@ export function buildTerrain(w: WorldData) {
     return smoothOpen(pts);
   };
   el('path', { d: wave(T.beach.y, 14, .013, 0, 120) + `L${B.x1},${B.y1}L${B.x0},${B.y1}Z`, fill: '#f3dfb0' }, L.ground);
+  // מקומות לשחייה: נכנסים למים בקצה החוף ונעלמים בהם לזמן מה
+  for (const x of T.beach.swim || []) addPlace({ kind: 'swim', name: 'the sea', door: [x, T.sea.y - 8] });
 
   /* הנהר (נמשך מעל החול אל הים) */
   {

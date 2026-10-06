@@ -47,6 +47,12 @@ export function addLabel(o: any, top?: number) {
   labels.push({ o, key, original: o.name, x: p[0], y: p[1] - 2, inner, text });
 }
 
+/** השם הנוכחי של מקום (אחרי שינויים מהדפדפן), לפי השם המקורי שלו */
+export function currentName(original: string) {
+  const l = labels.find(x => x.key === original);
+  return l ? l.text.textContent : original;
+}
+
 /** השמות המשותפים: נטענים פעם אחת בכניסה. שינוי מקומי שכבר הגיע לאתר נמחק מהרשימה המקומית */
 export async function applySharedNames() {
   const remote = await loadNames();
@@ -93,15 +99,15 @@ const FIELD = 'width:100%;box-sizing:border-box;font-size:16px;padding:6px 8px;b
 
 export function openRename(l: Label) {
   dlg?.remove();
-  dlg = document.createElement('div'); dlg.dir = 'rtl'; dlg.style.cssText = BOX;
+  dlg = document.createElement('div'); dlg.style.cssText = BOX;
   document.body.appendChild(dlg);
   const close = () => { dlg?.remove(); dlg = null; };
   if (!getToken()) {
     // פעם ראשונה במכשיר הזה: מדביקים את מפתח GitHub
-    dlg.innerHTML = `<div style="margin-bottom:8px">כדי לשנות שמות, הדבק את מפתח GitHub (פעם אחת במכשיר הזה):</div>
+    dlg.innerHTML = `<div style="margin-bottom:8px">To rename places, paste your GitHub key (once on this device):</div>
       <input dir="ltr" type="password" placeholder="github_pat_..." style="${FIELD}">
-      <div style="display:flex;gap:6px;margin-top:10px"><button data-a="ok">שמירת המפתח</button><button data-a="cancel">ביטול</button></div>
-      <div style="margin-top:8px;font-size:12px;opacity:.75">המפתח נשמר רק במכשיר הזה, ונשלח רק ל-GitHub.</div>`;
+      <div style="display:flex;gap:6px;margin-top:10px"><button data-a="ok">Save key</button><button data-a="cancel">Cancel</button></div>
+      <div style="margin-top:8px;font-size:12px;opacity:.75">The key stays on this device and is only sent to GitHub.</div>`;
     const input = dlg.querySelector('input') as HTMLInputElement; input.focus();
     const ok = () => { const t = input.value.trim(); if (!t) return; setToken(t); close(); openRename(l); };
     (dlg.querySelector('[data-a=ok]') as HTMLButtonElement).onclick = ok;
@@ -109,30 +115,30 @@ export function openRename(l: Label) {
     input.onkeydown = e => { if (e.key === 'Enter') ok(); if (e.key === 'Escape') close(); };
     return;
   }
-  dlg.innerHTML = `<div style="margin-bottom:8px">שם המקום</div>
+  dlg.innerHTML = `<div style="margin-bottom:8px">Place name</div>
     <input dir="ltr" style="${FIELD}">
     <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-      <button data-a="save">שמירה</button><button data-a="reset">שם מקורי</button><button data-a="cancel">ביטול</button>
-      <button data-a="key" style="margin-inline-start:auto;font-size:12px">החלפת מפתח</button>
+      <button data-a="save">Save</button><button data-a="reset">Original name</button><button data-a="cancel">Cancel</button>
+      <button data-a="key" style="margin-inline-start:auto;font-size:12px">Change key</button>
     </div>
-    <div data-a="note" style="margin-top:8px;font-size:12px;opacity:.75">השם החדש יופיע אצל כולם תוך דקה-שתיים.</div>`;
+    <div data-a="note" style="margin-top:8px;font-size:12px;opacity:.75">Everyone will see the new name within a minute or two.</div>`;
   const input = dlg.querySelector('input') as HTMLInputElement, note = dlg.querySelector('[data-a=note]') as HTMLElement;
   input.value = l.text.textContent; input.focus(); input.select();
   const apply = async (name: string) => {
     const value = name && name !== l.original ? name : '';
     // שמות ייחודיים: כך כשמדברים על "Green House" ברור לאיזה מקום הכוונה
-    if (name && labels.some(o => o !== l && o.text.textContent.toLowerCase() === name.toLowerCase())) { note.textContent = 'השם הזה כבר שייך למקום אחר. בחר שם אחר.'; return; }
-    note.textContent = 'שומר…';
+    if (name && labels.some(o => o !== l && o.text.textContent.toLowerCase() === name.toLowerCase())) { note.textContent = 'Another place already has this name. Please choose a different one.'; return; }
+    note.textContent = 'Saving…';
     try {
       await saveName(l.key, value);
       pending[l.key] = value; persist();
       l.text.textContent = value || l.original; requestStatic();
-      note.textContent = 'נשמר. אצל כולם השם יתעדכן תוך דקה-שתיים.';
+      note.textContent = 'Saved. Everyone will see it within a minute or two.';
       setTimeout(close, 1400);
     } catch (e: any) {
-      note.textContent = e?.message || 'השמירה נכשלה';
+      note.textContent = e?.message || 'Saving failed';
       // מפתח שבור או מוגבל: מוחקים אותו מהמכשיר, כדי שבלחיצה הבאה אפשר יהיה להדביק מפתח מתוקן
-      if (/מפתח/.test(note.textContent || '')) setToken('');
+      if (/\bkey\b/i.test(note.textContent || '')) setToken('');
     }
   };
   dlg.querySelectorAll('button').forEach(b => b.onclick = () => {

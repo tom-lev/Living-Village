@@ -46,7 +46,7 @@ async function boot() {
     loopState.running = on; view.live = on && view.gpu;
     stage.classList.toggle('paused', !on);
     playBtn.textContent = on ? '❚❚' : '▶';
-    playBtn.setAttribute('aria-label', on ? 'עצירה' : 'הפעלה');
+    playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play');
     if (on) { last = performance.now(); requestAnimationFrame(tick); }
   }
   playBtn.onclick = () => setRunning(!loopState.running);
@@ -117,7 +117,7 @@ async function boot() {
   // ?debug בכתובת: מציג באיזה מסלול הציור רץ (gpu = כרטיס גרפי, 2d = גיבוי)
   if (new URLSearchParams(location.search).has('debug')) {
     const d = document.createElement('div');
-    d.style.cssText = 'position:fixed;top:8px;inset-inline-start:8px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:12px;z-index:9';
+    d.style.cssText = 'position:fixed;top:8px;right:8px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:12px;z-index:9';
     document.body.appendChild(d);
     let n = 0, t0 = performance.now();
     const upd = (t: number) => { n++; if (t - t0 > 1000) { d.textContent = `${tileStats.mode || '…'} · ${n} fps`; n = 0; t0 = t; } requestAnimationFrame(upd); };
