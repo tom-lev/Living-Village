@@ -12,23 +12,24 @@ export class Horse {
     const g = el('g', { transform: `translate(${x},${y}) scale(${flip * scale},${scale})` }, ctx.L.pad);
     this.g = g; this.x = x; this.y = y;
     el('ellipse', { cx: 0, cy: 1, rx: 30, ry: 5, fill: 'rgba(60,40,10,.22)' }, g);
-    const dk = shade(color, -.2), st = { stroke: 'rgba(60,30,10,.35)', 'stroke-width': 1, 'stroke-linejoin': 'round' };
+    const dk = shade(color, -.2);   // בלי קווי מתאר: הצוואר, הראש והגוף מתמזגים לצורה אחת
     const tail = el('g', { transform: 'translate(-24,-34)' }, g), tl = el('g', null, tail), d0 = rand(0, 2.6);
     fxAt(x, y - 30, 50, t => tl.setAttribute('transform', `rotate(${(1 - 9 * Math.cos(wrap1((t + d0) / 2.6) * Math.PI * 2)).toFixed(1)})`));
     el('path', { d: 'M0,0q-8,6 -6,22q4,-8 6,-14z', fill: mane }, tl);
     el('path', { d: 'M-18,-30v28M14,-30v28', stroke: dk, 'stroke-width': 5, 'stroke-linecap': 'round' }, g);
     el('path', { d: 'M-18,-1h3M14,-1h3', stroke: '#3b2f2a', 'stroke-width': 4, 'stroke-linecap': 'round' }, g);
-    el('path', { d: rrect(-26, -46, 50, 20, 10), fill: color, ...st }, g);
+    el('path', { d: rrect(-26, -46, 50, 20, 10), fill: color }, g);
+    el('path', { d: 'M-22,-30q22,7 42,0v1a10,10 0 0 1 -6,3h-30a10,10 0 0 1 -6,-3z', fill: shade(color, -.08) }, g);   // צל עדין בבטן
     el('path', { d: 'M-14,-28v27M20,-28v27', stroke: color, 'stroke-width': 5, 'stroke-linecap': 'round' }, g);
     el('path', { d: 'M-14,-1h3M20,-1h3', stroke: '#3b2f2a', 'stroke-width': 4, 'stroke-linecap': 'round' }, g);
     // צוואר וראש: מסתובבים יחד סביב נקודה קבועה בתוך הכתף; הכתף מצוירת מעל, כך שהמפרק לא נראה
     this.neck = el('g', { transform: 'translate(16,-38)' }, g);
-    el('path', { d: 'M-7,6C-6,-6 -1,-18 4,-26L13,-23C11,-12 10,-2 9,6Z', fill: color, ...st }, this.neck);
+    el('path', { d: 'M-7,6C-6,-6 -1,-18 4,-26L13,-23C11,-12 10,-2 9,6Z', fill: color }, this.neck);
     el('path', { d: 'M-6,2C-5,-8 -1,-18 3,-27L7,-27C3,-18 0,-8 -1,2Z', fill: mane }, this.neck);
     // ראש: מוארך, עם לוע כהה יותר, אוזן ועין
-    el('path', { d: 'M2,-30C6,-34 14,-33 24,-26C28,-23 28,-18 24,-17C17,-17 10,-19 4,-21C0,-23 -1,-28 2,-30Z', fill: color, ...st }, this.neck);
+    el('path', { d: 'M2,-30C6,-34 14,-33 24,-26C28,-23 28,-18 24,-17C17,-17 10,-19 4,-21C0,-23 -1,-28 2,-30Z', fill: color }, this.neck);
     el('path', { d: 'M19,-25C24,-24 27,-21 25,-18C22,-17 19,-18 18,-19Z', fill: shade(color, -.18) }, this.neck);
-    el('path', { d: 'M4,-30l1,-6l4,5z', fill: dk, ...st }, this.neck);
+    el('path', { d: 'M4,-30l1,-6l4,5z', fill: dk }, this.neck);
     el('circle', { cx: 9, cy: -27, r: 1.2, fill: '#2b2220' }, this.neck);
     el('circle', { cx: 24.5, cy: -20.5, r: .8, fill: shade(color, -.45) }, this.neck);
     el('ellipse', { cx: 15, cy: -36, rx: 9, ry: 8, fill: color }, g);   // כתף: מכסה את בסיס הצוואר
