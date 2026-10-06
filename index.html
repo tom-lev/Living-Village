@@ -24,13 +24,13 @@
 
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
   font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-tap-highlight-color: transparent; }
-/* שתי שכבות: סטטית (קרקע, דרכים, בתים, עצים) שמצוירת רק כשהמצלמה נעצרת,
-   ודינמית (דמויות ואפקטים) שמתעדכנת בכל פריים. בזמן זום/גרירה השכבה הסטטית רק מוגדלת ב-GPU. */
+/* שתי שכבות: סטטית (קרקע, דרכים, בתים, עצים) ודינמית (דמויות ואפקטים, מתעדכנת בכל פריים).
+   בזמן זום/גרירה שתיהן רק מוזזות ומוגדלות ב-GPU (transform של CSS) והדמויות קופאות לרגע;
+   כשהאצבע עוזבת, הן מצוירות מחדש וחדות. */
 #stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 #stage.drag { cursor: grabbing; }
-#sWrap { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
-#mapS { position: absolute; display: block; }
-#mapD { position: absolute; inset: 0; width: 100%; height: 100%; display: block; will-change: transform; }
+#sWrap, #dWrap { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+#mapS, #mapD { position: absolute; display: block; }
 svg { shape-rendering: geometricPrecision; }
 svg text { font-family: "Rubik", system-ui, sans-serif; pointer-events: none; }
 .who, .veh { cursor: pointer; }
@@ -43,6 +43,7 @@ svg text { font-family: "Rubik", system-ui, sans-serif; pointer-events: none; }
 .card p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); }
 .card .x { position: absolute; top: 6px; inset-inline-end: 6px; }
 .card.min p { display: none; }
+@media (pointer: coarse) { #zin, #zout { display: none; } .controls button { min-width: 40px; height: 40px; font-size: 17px; } }
 @media (max-width: 640px) { .card { padding: 10px 14px; } .card h1 { font-size: 18px; } .card p { font-size: 13px; } }
 
 /* כפתורים */
@@ -90,7 +91,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 <body>
 <div id="stage" role="img" aria-label="מפה מצוירת של כפר">
   <div id="sWrap"><svg id="mapS"></svg></div>
-  <svg id="mapD"></svg>
+  <div id="dWrap"><svg id="mapD"></svg></div>
 </div>
 
 <div class="card" id="card">
@@ -113,8 +114,8 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 (() => {
 'use strict';
 const NS = 'http://www.w3.org/2000/svg';
-const W = 1600, H = 1000;                 // גודל המפה ביחידות עולם
-const stage = document.getElementById('stage'), sWrap = document.getElementById('sWrap');
+const W = 800, H = 1700;                  // גודל המפה ביחידות עולם: מפה לאורך, בפרופורציה של מסך טלפון
+const stage = document.getElementById('stage'), sWrap = document.getElementById('sWrap'), dWrap = document.getElementById('dWrap');
 const svgS = document.getElementById('mapS'), svgD = document.getElementById('mapD');
 
 /* ───────── כלי עזר ───────── */
@@ -168,17 +169,20 @@ for (const n of ['ground', 'roads', 'groundProps', 'water', 'props']) L[n] = el(
 for (const n of ['waterFx', 'cloudShadows', 'pad', 'fx', 'actors', 'air', 'clouds']) L[n] = el('g', { 'data-layer': n }, worldD);
 
 /* ───────── רשת הדרכים: צמתים וקטעים (כל קטע הוא עקומת בזייה אחת) ───────── */
+/* שלוש עמודות (שמאל, אמצע, ימין) וארבע שורות, ולולאה סביב האגם למעלה */
 const NODES = {
-  TL: [60, 120], C1: [430, 330], LE: [16, 560], C2: [470, 520], C3: [470, 790], BL: [70, 994],
-  C4: [1000, 520], C5: [1000, 790], TC: [980, 6], L1: [1065, 400], L3: [1480, 380], L2: [1270, 640], R1: [1594, 860],
+  TL: [90, 70], N1: [70, 470], N2: [400, 455], N3: [735, 465], W: [330, 250], E: [740, 235],
+  N4: [70, 830], N5: [400, 835], N6: [730, 825], N7: [75, 1180], N8: [400, 1185], N9: [725, 1175],
+  BX: [410, 1694], LX: [6, 1330], RX: [794, 865],
 };
-const BORDER = new Set(['LE', 'BL', 'TC', 'R1']);   // דרכים שיוצאות מהמפה: הולכים יוצאים ונכנסים שם
+const BORDER = new Set(['BX', 'LX', 'RX']);   // דרכים שיוצאות מהמפה: הולכים יוצאים ונכנסים שם
 const EDGE_DEF = [
-  ['TL', 'C1', 200, 160, 330, 240], ['C1', 'C2', 460, 400, 470, 450], ['C2', 'C4', 650, 500, 820, 500],
-  ['TC', 'C4', 1000, 200, 960, 380], ['C4', 'L1', 1030, 480, 1050, 450], ['L1', 'L3', 1050, 70, 1480, 40],
-  ['L3', 'L2', 1480, 560, 1400, 640], ['L2', 'L1', 1120, 650, 1060, 540], ['C5', 'L2', 1100, 760, 1220, 720],
-  ['C2', 'C3', 480, 620, 460, 700], ['C4', 'C5', 990, 620, 1010, 700], ['C3', 'C5', 650, 810, 820, 810],
-  ['C2', 'LE', 330, 540, 160, 580], ['C3', 'BL', 380, 870, 200, 940], ['C5', 'R1', 1200, 860, 1400, 880],
+  ['TL', 'N1', 60, 200, 80, 330], ['N1', 'N2', 180, 470, 290, 450], ['N2', 'N3', 510, 460, 620, 470],
+  ['N2', 'W', 330, 420, 320, 330], ['W', 'E', 320, 30, 740, 10], ['E', 'N3', 750, 330, 750, 400],
+  ['N1', 'N4', 80, 590, 60, 710], ['N2', 'N5', 410, 590, 390, 710], ['N3', 'N6', 720, 590, 740, 710],
+  ['N4', 'N5', 180, 845, 290, 830], ['N5', 'N6', 510, 840, 620, 820], ['N4', 'N7', 60, 950, 85, 1060],
+  ['N6', 'N9', 740, 950, 715, 1060], ['N7', 'N8', 180, 1190, 290, 1175], ['N8', 'N9', 510, 1190, 620, 1170],
+  ['N8', 'BX', 410, 1350, 380, 1530], ['N7', 'LX', 60, 1250, 30, 1300], ['N6', 'RX', 760, 830, 780, 850],
 ];
 /* טבלת אורך-קשת לכל קטע, כדי להתקדם לפי מרחק אמיתי (ולא לפי t של העקומה) */
 const EDGES = EDGE_DEF.map(([a, b, c1x, c1y, c2x, c2y]) => {
@@ -215,7 +219,7 @@ function roadDist(x, y) {
 /* ───────── אזורים שאסור לשתול בהם עצים ───────── */
 const NO_TREE = [];
 const block = (x0, y0, x1, y1) => NO_TREE.push([x0, y0, x1, y1]);
-const LAKE = { cx: 1270, cy: 390, rx: 140, ry: 160 };
+const LAKE = { cx: 535, cy: 262, rx: 132, ry: 112 };
 function treeOk(x, y) {
   if (x < 12 || x > W - 12 || y < 40 || y > H - 6) return false;
   for (const [x0, y0, x1, y1] of NO_TREE) if (x > x0 && x < x1 && y > y0 && y < y1) return false;
@@ -373,7 +377,7 @@ function bench(x, y) {
 /* ═════════ אזורים ═════════ */
 
 /* מכלאה */
-const PAD = { x0: 545, y0: 75, x1: 905, y1: 420 };
+const PAD = { x0: 112, y0: 502, x1: 366, y1: 792 };
 block(PAD.x0 - 20, PAD.y0 - 20, PAD.x1 + 20, PAD.y1 + 20);
 el('rect', { x: PAD.x0, y: PAD.y0, width: PAD.x1 - PAD.x0, height: PAD.y1 - PAD.y0, rx: 34, fill: '#d9a65a' }, L.groundProps);
 {
@@ -391,12 +395,12 @@ el('rect', { x: PAD.x0, y: PAD.y0, width: PAD.x1 - PAD.x0, height: PAD.y1 - PAD.
   el('path', { d: posts, fill: '#8a5a35' }, L.groundProps);
   void pw; void ph;
   // ערמת חציר ושוקת
-  el('path', { d: blob(850, 360, 28, 15, 8, .08, 2), fill: '#f2cd5c', stroke: '#d6aa38', 'stroke-width': 1.2 }, L.groundProps);
+  el('path', { d: blob(325, 752, 26, 14, 8, .08, 2), fill: '#f2cd5c', stroke: '#d6aa38', 'stroke-width': 1.2 }, L.groundProps);
   let straw = '';
-  for (let i = 0; i < 18; i++) { const x = 850 + rand(-22, 22), y = 360 + rand(-10, 8); straw += `M${n2(x)},${n2(y)}l${n2(rand(-4, 4))},${n2(rand(-3, 3))}`; }
+  for (let i = 0; i < 18; i++) { const x = 325 + rand(-20, 20), y = 752 + rand(-9, 7); straw += `M${n2(x)},${n2(y)}l${n2(rand(-4, 4))},${n2(rand(-3, 3))}`; }
   el('path', { d: straw, stroke: '#c99a2a', 'stroke-width': 1, 'stroke-linecap': 'round' }, L.groundProps);
-  el('rect', { x: 585, y: 365, width: 46, height: 14, rx: 4, fill: '#8a5a35' }, L.groundProps);
-  el('rect', { x: 589, y: 367, width: 38, height: 6, rx: 3, fill: '#7fd3ef' }, L.groundProps);
+  el('rect', { x: 135, y: 752, width: 46, height: 14, rx: 4, fill: '#8a5a35' }, L.groundProps);
+  el('rect', { x: 139, y: 754, width: 38, height: 6, rx: 3, fill: '#7fd3ef' }, L.groundProps);
 }
 
 /* אגם */
@@ -411,7 +415,7 @@ for (let i = 0; i < 14; i++) {
 }
 const waterFx = L.waterFx;
 // קני סוף על החוף
-for (const [x, y] of [[1150, 280], [1395, 470], [1165, 500], [1380, 260]]) {
+for (const [x, y] of [[419, 183], [655, 320], [434, 341], [641, 169]]) {
   for (let i = 0; i < 5; i++) {
     const rx = x + rand(-8, 8), h = rand(14, 22);
     const g = el('g', null, L.water);
@@ -421,23 +425,23 @@ for (const [x, y] of [[1150, 280], [1395, 470], [1165, 500], [1380, 260]]) {
 }
 
 /* כיכר הכפר: רחבה, מזרקה, חנויות וספסלים */
-el('path', { d: blob(735, 705, 120, 52, 9, .05, .4), fill: '#f1dec0', stroke: '#e5cba3', 'stroke-width': 2 }, L.groundProps);
+el('path', { d: blob(400, 1060, 120, 50, 9, .05, .4), fill: '#f1dec0', stroke: '#e5cba3', 'stroke-width': 2 }, L.groundProps);
 {
   let d = '';
-  for (let i = 0; i < 90; i++) { const a = rand(0, 6.28), r = Math.sqrt(R()); d += circ(735 + Math.cos(a) * 105 * r, 705 + Math.sin(a) * 42 * r, rand(1.2, 2.4)); }
+  for (let i = 0; i < 90; i++) { const a = rand(0, 6.28), r = Math.sqrt(R()); d += circ(400 + Math.cos(a) * 105 * r, 1060 + Math.sin(a) * 40 * r, rand(1.2, 2.4)); }
   el('path', { d, fill: '#e6cfaa' }, L.groundProps);
 }
-shop(575, 640, { name: 'מאפייה', c: '#e2574c', wall: '#fff4dc', extra: (g, x, y, w, h) => {
+shop(165, 965, { name: 'מאפייה', c: '#e2574c', wall: '#fff4dc', extra: (g, x, y, w, h) => {
   el('path', { d: `M${x - 13},${y - h - 26}q13,-14 26,0z`, fill: '#e3a857', stroke: '#b97a2f', 'stroke-width': 1.2 }, g);
   el('path', { d: `M${x - 6},${y - h - 31}l3,4M${x},${y - h - 32}l3,4M${x + 6},${y - h - 31}l3,4`, stroke: '#b97a2f', 'stroke-width': 1.2, 'stroke-linecap': 'round' }, g);
 } });
-shop(690, 640, { name: 'פרחים', c: '#45a85a', wall: '#effaf1', extra: (g, x, y) => {
+shop(305, 965, { name: 'פרחים', c: '#45a85a', wall: '#effaf1', extra: (g, x, y) => {
   for (const dx of [-38, -26]) {
     el('path', { d: `M${x + dx - 5},${y}l1.5,-8h7l1.5,8z`, fill: '#c46a3a' }, g);
     el('path', { d: circ(x + dx - 2, y - 12, 2.6) + circ(x + dx + 2.5, y - 11, 2.4) + circ(x + dx, y - 15, 2.4), fill: dx < -30 ? '#ff7aa2' : '#ffd23f' }, g);
   }
 } });
-shop(805, 640, { name: 'מספרה', c: '#3d7bd9', wall: '#eef3ff', extra: (g, x, y, w) => {
+shop(495, 965, { name: 'מספרה', c: '#3d7bd9', wall: '#eef3ff', extra: (g, x, y, w) => {
   const px = x + w / 2 + 6, cp = el('clipPath', { id: 'poleClip' }, defs);
   el('rect', { x: px - 3, y: y - 34, width: 6, height: 24, rx: 3 }, cp);
   el('rect', { x: px - 3, y: y - 34, width: 6, height: 24, rx: 3, fill: '#fff', stroke: '#9aa', 'stroke-width': .8 }, g);
@@ -447,17 +451,17 @@ shop(805, 640, { name: 'מספרה', c: '#3d7bd9', wall: '#eef3ff', extra: (g, x
   el('path', { d, fill: '#e2574c' }, sp);
   el('circle', { cx: px, cy: y - 36, r: 3, fill: '#3d7bd9' }, g);
 } });
-shop(920, 640, { name: 'גלידה', c: '#ef6fa4', wall: '#ffeef5', extra: (g, x, y, w, h) => {
+shop(635, 965, { name: 'גלידה', c: '#ef6fa4', wall: '#ffeef5', extra: (g, x, y, w, h) => {
   el('path', { d: `M${x - 5},${y - h - 30}l5,14l5,-14z`, fill: '#e3a857', stroke: '#b97a2f', 'stroke-width': 1 }, g);
   el('path', { d: circ(x, y - h - 33, 5.5), fill: '#ffd1e3' }, g);
   el('path', { d: circ(x + 2, y - h - 37, 3.5), fill: '#8b5a2b' }, g);
 } });
-bench(605, 742);
-bench(870, 742);
-block(500, 545, 975, 770);
+bench(240, 1092);
+bench(560, 1092);
+block(95, 860, 705, 1150);
 /* מזרקה */
 {
-  const fx = 735, fy = 712, g = prop(fy + 6);
+  const fx = 400, fy = 1067, g = prop(fy + 6);
   el('ellipse', { cx: fx, cy: fy, rx: 34, ry: 13, fill: '#c9d4dc', stroke: '#a3b1bb', 'stroke-width': 1.5 }, g);
   el('ellipse', { cx: fx, cy: fy - 1, rx: 28, ry: 9.5, fill: '#69cbeb' }, g);
   el('rect', { x: fx - 3.5, y: fy - 22, width: 7, height: 21, rx: 2, fill: '#c9d4dc', stroke: '#a3b1bb', 'stroke-width': 1 }, g);
@@ -472,7 +476,7 @@ block(500, 545, 975, 770);
       style: `animation:ripple 2.4s ease-out infinite;animation-delay:${-i * .8}s` }, L.fx);
 }
 /* יונים ליד הספסל */
-for (const [x, y, f] of [[648, 758, 1], [664, 752, -1], [640, 768, 1]]) {
+for (const [x, y, f] of [[283, 1108, 1], [299, 1102, -1], [275, 1118, 1]]) {
   const b = el('g', { transform: `translate(${x},${y}) scale(${f},1)` }, L.fx);
   el('ellipse', { cx: 0, cy: 1, rx: 5, ry: 1.3, fill: 'rgba(40,70,20,.2)' }, b);
   el('ellipse', { cx: 0, cy: -4, rx: 5, ry: 3.4, fill: '#a7adb8' }, b);
@@ -486,11 +490,11 @@ for (const [x, y, f] of [[648, 758, 1], [664, 752, -1], [640, 768, 1]]) {
 
 /* שדה פרחים */
 {
-  const fd = blob(742, 922, 230, 62, 10, .05, 3.1);
+  const fd = blob(228, 1585, 128, 82, 10, .05, 3.1);
   el('path', { d: fd, fill: '#b5dd78' }, L.groundProps);
   let petals = '', white = '', centers = '';
-  for (let i = 0; i < 520; i++) {
-    const a = rand(0, 6.28), r = Math.sqrt(R()) * .95, x = 742 + Math.cos(a) * 225 * r, y = 922 + Math.sin(a) * 58 * r, s = rand(1.4, 2.2);
+  for (let i = 0; i < 420; i++) {
+    const a = rand(0, 6.28), r = Math.sqrt(R()) * .95, x = 228 + Math.cos(a) * 122 * r, y = 1585 + Math.sin(a) * 76 * r, s = rand(1.4, 2.2);
     const ring = circ(x - s, y, s * .8) + circ(x + s, y, s * .8) + circ(x, y - s, s * .8) + circ(x, y + s, s * .8);
     if (R() < .82) petals += ring; else white += ring;
     centers += circ(x, y, s * .55);
@@ -498,21 +502,22 @@ for (const [x, y, f] of [[648, 758, 1], [664, 752, -1], [640, 768, 1]]) {
   el('path', { d: petals, fill: '#ffe14d' }, L.groundProps);
   el('path', { d: white, fill: '#fff8f0' }, L.groundProps);
   el('path', { d: centers, fill: '#f29e38' }, L.groundProps);
-  block(500, 850, 985, 1000);
+  block(85, 1490, 372, 1680);
 }
 
 /* גינת ירקות ודחליל */
 {
-  el('rect', { x: 1080, y: 910, width: 220, height: 74, rx: 10, fill: '#a9774a' }, L.groundProps);
+  el('rect', { x: 445, y: 1262, width: 250, height: 74, rx: 10, fill: '#a9774a' }, L.groundProps);
   let rows = '', heads = '';
   for (let r = 0; r < 4; r++) {
-    const y = 924 + r * 16; rows += `M1090,${y + 4}h200`;
-    for (let x = 1098; x < 1290; x += 16) heads += circ(x + (r % 2) * 8, y, 4.6);
+    const y = 1276 + r * 16; rows += `M455,${y + 4}h230`;
+    for (let x = 463; x < 685; x += 16) heads += circ(x + (r % 2) * 8, y, 4.6);
   }
   el('path', { d: rows, stroke: '#8a5f39', 'stroke-width': 4, 'stroke-linecap': 'round' }, L.groundProps);
   el('path', { d: heads, fill: '#6cc04a' }, L.groundProps);
-  block(1070, 895, 1310, 1000);
-  const sc = prop(966);
+  block(435, 1235, 705, 1345);
+  const sc = prop(1318), dx = 570 - 1190, dy = 1318 - 966;
+  sc.setAttribute('transform', `translate(${dx},${dy})`);
   el('path', { d: 'M1190,966v-46M1174,936h32', stroke: '#7a4f2a', 'stroke-width': 3, 'stroke-linecap': 'round' }, sc);
   el('path', { d: 'M1180,930h20l-3,20h-14z', fill: '#4f86c6' }, sc);
   el('circle', { cx: 1190, cy: 922, r: 7, fill: '#f2cd5c' }, sc);
@@ -520,9 +525,9 @@ for (const [x, y, f] of [[648, 758, 1], [664, 752, -1], [640, 768, 1]]) {
 }
 
 /* קמפינג: אוהל ומדורה */
-const FIRE = [268, 368];
+const FIRE = [232, 398];
 {
-  const tx = 170, ty = 350, g = prop(ty);
+  const tx = 152, ty = 382, g = prop(ty);
   el('ellipse', { cx: tx + 6, cy: ty + 1, rx: 52, ry: 6, fill: 'rgba(40,70,20,.22)' }, g);
   el('path', { d: `M${tx - 46},${ty}L${tx},${ty - 62}L${tx + 46},${ty}Z`, fill: '#f4a142', stroke: '#c9772a', 'stroke-width': 1.4, 'stroke-linejoin': 'round' }, g);
   el('path', { d: `M${tx},${ty - 62}L${tx + 46},${ty}L${tx + 8},${ty}Z`, fill: '#f8b866' }, g);
@@ -540,7 +545,7 @@ const FIRE = [268, 368];
   const lg = prop(FIRE[1] + 4);
   el('rect', { x: FIRE[0] + 24, y: FIRE[1] - 6, width: 30, height: 9, rx: 4.5, fill: '#9c6a3c', stroke: '#7a4f2a', 'stroke-width': 1 }, lg);
   el('ellipse', { cx: FIRE[0] + 52, cy: FIRE[1] - 1.5, rx: 3, ry: 4.5, fill: '#d9a97a', stroke: '#7a4f2a', 'stroke-width': 1 }, lg);
-  block(100, 260, 350, 410);
+  block(98, 290, 310, 425);
 }
 const fireGlow = el('radialGradient', { id: 'fireGlow' }, defs);
 el('stop', { offset: '0%', 'stop-color': '#ffcf6b', 'stop-opacity': .9 }, fireGlow);
@@ -548,30 +553,29 @@ el('stop', { offset: '100%', 'stop-color': '#ffcf6b', 'stop-opacity': 0 }, fireG
 
 /* בתים */
 const SMALL_ROOFS = ['#e2574c', '#7a52a8', '#f29e38', '#3d9bd9', '#e96aa4', '#4caf50'];
-[[92, 668], [168, 662], [244, 670], [320, 664], [395, 672], [120, 770], [200, 776], [282, 768], [362, 774]].forEach(([x, y], i) =>
+[[466, 612], [536, 606], [606, 614], [673, 608], [466, 766], [536, 772], [606, 764], [673, 770]].forEach(([x, y], i) =>
   house(x, y, { w: 40, h: 30, rh: 26, wall: pick(['#fff3d6', '#fffaf0', '#fde9c8']), roof: SMALL_ROOFS[i % SMALL_ROOFS.length], win: 1, chimney: i % 3 === 0 }));
-house(1352, 814, { w: 104, h: 64, rh: 50, wall: '#fffaf2', roof: '#3d6fd0', win: 2, chimney: true, door: '#b8693a', attic: true });
-house(1478, 814, { w: 86, h: 70, rh: 46, wall: '#fdeccc', roof: '#d9473d', win: 2, chimney: true, door: '#7d4a2a' });
-el('path', { d: 'M1352,814V846M1478,814V846', stroke: '#f6d4b2', 'stroke-width': 13, 'stroke-linecap': 'round' }, L.roads);
+house(182, 1342, { w: 104, h: 64, rh: 50, wall: '#fffaf2', roof: '#3d6fd0', win: 2, chimney: true, door: '#b8693a', attic: true });
+house(306, 1342, { w: 86, h: 70, rh: 46, wall: '#fdeccc', roof: '#d9473d', win: 2, chimney: true, door: '#7d4a2a' });
 // תיבת דואר
-{ const g = prop(840); el('path', { d: 'M1418,840v-16', stroke: '#7a4f2a', 'stroke-width': 2.4 }, g);
-  el('rect', { x: 1411, y: 816, width: 14, height: 9, rx: 4, fill: '#e2574c' }, g); }
+{ const g = prop(1368); el('path', { d: 'M244,1368v-16', stroke: '#7a4f2a', 'stroke-width': 2.4 }, g);
+  el('rect', { x: 237, y: 1344, width: 14, height: 9, rx: 4, fill: '#e2574c' }, g); }
 
 /* שתילת עצים */
 {
   const trees = [];
-  const forest = (x, y) => (x < 430 && y < 470) || (x > 1500 && y < 720) || (y < 120 && x > 1000) || (x > 1310 && y > 880)
-    || (x < 80) || (y > 880 && x < 470) || (x > 1020 && x < 1250 && y > 560 && y < 780);
-  for (let i = 0; i < 7000 && trees.length < 330; i++) {
+  const forest = (x, y) => (x < 330 && y < 440) || y < 60 || x > 755 || x < 50 || (y > 1450 && x > 420) || y > 1660
+    || (y > 1200 && y < 1250);
+  for (let i = 0; i < 9000 && trees.length < 300; i++) {
     const x = rand(0, W), y = rand(0, H);
     if (R() > (forest(x, y) ? 1 : .18)) continue;
     if (!treeOk(x, y)) continue;
     if (trees.some(t => (t[0] - x) ** 2 + ((t[1] - y) * 1.4) ** 2 < 30 * 30)) continue;
     trees.push([x, y]);
   }
-  for (const [x, y] of trees) (x < 430 && y < 470) || x > 1500 || R() < .35 ? pine(x, y, rand(1.5, 2.1)) : roundTree(x, y, rand(1.3, 1.75));
+  for (const [x, y] of trees) (x < 330 && y < 440) || x > 755 || R() < .35 ? pine(x, y, rand(1.5, 2.1)) : roundTree(x, y, rand(1.3, 1.75));
   // כמה עצים בכיכר
-  roundTree(520, 760, 1.4); roundTree(960, 762, 1.5);
+  roundTree(122, 1138, 1.4); roundTree(680, 1140, 1.5);
 }
 
 /* ═════════════════════ דמויות ═════════════════════ */
@@ -1028,7 +1032,7 @@ function horse(x, y, color, mane, flip) {
   el('circle', { cx: 23, cy: -20, r: .9, fill: shade(color, -.4) }, neck);
   return { neck, a: 0, ta: 0, timer: rand(1, 4), graze: true };
 }
-const HORSES = [horse(660, 285, '#a0643a', '#4a2f1d', 1), horse(800, 205, '#f6f1ea', '#c9c0b4', -1)];
+const HORSES = [horse(185, 690, '#a0643a', '#4a2f1d', 1), horse(295, 595, '#f6f1ea', '#c9c0b4', -1)];
 class Sheep {
   constructor(x, y) {
     this.x = x; this.y = y; this.tx = x; this.ty = y; this.flip = 1; this.state = 'graze'; this.timer = rand(1, 5); this.phase = 0; this.head = 0;
@@ -1063,7 +1067,7 @@ class Sheep {
     this.b.setAttribute('transform', `scale(${this.flip.toFixed(3)},1)`);
   }
 }
-const SHEEP = [[600, 160], [720, 360], [820, 300], [640, 230]].map(([x, y]) => new Sheep(x, y));
+const SHEEP = [[160, 560], [250, 740], [320, 680], [200, 610]].map(([x, y]) => new Sheep(x, y));
 
 /* ───── ברווזים באגם ───── */
 function duck(scale, body) {
@@ -1079,7 +1083,7 @@ function duck(scale, body) {
 const DUCKS = [duck(1.15, '#ffffff'), duck(.62, '#ffd84d'), duck(.62, '#ffd84d'), duck(.62, '#ffd84d')];
 function duckPath(th) {
   const r = 1 + .1 * Math.sin(3 * th);
-  return [LAKE.cx + Math.cos(th) * 88 * r, LAKE.cy + Math.sin(th) * 100 * r];
+  return [LAKE.cx + Math.cos(th) * 82 * r, LAKE.cy + Math.sin(th) * 68 * r];
 }
 function ripple(x, y, rx, ry, parent) {
   const e = el('ellipse', { cx: n2(x), cy: n2(y), rx, ry, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 1.2, class: 'ripple' }, parent || waterFx);
@@ -1101,11 +1105,11 @@ const BUTTERFLIES = ['#ff9f43', '#ffffff', '#6fb7ff', '#ff7aa2'].map((c, i) => {
   el('ellipse', { cx: -2.6, cy: -1, rx: 2.8, ry: 2.2, fill: c, stroke: shade(c, -.3), 'stroke-width': .4 }, wl);
   el('ellipse', { cx: 2.6, cy: -1, rx: 2.8, ry: 2.2, fill: c, stroke: shade(c, -.3), 'stroke-width': .4 }, wr);
   el('rect', { x: -.5, y: -3, width: 1, height: 5, rx: .5, fill: '#3b2f25' }, g);
-  return { g, wl, wr, cx: 640 + i * 70, cy: 915, s: rand(0, 100) };
+  return { g, wl, wr, cx: 150 + i * 52, cy: 1585, s: rand(0, 100) };
 });
 
 /* עננים וצלליהם */
-const CLOUDS = [[100, 140, 1.2], [700, 470, 1], [1150, 760, 1.3], [1500, 200, .9]].map(([x, y, s]) => {
+const CLOUDS = [[120, 180, 1], [620, 640, .9], [250, 1050, 1.1], [600, 1420, .9]].map(([x, y, s]) => {
   const d = circ(0, 0, 26 * s) + circ(-26 * s, 8 * s, 17 * s) + circ(26 * s, 7 * s, 19 * s) + circ(-8 * s, 14 * s, 18 * s) + circ(12 * s, 14 * s, 17 * s);
   const sh = el('path', { d, fill: '#2f5a1a', opacity: .08 }, L.cloudShadows);
   const c = el('g', null, L.clouds);
@@ -1137,7 +1141,7 @@ const leash = new Leash(walkers[1], dog);
 const balloon = new Balloon(walkers[2], '#e8413b');
 // סבא על הספסל: מפזר פירורים ליונים מדי פעם
 const grandpa = new Sitter({ name: 'סבא משה', h: 33, headR: .095, skin: SKIN[0], hair: '#d9d4cc', hairStyle: 'short', shirt: '#8a9a5b', pants: '#5a4a3a', hat: '#6b4a2f' },
-  612, 744, .3 * 33, 1, (t, h) => {
+  247, 1094, .3 * 33, 1, (t, h) => {
     const toss = Math.max(0, Math.sin(t * .9)) ** 6;
     return [[.2 * h + toss * .12 * h, -.33 * h - toss * .1 * h], [.17 * h, -.32 * h]];
   });
@@ -1148,7 +1152,7 @@ const camper = new Sitter({ name: 'תמר', h: 32, headR: .1, skin: SKIN[1], hai
     return [[.32 * h + w, -.42 * h], [.3 * h - w, -.4 * h]];
   });
 // רכבים: מכונית אדומה ומיניבוס צהוב שנוסעים בלולאה בכיוונים הפוכים
-const ROUTE = [[2, 1], [4, 1], [5, 1], [6, 1], [8, -1], [11, -1], [9, -1]];
+const ROUTE = [[1, 1], [3, 1], [4, 1], [5, 1], [8, 1], [12, 1], [14, -1], [13, -1], [11, -1], [6, -1]];   // לולאה: האגם ואז היקף הכפר
 const ROUTE_REV = ROUTE.slice().reverse().map(([e, d]) => [e, -d]);
 new Vehicle({ name: 'המכונית האדומה', color: '#ef5b5b', len: 52, speed: 48, lane: 9, route: ROUTE });
 new Vehicle({ name: 'המיניבוס', color: '#ffc53d', len: 60, speed: 38, lane: 9, route: ROUTE_REV, tall: true, s: 40 });
@@ -1161,48 +1165,78 @@ sortDepth();
 const cam = { k: 1, x: 0, y: 0 };
 let fitK = 1, vw = 0, vh = 0, anim = null, following = null;
 const zoomLbl = document.getElementById('zoomLbl');
-let committed = { k: 1, x: 0, y: 0 }, M = 0, commitTimer = 0;
+const ptrs = new Map();
+let down = null, pinch = null;
+let committed = { k: 1, x: 0, y: 0 }, dcam = { k: 1, x: 0, y: 0 }, M = 0;
+let gesturing = false, gestureMoved = false, wheelTimer = 0;
 function measure() {
   const r = stage.getBoundingClientRect(); vw = r.width; vh = r.height;
-  fitK = Math.max(vw / W, vh / H);   // המפה תמיד ממלאת את כל המסך (גם בטלפון לאורך); את השאר רואים בגרירה
-  // השכבה הסטטית גדולה מהמסך בשוליים M, כדי שבזמן גרירה/הקטנה לא ייחשפו חורים לפני הציור מחדש
+  // בטלפון לאורך המפה ממלאת את המסך (כיסוי, חיתוך קטן בקצוות); במסך רחב רואים את כולה
+  const contain = Math.min(vw / W, vh / H), cover = Math.max(vw / W, vh / H);
+  fitK = cover / contain < 1.2 ? cover : contain;
+  // השכבות גדולות מהמסך בשוליים M, כדי שבזמן גרירה/הקטנה לא ייחשפו חורים לפני הציור מחדש
   M = Math.round(Math.max(vw, vh) * .35);
-  svgS.setAttribute('width', vw + 2 * M); svgS.setAttribute('height', vh + 2 * M);
-  svgS.style.left = -M + 'px'; svgS.style.top = -M + 'px';
+  for (const sv of [svgS, svgD]) {
+    sv.setAttribute('width', vw + 2 * M); sv.setAttribute('height', vh + 2 * M);
+    sv.style.left = -M + 'px'; sv.style.top = -M + 'px';
+  }
 }
+const camMatrix = c => `matrix(${c.k} 0 0 ${c.k} ${(c.x + M).toFixed(2)} ${(c.y + M).toFixed(2)})`;
 /* ציור חד של השכבה הסטטית במצב המצלמה הנוכחי (יקר; קורה רק כשהמצלמה נחה) */
 function commit() {
-  clearTimeout(commitTimer);
   committed = { k: cam.k, x: cam.x, y: cam.y };
-  worldS.setAttribute('transform', `matrix(${cam.k} 0 0 ${cam.k} ${(cam.x + M).toFixed(2)} ${(cam.y + M).toFixed(2)})`);
+  worldS.setAttribute('transform', camMatrix(cam));
   sWrap.style.transform = '';
+}
+function commitD() {
+  dcam = { k: cam.k, x: cam.x, y: cam.y };
+  worldD.setAttribute('transform', camMatrix(cam));
+  dWrap.style.transform = '';
+  L.clouds.setAttribute('opacity', clamp((4 - cam.k / fitK) / 2.5, 0, 1).toFixed(2));   // בזום עמוק העננים מתפוגגים
+}
+/* מזיז שכבה שכבר צוירה (base) למצב המצלמה הנוכחי בעזרת CSS בלבד. false אם השוליים כבר לא מכסים את המסך */
+function cssMove(wrap, base) {
+  const s = cam.k / base.k, tx = cam.x - s * base.x, ty = cam.y - s * base.y;
+  if (tx - s * M > 0 || ty - s * M > 0 || tx + s * (vw + M) < vw || ty + s * (vh + M) < vh) return false;
+  wrap.style.transform = `matrix(${s.toFixed(5)},0,0,${s.toFixed(5)},${tx.toFixed(2)},${ty.toFixed(2)})`;
+  return true;
 }
 function clampCam() {
   cam.k = clamp(cam.k, fitK, fitK * 24);
-  cam.x = clamp(cam.x, vw - W * cam.k, 0);
-  cam.y = clamp(cam.y, vh - H * cam.k, 0);
+  cam.x = W * cam.k <= vw ? (vw - W * cam.k) / 2 : clamp(cam.x, vw - W * cam.k, 0);
+  cam.y = H * cam.k <= vh ? (vh - H * cam.k) / 2 : clamp(cam.y, vh - H * cam.k, 0);
 }
 function applyCam() {
   clampCam();
-  worldD.setAttribute('transform', `matrix(${cam.k} 0 0 ${cam.k} ${cam.x.toFixed(2)} ${cam.y.toFixed(2)})`);
-  // השכבה הסטטית: רק transform של CSS (הגדלה ב-GPU, בלי לצייר מחדש)
-  const s = cam.k / committed.k, tx = cam.x - s * committed.x, ty = cam.y - s * committed.y;
-  const covered = tx - s * M <= 0 && ty - s * M <= 0 && tx + s * (vw + M) >= vw && ty + s * (vh + M) >= vh;
-  if (!covered || s > 2.5) commit();
-  else {
-    sWrap.style.transform = `matrix(${s.toFixed(5)},0,0,${s.toFixed(5)},${tx.toFixed(2)},${ty.toFixed(2)})`;
-    clearTimeout(commitTimer);
-    if (Math.abs(s - 1) > 1e-4) commitTimer = setTimeout(commit, 160);   // הזזה בלבד לא מטשטשת, אין צורך לצייר מחדש
+  if (gesturing) {
+    gestureMoved = true;
+    if (!cssMove(sWrap, committed)) commit();
+    if (!cssMove(dWrap, dcam)) commitD();
+  } else {
+    // מחוץ למחווה (למשל מעקב אחרי דמות): הדינמית מתעדכנת ממילא, הסטטית רק זזה
+    commitD();
+    if (Math.abs(cam.k - committed.k) > 1e-9 || !cssMove(sWrap, committed)) commit();
   }
-  const z = cam.k / fitK;
-  zoomLbl.textContent = '×' + z.toFixed(1);
-  L.clouds.setAttribute('opacity', clamp((4 - z) / 2.5, 0, 1).toFixed(2));   // בזום עמוק העננים מתפוגגים
+  zoomLbl.textContent = '×' + (cam.k / fitK).toFixed(1);
+}
+function beginGesture() {
+  if (gesturing) return;
+  gesturing = true; gestureMoved = false;
+  stage.classList.add('paused');
+}
+function endGesture() {
+  if (!gesturing || ptrs.size || anim || wheelTimer) return;
+  gesturing = false;
+  if (gestureMoved) { commit(); commitD(); }
+  if (running) stage.classList.remove('paused');
+  last = performance.now();
 }
 function zoomAt(sx, sy, f) {
   const nk = clamp(cam.k * f, fitK, fitK * 24), wx = (sx - cam.x) / cam.k, wy = (sy - cam.y) / cam.k;
   cam.k = nk; cam.x = sx - wx * nk; cam.y = sy - wy * nk; applyCam();
 }
 function animateTo(k, wx, wy, ms = 420) {        // wx,wy: נקודת עולם שתהיה במרכז המסך
+  beginGesture();
   const s = { ...cam }, e = { k, x: vw / 2 - wx * k, y: vh / 2 - wy * k }, t0 = performance.now();
   anim = (now) => {
     const u = Math.min(1, (now - t0) / ms), q = u < .5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
@@ -1211,27 +1245,26 @@ function animateTo(k, wx, wy, ms = 420) {        // wx,wy: נקודת עולם �
     const cx = (vw / 2 - s.x) / s.k + ((vw / 2 - e.x) / e.k - (vw / 2 - s.x) / s.k) * q;
     const cy = (vh / 2 - s.y) / s.k + ((vh / 2 - e.y) / e.k - (vh / 2 - s.y) / s.k) * q;
     cam.x = vw / 2 - cx * cam.k; cam.y = vh / 2 - cy * cam.k; applyCam();
-    if (u >= 1) anim = null;
+    if (u >= 1) { anim = null; endGesture(); }
   };
   if (!running) requestAnimationFrame(function step(n) { if (anim) { anim(n); requestAnimationFrame(step); } });
 }
 function center() { return [(vw / 2 - cam.x) / cam.k, (vh / 2 - cam.y) / cam.k]; }
-function fitAll() { measure(); animateTo(fitK, 735, H / 2); }
+function fitAll() { measure(); animateTo(fitK, W / 2, H / 2); }
 
 stage.addEventListener('wheel', e => {
-  e.preventDefault(); anim = null;
+  e.preventDefault(); anim = null; beginGesture();
   const r = stage.getBoundingClientRect();
   zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * (e.ctrlKey ? .012 : .0018)));
+  clearTimeout(wheelTimer); wheelTimer = setTimeout(() => { wheelTimer = 0; endGesture(); }, 180);
 }, { passive: false });
 
-const ptrs = new Map();
-let down = null, pinch = null;
 stage.addEventListener('pointerdown', e => {
   stage.setPointerCapture(e.pointerId);
   ptrs.set(e.pointerId, [e.clientX, e.clientY]);
   if (ptrs.size === 1) { const f = e.target.closest('[data-f]'); down = { x: e.clientX, y: e.clientY, f: f ? +f.dataset.f : null, moved: false }; }
   if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), c: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; if (down) down.moved = true; }
-  anim = null; stage.classList.add('drag');
+  anim = null; stage.classList.add('drag'); beginGesture();
   if (innerWidth < 640 && !card.classList.contains('min')) document.getElementById('cardToggle').click();
 });
 stage.addEventListener('pointermove', e => {
@@ -1256,6 +1289,7 @@ function endPtr(e) {
     stage.classList.remove('drag');
     if (down && !down.moved && down.f !== null) startFollow(followables[down.f]);
     down = null;
+    endGesture();
   }
 }
 stage.addEventListener('pointerup', endPtr);
@@ -1276,6 +1310,7 @@ document.getElementById('zout').onclick = () => { const c = center(); animateTo(
 document.getElementById('zfit').onclick = () => { stopFollow(); fitAll(); };
 const card = document.getElementById('card');
 document.getElementById('cardToggle').onclick = e => { card.classList.toggle('min'); e.currentTarget.textContent = card.classList.contains('min') ? '?' : '–'; };
+if (innerWidth < 640) document.getElementById('cardToggle').click();   // בטלפון ההסבר מקופל כדי לא להסתיר את המפה
 addEventListener('keydown', e => {
   if (e.key === '+' || e.key === '=') document.getElementById('zin').click();
   if (e.key === '-') document.getElementById('zout').click();
@@ -1288,6 +1323,7 @@ let running = false, last = 0, T = 0, frame = 0;
 const playBtn = document.getElementById('play');
 function tick(now) {
   if (!running) return;
+  if (gesturing) { if (anim) anim(now); last = now; requestAnimationFrame(tick); return; }   // במחווה: רק המצלמה זזה
   const dt = Math.min(.05, (now - last) / 1000 || .016); last = now; T += dt; frame++;
   for (const w of walkers) w.update(dt, T);
   dog.update(dt, T); leash.update(); balloon.update(dt, T);
@@ -1325,7 +1361,7 @@ function tick(now) {
   }
   // פרפרים
   for (const b of BUTTERFLIES) {
-    const s = b.s + T, x = b.cx + Math.sin(s * .37) * 90 + Math.sin(s * 1.3) * 18, y = b.cy + Math.sin(s * .53) * 32 + Math.cos(s * 1.7) * 8 - 10;
+    const s = b.s + T, x = b.cx + Math.sin(s * .37) * 60 + Math.sin(s * 1.3) * 14, y = b.cy + Math.sin(s * .53) * 45 + Math.cos(s * 1.7) * 8 - 10;
     const flap = Math.abs(Math.sin(s * 15)) * .8 + .2;
     b.g.setAttribute('transform', `translate(${n2(x)},${n2(y)})`);
     b.wl.setAttribute('transform', `translate(0,0) scale(${flap.toFixed(2)},1)`); b.wr.setAttribute('transform', `scale(${flap.toFixed(2)},1)`);
@@ -1339,7 +1375,7 @@ function tick(now) {
   // להקת ציפורים
   if (FLOCK.x > W + 80 || FLOCK.g.getAttribute('display') === 'none') {
     FLOCK.wait -= dt;
-    if (FLOCK.wait <= 0) { FLOCK.x = -60; FLOCK.y = rand(150, 800); FLOCK.wait = rand(18, 30); FLOCK.g.setAttribute('display', 'inline'); }
+    if (FLOCK.wait <= 0) { FLOCK.x = -60; FLOCK.y = rand(150, H - 250); FLOCK.wait = rand(18, 30); FLOCK.g.setAttribute('display', 'inline'); }
     else if (FLOCK.x > W + 80) FLOCK.g.setAttribute('display', 'none');
   }
   if (FLOCK.g.getAttribute('display') !== 'none') {
@@ -1359,7 +1395,7 @@ function tick(now) {
 }
 function setRunning(on) {
   running = on;
-  stage.classList.toggle('paused', !on);
+  stage.classList.toggle('paused', !on || gesturing);
   playBtn.textContent = on ? '❚❚' : '▶';
   playBtn.setAttribute('aria-label', on ? 'עצירה' : 'הפעלה');
   if (on) { last = performance.now(); requestAnimationFrame(tick); }
@@ -1367,8 +1403,8 @@ function setRunning(on) {
 playBtn.onclick = () => setRunning(!running);
 
 measure();
-// מתחילים כשהמפה ממלאת את המסך, ממורכזת על כיכר הכפר
-cam.k = fitK; cam.x = vw / 2 - 735 * cam.k; cam.y = vh / 2 - H / 2 * cam.k; clampCam(); commit(); applyCam();
+// מתחילים כשכל המפה על המסך
+cam.k = fitK; cam.x = vw / 2 - W / 2 * cam.k; cam.y = vh / 2 - H / 2 * cam.k; clampCam(); commit(); applyCam();
 // ציור פריים ראשון כדי שגם במצב "פחות תנועה" הדמויות יופיעו
 { running = true; tick(performance.now()); running = false; }
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
