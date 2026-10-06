@@ -8,6 +8,7 @@ import { ctx } from '../world/context';
 import { DETAIL_GROUPS } from '../scene/terrain';
 import { view } from '../camera/view';
 import { createPainter, type DLItem } from './tilePainter';
+import { createGpuTiles, type GpuTiles } from './gpu';
 
 const TILE = 256, BASE = 1 / 8, LMAX = 10, TILE_CAP = 300;
 const tileScale = (l: number) => BASE * 2 ** l;   // פיקסלים של המסך ליחידת עולם
@@ -65,21 +66,38 @@ function getTile(l: number, x: number, y: number) {
   return t;
 }
 function putTile(l: number, x: number, y: number, bmp: any) {
-  tiles.set(tkey(l, x, y), bmp);
-  for (const [k, v] of tiles) { if (tiles.size <= TILE_CAP) break; if (!k.startsWith('0/') && !wanted.has(k)) { tiles.delete(k); v.close?.(); } }
+  const key = tkey(l, x, y);
+  tiles.set(key, bmp);
+  if (gpu) { const t = TILE / tileScale(l); gpu.add(key, l, ctx.B.x0 + x * t, ctx.B.y0 + y * t, t, bmp); }
+  for (const [k, v] of tiles) {
+    if (tiles.size <= TILE_CAP) break;
+    if (!k.startsWith('0/') && !wanted.has(k)) { tiles.delete(k); gpu?.remove(k); v.close?.(); }
+  }
 }
 
 let painters: { postMessage(m: any): void }[] = [];
 let gen = 0, colors: string[] = [];
 const colorMap = () => Object.fromEntries(colors.map(c => [c, grade(c)]));
 let cvS: HTMLCanvasElement, cs: CanvasRenderingContext2D;
+// מצב ההרכבה: כרטיס גרפי (WebGL), או קנבס דו-ממדי כגיבוי בדפדפן בלי WebGL
+let gpu: GpuTiles | null = null, mode: 'pending' | 'gpu' | '2d' = 'pending';
 const L0_KEYS: number[][] = [];
-export const tileStats = { missing: 0, painted: 0 };
+export const tileStats = { missing: 0, painted: 0, mode: '' };
 let sDirty = true, sRaf = 0, lastNeed = '';
 let wanted = new Set<string>();   // האריחים שהתצוגה הנוכחית צריכה או מכינה מראש: לא נזרקים מהמטמון
 
 export function initTiles(canvas: HTMLCanvasElement) {
-  cvS = canvas; cs = canvas.getContext('2d');
+  cvS = canvas;
+  createGpuTiles(canvas, innerWidth, innerHeight, sdpr(), grade('#9cd162'), LMAX).then(g => {
+    gpu = g; mode = 'gpu'; tileStats.mode = mode;
+    if (view.vw) gpu.resize(view.vw, view.vh, sdpr());
+    for (const [k, bmp] of tiles) { const [l, x, y] = k.split('/').map(Number), t = TILE / tileScale(l); gpu.add(k, l, ctx.B.x0 + x * t, ctx.B.y0 + y * t, t, bmp); }
+    requestStatic();
+  }).catch(err => {
+    console.warn('WebGL לא זמין, עוברים לקנבס רגיל', err);
+    const c = document.createElement('canvas'); c.id = canvas.id; canvas.replaceWith(c);   // קנבס נקי (בלי הקשר WebGL שנכשל)
+    cvS = c; cs = c.getContext('2d'); mode = '2d'; tileStats.mode = mode; resizeCanvas(); requestStatic();
+  });
   const DL = extractDisplayList();
   const onTile = (m: any) => { if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
   try {
@@ -107,16 +125,16 @@ export function initTiles(canvas: HTMLCanvasElement) {
    וההבדל באיור רך כמעט לא נראה (הדמויות בשכבה הדינמית נשארות בצפיפות המלאה) */
 const sdpr = () => Math.min(view.dpr, 2);
 export function resizeCanvas() {
-  cvS.width = Math.round(view.vw * sdpr()); cvS.height = Math.round(view.vh * sdpr());
+  if (gpu) gpu.resize(view.vw, view.vh, sdpr());
+  else if (mode === '2d') { cvS.width = Math.round(view.vw * sdpr()); cvS.height = Math.round(view.vh * sdpr()); }
 }
 
 const levelFor = (k: number) => clamp(Math.ceil(Math.log2(k * sdpr() / BASE) - .15), 0, LMAX);
 
 /** מרכיב את האריחים המוכנים על הקנבס, ומבקש מה-Worker את החסרים (הקרובים למרכז קודם) */
 function drawStatic() {
-  const { B } = ctx, { cam, vw, vh } = view, dpr = sdpr();
-  cs.setTransform(1, 0, 0, 1, 0, 0);
-  cs.fillStyle = grade('#9cd162'); cs.fillRect(0, 0, cvS.width, cvS.height);
+  const { B } = ctx, { cam, vw, vh } = view, dpr = sdpr(), flat = mode === '2d';
+  if (flat) { cs.setTransform(1, 0, 0, 1, 0, 0); cs.fillStyle = grade('#9cd162'); cs.fillRect(0, 0, cvS.width, cvS.height); }
   const l = levelFor(cam.k), tw = TILE / tileScale(l);
   const nx = Math.ceil((B.x1 - B.x0) / tw), ny = Math.ceil((B.y1 - B.y0) / tw);
   const wx0 = -cam.x / cam.k, wy0 = -cam.y / cam.k, wx1 = (vw - cam.x) / cam.k, wy1 = (vh - cam.y) / cam.k;
@@ -124,14 +142,16 @@ function drawStatic() {
   const iy0 = clamp(Math.floor((wy0 - B.y0) / tw), 0, ny - 1), iy1 = clamp(Math.floor((wy1 - B.y0) / tw), 0, ny - 1);
   const sx = (i: number) => Math.round(((B.x0 + i * tw) * cam.k + cam.x) * dpr), sy = (j: number) => Math.round(((B.y0 + j * tw) * cam.k + cam.y) * dpr);
   const need: number[][] = [], ccx = (wx0 + wx1) / 2, ccy = (wy0 + wy1) / 2;
-  cs.imageSmoothingEnabled = true; cs.imageSmoothingQuality = 'low';   // האריחים כמעט בגודל טבעי; איכות גבוהה רק מאטה
+  if (flat) { cs.imageSmoothingEnabled = true; cs.imageSmoothingQuality = 'low'; }   // האריחים כמעט בגודל טבעי; איכות גבוהה רק מאטה
   for (let j = iy0; j <= iy1; j++) for (let i = ix0; i <= ix1; i++) {
-    const X = sx(i), Y = sy(j), Wd = sx(i + 1) - X, Ht = sy(j + 1) - Y;
     const t = getTile(l, i, j);
-    if (t) { cs.drawImage(t, X, Y, Wd, Ht); continue; }
-    need.push([l, i, j, (B.x0 + (i + .5) * tw - ccx) ** 2 + (B.y0 + (j + .5) * tw - ccy) ** 2]);
-    standIn(l, i, j, X, Y, Wd, Ht);
+    if (!t) need.push([l, i, j, (B.x0 + (i + .5) * tw - ccx) ** 2 + (B.y0 + (j + .5) * tw - ccy) ** 2]);
+    if (!flat) continue;
+    const X = sx(i), Y = sy(j), Wd = sx(i + 1) - X, Ht = sy(j + 1) - Y;
+    if (t) cs.drawImage(t, X, Y, Wd, Ht); else standIn(l, i, j, X, Y, Wd, Ht);
   }
+  // בכרטיס הגרפי: רק מטריצה אחת ורשימת אריחים נראים
+  if (gpu) gpu.compose(l, { x0: wx0, y0: wy0, x1: wx1, y1: wy1 }, cam);
   tileStats.missing = need.length;
   // את רשימת ההכנה בונים מחדש רק כשהאזור הנראה משתנה (לא בכל פריים של גרירה)
   const key = `${l}|${ix0}|${ix1}|${iy0}|${iy1}|${Math.round(ccx / tw * 2)}|${Math.round(ccy / tw * 2)}`;
@@ -188,6 +208,7 @@ export function requestStatic() { sDirty = true; if (!sRaf) sRaf = requestAnimat
 /** אחרי החלפת פלטה: זורקים את כל האריחים ומבקשים אותם מחדש בצבעים החדשים */
 export function repaintTiles() {
   gen++; const cmap = colorMap();
+  gpu?.clear(); gpu?.setBackground(grade('#9cd162'));
   for (const v of tiles.values()) v.close?.();
   tiles.clear(); lastNeed = '';
   for (const p of painters) p.postMessage({ type: 'palette', cmap, gen });

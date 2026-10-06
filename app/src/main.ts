@@ -101,5 +101,15 @@ applyGrain(currentPalette().grain);
 actors.update(.016, 0);
 setRunning(!matchMedia('(prefers-reduced-motion: reduce)').matches);
 
+// ?debug בכתובת: מציג באיזה מסלול הציור רץ (gpu = כרטיס גרפי, 2d = גיבוי)
+if (new URLSearchParams(location.search).has('debug')) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:8px;inset-inline-start:8px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:12px;z-index:9';
+  document.body.appendChild(d);
+  let n = 0, t0 = performance.now();
+  const upd = (t: number) => { n++; if (t - t0 > 1000) { d.textContent = `${tileStats.mode || '…'} · ${n} fps`; n = 0; t0 = t; } requestAnimationFrame(upd); };
+  requestAnimationFrame(upd);
+}
+
 // לבדיקות אוטומטיות
 (window as any).__village = { cam: view.cam, walkers: actors.walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => view.fitK, items, tileStats, applyPalette };
