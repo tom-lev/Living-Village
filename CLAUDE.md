@@ -274,6 +274,11 @@ The original plan follows. Steps 2, 4 and 5 are optional now; measure before doi
    - consider 512 px tiles at deep levels.
 6. After each improvement, deploy and ask the owner to check `?debug` on the phone and desktop during fast zoom.
 
+## 8b. The owner's task list
+**`TODO.md` (in Hebrew, at the repo root) is the prioritised task list. Work through it top to bottom, one task at a time, and tick items off as you finish them.**
+- The owner wants each task done, deployed and checked before the next one starts.
+- Large or visual tasks get a short proposal or sketch first.
+
 ## 9. Backlog (owner wishes, not started)
 - A simple in-browser **editor**: drag objects, add from a list, draw roads and paths, export `world.json`. This was proposed as the next architecture stage after performance.
 - **More content.** The empty area north-east of the lake (x 560..800, y 150..640) is a candidate for a café, playground or houses.
