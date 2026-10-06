@@ -250,7 +250,8 @@ function playground(o: any) {
   el('rect', { x: x - 80, y: y - 50, width: 160, height: 80, rx: 14, fill: '#f0d9a8', stroke: '#e0c38a', 'stroke-width': 2 }, G);
   el('rect', { x: x + 30, y: y - 10, width: 40, height: 30, rx: 4, fill: '#f6e3b6', stroke: '#c9a466', 'stroke-width': 3 }, G);
   let g = prop(y - 10);
-  el('path', { d: `M${x - 60},${y - 10}l-6,-40M${x - 60},${y - 10}l6,-40M${x - 20},${y - 10}l-6,-40M${x - 20},${y - 10}l6,-40M${x - 66},${y - 50}h52`, stroke: '#e2574c', 'stroke-width': 2.6, 'stroke-linecap': 'round' }, g);
+  el('path', { d: `M${x - 60},${y - 50}l-7,40M${x - 60},${y - 50}l7,40M${x - 20},${y - 50}l-7,40M${x - 20},${y - 50}l7,40M${x - 62},${y - 50}h44`, stroke: '#e2574c', 'stroke-width': 2.6, 'stroke-linecap': 'round' }, g);
+  // נדנדות: שתי מסגרות A (הרגליים נפגשות למעלה) וקורה ביניהן
   el('path', { d: `M${x - 50},${y - 50}v28M${x - 44},${y - 50}v28M${x - 36},${y - 50}v24M${x - 30},${y - 50}v24`, stroke: '#6b6f78', 'stroke-width': .8 }, g);
   el('rect', { x: x - 52, y: y - 23, width: 10, height: 3, fill: '#3d9bd9' }, g); el('rect', { x: x - 38, y: y - 27, width: 10, height: 3, fill: '#3d9bd9' }, g);
   g = prop(y + 4);

@@ -31,6 +31,7 @@ export const geo = {
   OUTER: [] as Edge[],            // דרכים מחוץ לכפר (ציור בלבד)
   ADJ: {} as Record<string, { e: number; dir: number }[]>,
   RIVER_SAMPLES: [] as number[][],
+  CREEK_SAMPLES: [] as number[][],   // הפלג שבעמק
 };
 
 /* ───────── רשת תפוסה גסה (תא של 10 יחידות): דרך / נהר / שביל ───────── */
@@ -73,7 +74,18 @@ export function buildGeometry(w: WorldData) {
   const R = w.river; geo.RIVER_SAMPLES = [];
   for (let i = 0; i < R.length - 1; i++)
     for (let t = 0; t < 1; t += .05) geo.RIVER_SAMPLES.push([R[i][0] + (R[i + 1][0] - R[i][0]) * t, R[i][1] + (R[i + 1][1] - R[i][1]) * t]);
-  stamp(roadSamples, 36, O_ROAD); stamp(trailSamples, 15, O_TRAIL); stamp(geo.RIVER_SAMPLES, 44, O_RIVER);
+  // הפלג בעמק: דוגמים את אותה עקומה חלקה שמצוירת (Catmull-Rom), כדי שגם הגשרים ייפלו במקום
+  const C = w.terrain.creek as number[][] | undefined; geo.CREEK_SAMPLES = [];
+  if (C) for (let i = 0; i < C.length - 1; i++) {
+    const p0 = C[Math.max(0, i - 1)], p1 = C[i], p2 = C[i + 1], p3 = C[Math.min(C.length - 1, i + 2)];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    for (let t = 0; t < 1; t += .05) {
+      const u = 1 - t;
+      geo.CREEK_SAMPLES.push([u * u * u * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p2[0], u * u * u * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p2[1]]);
+    }
+  }
+  if (C) geo.CREEK_SAMPLES.push(C[C.length - 1]);
+  stamp(roadSamples, 36, O_ROAD); stamp(trailSamples, 15, O_TRAIL); stamp(geo.RIVER_SAMPLES, 44, O_RIVER); stamp(geo.CREEK_SAMPLES, 20, O_RIVER);
 }
 
 /** אפשר לשתול עץ כאן? (לא על דרך/שביל/נהר/מים, וגם הצמרת לא מסתירה מבנה או דרך) */

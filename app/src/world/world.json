@@ -1465,7 +1465,12 @@
     "hMax": 280,
     "color": "#a8c3d1",
     "snow": "#ffffff",
-    "step": 170
+    "step": 170,
+    "valley": -1,
+    "anchors": [
+     700,
+     1080
+    ]
    },
    {
     "baseY": -1385,
@@ -1473,7 +1478,11 @@
     "hMax": 230,
     "color": "#86aabd",
     "snow": "#f4fbff",
-    "step": 200
+    "step": 200,
+    "anchors": [
+     -400
+    ],
+    "gaps": 0.65
    },
    {
     "baseY": -2900,
@@ -1481,14 +1490,89 @@
     "hMax": 250,
     "color": "#9fbccb",
     "snow": "#ffffff",
-    "step": 180
+    "step": 180,
+    "valley": 1
    }
   ],
   "waterfall": {
    "x": 1080,
    "top": -1500,
    "bottom": -1432
-  }
+  },
+  "creek": [
+   [
+    2160,
+    -2420
+   ],
+   [
+    1900,
+    -2470
+   ],
+   [
+    1700,
+    -2560
+   ],
+   [
+    1450,
+    -2600
+   ],
+   [
+    1200,
+    -2565
+   ],
+   [
+    1000,
+    -2585
+   ],
+   [
+    820,
+    -2560
+   ],
+   [
+    620,
+    -2525
+   ],
+   [
+    430,
+    -2545
+   ],
+   [
+    250,
+    -2585
+   ],
+   [
+    60,
+    -2545
+   ],
+   [
+    -60,
+    -2470
+   ],
+   [
+    -260,
+    -2440
+   ],
+   [
+    -480,
+    -2445
+   ],
+   [
+    -650,
+    -2470
+   ],
+   [
+    -850,
+    -2440
+   ],
+   [
+    -1050,
+    -2400
+   ],
+   [
+    -1320,
+    -2420
+   ]
+  ]
  },
  "objects": [
   {
@@ -1506,7 +1590,7 @@
    "type": "shop",
    "x": 440,
    "y": 718,
-   "name": "מאפייה",
+   "name": "Bakery",
    "color": "#e2574c",
    "wall": "#fff4dc",
    "variant": "bakery"
@@ -1515,7 +1599,7 @@
    "type": "shop",
    "x": 688,
    "y": 718,
-   "name": "פרחים",
+   "name": "Flowers",
    "color": "#45a85a",
    "wall": "#effaf1",
    "variant": "flowers"
@@ -1524,7 +1608,7 @@
    "type": "shop",
    "x": 690,
    "y": 950,
-   "name": "מספרה",
+   "name": "Barber",
    "color": "#3d7bd9",
    "wall": "#eef3ff",
    "variant": "barber"
@@ -1533,7 +1617,7 @@
    "type": "shop",
    "x": 445,
    "y": 938,
-   "name": "גלידה",
+   "name": "Ice Cream",
    "color": "#ef6fa4",
    "wall": "#ffeef5",
    "variant": "icecream"
@@ -2834,7 +2918,7 @@
    "type": "station",
    "x": 170,
    "y": -406,
-   "name": "תחנה"
+   "name": "Station"
   },
   {
    "type": "train",
@@ -3014,7 +3098,7 @@
    "y": -500
   },
   {
-   "type": "castle",
+   "type": "stoneFarm",
    "x": -950,
    "y": 180
   },
@@ -3598,7 +3682,7 @@
   "walkers": [
    {
     "look": {
-     "name": "נועה",
+     "name": "Noa",
      "h": 34,
      "headR": 0.1,
      "skin": "#f1c7a5",
@@ -3611,7 +3695,7 @@
    },
    {
     "look": {
-     "name": "איתי",
+     "name": "Itai",
      "h": 36,
      "headR": 0.095,
      "skin": "#c58c66",
@@ -3625,7 +3709,7 @@
    },
    {
     "look": {
-     "name": "מאיה",
+     "name": "Maya",
      "h": 24,
      "headR": 0.12,
      "skin": "#f6d5bd",
@@ -3640,7 +3724,7 @@
    },
    {
     "look": {
-     "name": "סבתא רחל",
+     "name": "Grandma Rachel",
      "h": 31,
      "headR": 0.1,
      "skin": "#f1c7a5",
@@ -3654,7 +3738,7 @@
    },
    {
     "look": {
-     "name": "דני",
+     "name": "Dani",
      "h": 35,
      "headR": 0.095,
      "skin": "#e0ac85",
@@ -3668,7 +3752,7 @@
    },
    {
     "look": {
-     "name": "ליה",
+     "name": "Lia",
      "h": 33,
      "headR": 0.1,
      "skin": "#8d5a3b",
@@ -3682,7 +3766,7 @@
    },
    {
     "look": {
-     "name": "עומר",
+     "name": "Omer",
      "h": 33,
      "headR": 0.1,
      "skin": "#e0ac85",
@@ -3695,7 +3779,7 @@
    },
    {
     "look": {
-     "name": "יעל",
+     "name": "Yael",
      "h": 32,
      "headR": 0.1,
      "skin": "#c58c66",
@@ -3708,7 +3792,7 @@
    },
    {
     "look": {
-     "name": "אבי",
+     "name": "Avi",
      "h": 35,
      "headR": 0.095,
      "skin": "#8d5a3b",
@@ -3725,7 +3809,7 @@
     "type": "dog",
     "owner": 1,
     "color": "#c8894e",
-    "name": "בוני"
+    "name": "Boni"
    },
    {
     "type": "balloon",
@@ -3736,7 +3820,7 @@
   "sitters": [
    {
     "look": {
-     "name": "סבא משה",
+     "name": "Grandpa Moshe",
      "h": 33,
      "headR": 0.095,
      "skin": "#f1c7a5",
@@ -3754,7 +3838,7 @@
    },
    {
     "look": {
-     "name": "תמר",
+     "name": "Tamar",
      "h": 32,
      "headR": 0.1,
      "skin": "#e0ac85",

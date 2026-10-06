@@ -34,7 +34,8 @@ async function boot() {
   const playBtn = document.getElementById('play');
   function tick(now: number) {
     if (!loopState.running) return;
-    const dt = Math.min(.05, (now - last) / 1000 || .016); last = now; T += dt;
+    // חותמת הזמן של הפריים יכולה להיות מוקדמת מרגע ההפעלה: זמן שלילי מותח את הצעדים, אז מתייחסים אליו כאפס
+    const raw = (now - last) / 1000, dt = raw > 0 ? Math.min(.05, raw) : 0; last = Math.max(last, now); T += dt;
     actors.update(dt, T);
     cameraTick(now, dt);
     if (view.gpu) renderNow();   // פריים אחד משותף: אריחים ודמויות

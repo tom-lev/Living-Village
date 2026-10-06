@@ -1,52 +1,21 @@
 /* מבנים: בתים, חנויות, כנסייה, טירה ועוד */
-import { el, n2, circ, shade, wrap1, blob, ST } from '../core/util';
-import { rand } from '../core/rng';
-import { ctx, prop, block, fxAt, smokeFx, WATERS } from '../world/context';
+import { el, n2, circ, shade, blob, ST } from '../core/util';
+import { rngAt } from '../core/rng';
+import { ctx, prop, block, smokeFx } from '../world/context';
 import { register } from './registry';
+import { house, roofTexture, windowAt, poly, type Pt } from './house';
+import { shop } from './shop';
 
-function chimneySmoke(x: number, y: number, scale: number) {
-  for (let i = 0; i < 3; i++)
-    smokeFx(el('circle', { cx: x, cy: y, r: 5 * scale, fill: '#f4f1ea', opacity: 0 }, ctx.L.air), x, y, i * 1.6 + rand(0, 1));
-}
-
-/** בית עם גג משולש. smoke=false: ארובה בלי עשן (מחוץ לכפר הנוף סטטי) */
-export function house(o: any) {
-  const { x, y, w, h, wall, roof, rh = w * .55, chimney = false, smoke = true, door = '#a86a3d', win = 2, attic = false } = o;
-  const g = prop(y);
-  el('ellipse', { cx: x + 4, cy: y + 1, rx: w * .62, ry: 5, fill: 'rgba(40,70,20,.2)' }, g);
-  if (chimney) el('rect', { x: x + w * .2, y: y - h - rh * .85, width: w * .11, height: rh * .55, fill: shade(roof, -.2), ...ST }, g);
-  el('rect', { x: x - w / 2, y: y - h, width: w, height: h, fill: wall, ...ST }, g);
-  el('rect', { x: x - w / 2, y: y - h, width: w * .14, height: h, fill: shade(wall, -.06) }, g);
-  el('path', { d: `M${n2(x - w / 2 - 6)},${n2(y - h + 2)}L${n2(x)},${n2(y - h - rh)}L${n2(x + w / 2 + 6)},${n2(y - h + 2)}Z`, fill: roof, ...ST }, g);
-  el('path', { d: `M${n2(x)},${n2(y - h - rh)}L${n2(x + w / 2 + 6)},${n2(y - h + 2)}L${n2(x + w * .1)},${n2(y - h + 2)}Z`, fill: shade(roof, .12) }, g);
-  if (attic) {
-    el('circle', { cx: x, cy: y - h - rh * .42, r: rh * .16, fill: '#fff7e0', ...ST }, g);
-    el('path', { d: `M${n2(x - rh * .16)},${n2(y - h - rh * .42)}h${n2(rh * .32)}M${n2(x)},${n2(y - h - rh * .58)}v${n2(rh * .32)}`, stroke: '#c9a47a', 'stroke-width': 1 }, g);
-  }
-  const dw = Math.min(14, w * .22), dh = Math.min(22, h * .6);
-  el('path', { d: `M${n2(x - dw / 2)},${y}v${n2(-dh + dw / 2)}a${n2(dw / 2)},${n2(dw / 2)} 0 0 1 ${n2(dw)},0v${n2(dh - dw / 2)}Z`, fill: door, ...ST }, g);
-  el('circle', { cx: x + dw * .25, cy: y - dh * .45, r: 1, fill: '#f4d06f' }, g);
-  const ww = Math.min(13, w * .2), wh = ww * .95;
-  const wins = win === 2 ? [x - w * .3, x + w * .3] : win === 4 ? [x - w * .33, x - w * .19, x + w * .19, x + w * .33] : [x + w * .28];
-  for (const wx of wins) {
-    const wy = y - h * .62;
-    el('rect', { x: wx - ww / 2, y: wy - wh / 2, width: ww, height: wh, rx: 1.2, fill: '#bfe6fb', stroke: '#fff', 'stroke-width': 1.6 }, g);
-    el('path', { d: `M${n2(wx)},${n2(wy - wh / 2)}v${n2(wh)}M${n2(wx - ww / 2)},${n2(wy)}h${n2(ww)}`, stroke: '#fff', 'stroke-width': 1.1 }, g);
-  }
-  if (chimney && smoke) chimneySmoke(x + w * .255, y - h - rh * .9, Math.max(.7, w / 90));
-  block(x - w / 2 - 14, y - h - rh - 10, x + w / 2 + 14, y + 16);
-  return g;
-}
+export { house };
 
 /** בקתה אלפינית: בית עץ עם גג מושלג */
 function chalet(o: any) {
-  const g = house({ w: 52, h: 34, rh: 30, roof: '#ffffff', win: 2, smoke: false, door: '#5b3a22', ...o });
-  el('path', { d: `M${o.x - 32},${o.y - 32}h64`, stroke: '#cfe0e8', 'stroke-width': 2 }, g);
+  house({ w: 52, h: 34, rh: 30, roof: '#ffffff', win: 2, smoke: false, door: '#5b3a22', ...o });
 }
 
 /** בקתת עץ ביער: בית עם קורות אופקיות */
 function logCabin(o: any) {
-  const g = house({ w: 70, h: 40, rh: 34, wall: '#a0643a', roof: '#5b3a22', win: 2, chimney: true, smoke: false, door: '#5b3a22', ...o });
+  const g = house({ w: 70, h: 40, rh: 34, wall: '#a0643a', roof: '#5b3a22', win: 2, chimney: true, smoke: false, door: '#5b3a22', logs: true, ...o });
   let d = ''; for (let k = 1; k < 5; k++) d += `M${o.x - 35},${o.y - k * 8}h70`;
   el('path', { d, stroke: '#7a4a2a', 'stroke-width': 1.2 }, g);
 }
@@ -77,57 +46,6 @@ function modernHouse(o: any) {
   el('path', { d: gr, stroke: '#9fb3cc', 'stroke-width': .7 }, g);
   el('path', { d: circ(x - w / 2 - 8, y - 6, 7) + circ(x + w / 2 + 7, y - 5, 6), fill: '#5db85a' }, g);
   block(x - w / 2 - 18, top - 24, x + w / 2 + 16, y + 14);
-}
-
-/* קישוט מיוחד לכל חנות */
-const SHOP_EXTRAS: Record<string, (g: any, x: number, y: number, w: number, h: number) => void> = {
-  bakery: (g, x, y, w, h) => {
-    el('path', { d: `M${x - 13},${y - h - 26}q13,-14 26,0z`, fill: '#e3a857', stroke: '#b97a2f', 'stroke-width': 1.2 }, g);
-    el('path', { d: `M${x - 6},${y - h - 31}l3,4M${x},${y - h - 32}l3,4M${x + 6},${y - h - 31}l3,4`, stroke: '#b97a2f', 'stroke-width': 1.2, 'stroke-linecap': 'round' }, g);
-  },
-  flowers: (g, x, y) => {
-    for (const dx of [-38, -26]) {
-      el('path', { d: `M${x + dx - 5},${y}l1.5,-8h7l1.5,8z`, fill: '#c46a3a' }, g);
-      el('path', { d: circ(x + dx - 2, y - 12, 2.6) + circ(x + dx + 2.5, y - 11, 2.4) + circ(x + dx, y - 15, 2.4), fill: dx < -30 ? '#ff7aa2' : '#ffd23f' }, g);
-    }
-  },
-  barber: (g, x, y, w) => {
-    // עמוד מספרה: הפסים מסתובבים לאט (בשכבה הדינמית)
-    const px = x + w / 2 + 6, cp = el('clipPath', { id: 'poleClip' }, ctx.defs);
-    el('rect', { x: px - 3, y: y - 34, width: 6, height: 24, rx: 3 }, cp);
-    el('rect', { x: px - 3, y: y - 34, width: 6, height: 24, rx: 3, fill: '#fff', stroke: '#9aa', 'stroke-width': .8 }, g);
-    const sg = el('g', { 'clip-path': 'url(#poleClip)' }, ctx.L.fx), sp = el('g', null, sg);
-    fxAt(px, y - 22, 30, t => sp.setAttribute('transform', `translate(0,${n2(-8 * wrap1(t / 2.6))})`));
-    let d = '';
-    for (let k = -2; k < 6; k++) d += `M${px - 4},${y - 30 + k * 8}l8,-5v3l-8,5z`;
-    el('path', { d, fill: '#e2574c' }, sp);
-    el('circle', { cx: px, cy: y - 36, r: 3, fill: '#3d7bd9' }, g);
-  },
-  icecream: (g, x, y, w, h) => {
-    el('path', { d: `M${x - 5},${y - h - 30}l5,14l5,-14z`, fill: '#e3a857', stroke: '#b97a2f', 'stroke-width': 1 }, g);
-    el('path', { d: circ(x, y - h - 33, 5.5), fill: '#ffd1e3' }, g);
-    el('path', { d: circ(x + 2, y - h - 37, 3.5), fill: '#8b5a2b' }, g);
-  },
-};
-function shop(o: any) {
-  const { x, y, color: c, wall, name } = o, w = 86, h = 54, g = prop(y);
-  el('ellipse', { cx: x + 4, cy: y + 1, rx: w * .6, ry: 5, fill: 'rgba(40,70,20,.2)' }, g);
-  el('rect', { x: x - w / 2, y: y - h, width: w, height: h, fill: wall, ...ST }, g);
-  el('rect', { x: x - w / 2 - 3, y: y - h - 6, width: w + 6, height: 8, rx: 2, fill: shade(c, -.15), ...ST }, g);
-  const aw = w + 8, ay = y - h + 4, n = 6, sw = aw / n;
-  for (let i = 0; i < n; i++) {
-    const ax = x - aw / 2 + i * sw;
-    el('path', { d: `M${n2(ax)},${n2(ay)}h${n2(sw)}v12a${n2(sw / 2)},${n2(sw / 2.4)} 0 0 1 ${n2(-sw)},0Z`, fill: i % 2 ? '#fffaf0' : c }, g);
-  }
-  el('path', { d: `M${n2(x - aw / 2)},${n2(ay)}h${aw}`, stroke: shade(c, -.2), 'stroke-width': 1.4 }, g);
-  el('rect', { x: x - w / 2 + 8, y: y - 24, width: 30, height: 18, rx: 2, fill: '#bfe6fb', stroke: '#fff', 'stroke-width': 2 }, g);
-  el('rect', { x: x + 10, y: y - 26, width: 16, height: 26, rx: 2, fill: shade(c, -.1), ...ST }, g);
-  el('circle', { cx: x + 22, cy: y - 13, r: 1.1, fill: '#f4d06f' }, g);
-  el('rect', { x: x - 24, y: y - h - 24, width: 48, height: 16, rx: 8, fill: '#fffaf0', ...ST }, g);
-  const t = el('text', { x, y: y - h - 12.6, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: shade(c, -.35) }, g);
-  t.textContent = name;
-  SHOP_EXTRAS[o.variant]?.(g, x, y, w, h);
-  block(x - w / 2 - 12, y - h - 34, x + w / 2 + 12, y + 14);
 }
 
 function church(o: any) {
@@ -259,34 +177,159 @@ function lookoutTower(o: any) {
   block(x - 25, y - 95, x + 25, y + 8);
 }
 
-/** טירה עם חפיר, גשר נמשך, מגדלים ודגלים */
-function castle(o: any) {
-  const { x, y } = o, MO = { cx: x, cy: y - 25, rx: 150, ry: 92 };
-  WATERS.push(MO);
-  const L = ctx.L;
-  el('path', { d: blob(MO.cx, MO.cy, MO.rx, MO.ry, 10, .04, 1), fill: '#5ec6e8', stroke: '#e9dcae', 'stroke-width': 8 }, L.water);
-  el('path', { d: blob(MO.cx, MO.cy - 4, MO.rx - 26, MO.ry - 24, 10, .04, 1), fill: '#9cd162' }, L.water);
-  el('rect', { x: x - 12, y: y + 30, width: 24, height: 48, fill: '#a0643a', stroke: '#6b4a2f', 'stroke-width': 1.2 }, L.water);
-  let pl = ''; for (let k = y + 34; k < y + 78; k += 6) pl += `M${x - 12},${k}h24`;
-  el('path', { d: pl, stroke: '#6b4a2f', 'stroke-width': .8 }, L.water);
-  const g = prop(y + 30), wall = '#cfc6b8', dk = '#b3a999';
-  const tower = (tx: number, ty: number, w: number, h: number) => {
-    el('rect', { x: tx - w / 2, y: ty - h, width: w, height: h, fill: wall, ...ST }, g);
-    let cr = ''; for (let k = 0; k < 4; k++) cr += `M${tx - w / 2 + k * w / 3.5},${ty - h}v-6h${w / 7}v6`;
-    el('path', { d: cr, fill: wall, stroke: 'rgba(70,45,25,.35)', 'stroke-width': 1 }, g);
-    el('path', { d: `M${tx - 2.5},${ty - h * .6}v-8a2.5,2.5 0 0 1 5,0v8z`, fill: '#3b3b46' }, g);
+/** בית אבן עתיק עם חצר מוקפת חומת אבנים וגינת ירק (במקום הטירה).
+ *  השערים בחומה נמצאים איפה שהשבילים והדרך מגיעים: דרום, דרום-מזרח וצפון */
+function stoneFarm(o: any) {
+  const { x, y } = o, rg = rngAt(x, y, 21), G = ctx.L.groundProps;
+  const X0 = x - 160, X1 = x + 160, Y0 = y - 125, Y1 = y + 65;
+  // קרקע החצר: אדמה מהודקת ליד הבית
+  el('path', { d: blob(x - 10, y - 2, 120, 26, 9, .1, 2), fill: '#d8c8a0', opacity: .75 }, G);
+  // חומת אבנים נמוכה, עם פתחים לשערים
+  const gaps: [number, number, number][] = [[x - 12, Y1, x + 12], [x + 88, Y1, x + 116], [x - 24, Y0, x + 2]];
+  const side = (a: Pt, b: Pt) => {
+    const segs: [Pt, Pt][] = []; let cur = a;
+    for (const [gx0, gy, gx1] of gaps) if (gy === a[1] && gy === b[1]) { segs.push([cur, [gx0, gy]]); cur = [gx1, gy]; }
+    segs.push([cur, b]); return segs;
   };
-  el('rect', { x: x - 80, y: y - 70, width: 160, height: 100, fill: dk, ...ST }, g);
-  let cr = ''; for (let k = x - 78; k < x + 76; k += 12) cr += `M${k},${y - 70}v-7h7v7`;
-  el('path', { d: cr, fill: dk, stroke: 'rgba(70,45,25,.35)', 'stroke-width': 1 }, g);
-  tower(x - 80, y + 30, 32, 120); tower(x + 80, y + 30, 32, 120); tower(x, y - 30, 40, 125);
-  el('path', { d: `M${x - 14},${y + 30}v-26a14,14 0 0 1 28,0v26z`, fill: '#5b3a22', ...ST }, g);
-  el('path', { d: `M${x - 14},${y + 6}h28M${x - 14},${y + 16}h28M${x - 7},${y - 6}v36M${x + 7},${y - 6}v36`, stroke: '#3b2a1c', 'stroke-width': 1 }, g);
-  for (const [fx, fy, c] of [[x - 80, y - 96, '#e2574c'], [x + 80, y - 96, '#3d7bd9'], [x, y - 161, '#ffd23f']] as [number, number, string][]) {
-    el('path', { d: `M${fx},${fy}v-22`, stroke: '#6b4a2f', 'stroke-width': 1.4 }, g);
-    el('path', { d: `M${fx},${fy - 22}l16,5l-16,5z`, fill: c }, g);
+  let wall = '', stones = '';
+  for (const [a, b] of [...side([X0, Y0], [X1, Y0]), ...side([X1, Y0], [X1, Y1]), ...side([X0, Y1], [X1, Y1]), ...side([X0, Y0], [X0, Y1])]) {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]); if (len < 2) continue;
+    wall += `M${n2(a[0])},${n2(a[1])}L${n2(b[0])},${n2(b[1])}`;
+    const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len;
+    for (let t = 2; t < len - 2; t += rg.rand(4.5, 7)) stones += blob(a[0] + ux * t, a[1] + uy * t + rg.rand(-1, 1), rg.rand(2.4, 3.6), rg.rand(1.8, 2.6), 6, .15, rg.rand(0, 6));
   }
-  block(x - 175, y - 200, x + 175, y + 90);
+  el('path', { d: wall, fill: 'none', stroke: '#a99b84', 'stroke-width': 8, 'stroke-linecap': 'round' }, G);
+  el('path', { d: wall, fill: 'none', stroke: '#c9bea9', 'stroke-width': 6, 'stroke-linecap': 'round' }, G);
+  el('path', { d: stones, fill: '#d6ccb8', stroke: '#9c8f78', 'stroke-width': .6 }, G);
+  // שבילי אבני מדרך: מהשער הדרומי לדלת, ומהשער המזרחי
+  let flag = '';
+  for (let t = 0; t < 1; t += .1) flag += blob(x - 10 + t * 10 + rg.rand(-1.5, 1.5), y - 6 + t * 70, rg.rand(4, 5.5), rg.rand(2.6, 3.4), 6, .12, rg.rand(0, 6));
+  for (let t = 0; t < 1; t += .14) flag += blob(x + 30 + t * 72, y + 6 + t * 50 + rg.rand(-1, 1), rg.rand(3.6, 5), rg.rand(2.4, 3.2), 6, .12, rg.rand(0, 6));
+  el('path', { d: flag, fill: '#e3dac8', stroke: '#b8ab92', 'stroke-width': .6 }, G);
+
+  // ── גינת ירק: ערוגות משני צדי השביל ──
+  const bedY = y + 14, bedH = 38, beds: [number, number][] = [[X0 + 16, x - 24], [x + 6, x + 80]];
+  for (const [bx0, bx1] of beds) {
+    el('rect', { x: bx0, y: bedY, width: bx1 - bx0, height: bedH, rx: 4, fill: '#9c6f48', stroke: '#7d5636', 'stroke-width': 1.2 }, G);
+    let furrow = ''; for (let r = 0; r < 4; r++) furrow += `M${n2(bx0 + 4)},${n2(bedY + 6 + r * 9.5)}H${n2(bx1 - 4)}`;
+    el('path', { d: furrow, stroke: '#7d5636', 'stroke-width': 1.6, 'stroke-linecap': 'round', opacity: .7 }, G);
+  }
+  // שורות של ירקות שונים
+  const crops: ((a: number, b: number, yy: number) => void)[] = [
+    (a, b, yy) => {   // כרוב
+      let d = '', c = ''; for (let xx = a; xx < b; xx += 8) { d += circ(xx, yy, 3.4); c += circ(xx, yy, 1.4); }
+      el('path', { d, fill: '#79b85a' }, G); el('path', { d: c, fill: '#b9df9a' }, G);
+    },
+    (a, b, yy) => {   // גזר
+      let d = '', t = ''; for (let xx = a; xx < b; xx += 4.5) { d += `M${n2(xx)},${n2(yy + 1)}l-1.4,-4M${n2(xx)},${n2(yy + 1)}l0,-4.6M${n2(xx)},${n2(yy + 1)}l1.4,-4`; t += circ(xx, yy + 1.8, 1); }
+      el('path', { d, stroke: '#5c9e4a', 'stroke-width': .8 }, G); el('path', { d: t, fill: '#f08a2c' }, G);
+    },
+    (a, b, yy) => {   // חסה
+      let d = ''; for (let xx = a; xx < b; xx += 7) d += blob(xx, yy, 3.2, 2.6, 6, .2, xx);
+      el('path', { d, fill: '#a8d878', stroke: '#86bb5a', 'stroke-width': .5 }, G);
+    },
+    (a, b, yy) => {   // דלעות על קנוקנות
+      let v = `M${n2(a)},${n2(yy)}`, p = ''; for (let xx = a; xx < b - 5; xx += 6) v += 'q3,-3 6,0';
+      for (let xx = a + 6; xx < b; xx += 14) p += circ(xx, yy + .5, 3.2);
+      el('path', { d: v, fill: 'none', stroke: '#5c9e4a', 'stroke-width': 1.2 }, G); el('path', { d: p, fill: '#ef9a3a', stroke: '#c9772a', 'stroke-width': .6 }, G);
+    },
+  ];
+  const order = [0, 1, 2, 3].sort(() => rg.r() - .5);
+  for (let r = 0; r < 4; r++) crops[order[r]](beds[0][0] + 7, beds[0][1] - 6, bedY + 4 + r * 9.5);
+  for (let r = 2; r < 4; r++) crops[order[(r + 1) % 4]](beds[1][0] + 7, beds[1][1] - 6, bedY + 4 + r * 9.5);
+  // עגבניות על מוטות וסוכת שעועית (גבוהות: אובייקטים עם עומק)
+  for (let k = 0; k < 2; k++) {
+    const ry = bedY + 7 + k * 9.5, gT = prop(ry);
+    let st = '', fr = '', lv = '';
+    for (let xx = x + 12; xx < x + 76; xx += 9) { st += `M${n2(xx)},${n2(ry)}v-14`; lv += circ(xx - 1.5, ry - 9, 2.6) + circ(xx + 1.6, ry - 5, 2.4) + circ(xx, ry - 12, 2.2); fr += circ(xx + 1.8, ry - 8, 1.2) + circ(xx - 1.6, ry - 4.5, 1.1); }
+    el('path', { d: st, stroke: '#a0784a', 'stroke-width': 1 }, gT);
+    el('path', { d: lv, fill: '#5c9e4a' }, gT);
+    el('path', { d: fr, fill: '#e2453a' }, gT);
+  }
+  const bean = prop(bedY + 36), bx = X0 + 8;
+  el('path', { d: `M${bx - 6},${bedY + 36}L${bx},${bedY + 10}L${bx + 6},${bedY + 36}M${bx},${bedY + 10}v-3`, fill: 'none', stroke: '#a0784a', 'stroke-width': 1.2 }, bean);
+  let bl = ''; for (let k = 0; k < 7; k++) bl += circ(bx + rg.rand(-4, 4), bedY + 14 + k * 3, 2);
+  el('path', { d: bl, fill: '#6aae4e' }, bean);
+
+  // ── הבית: קירות אבן לא אחידים, גג רעפים ישן עם טחב ──
+  const hy = y - 8, w = 112, h = 50, hx0 = x - 10 - w / 2, hx1 = hx0 + w, top = hy - h, g = prop(hy);
+  el('ellipse', { cx: x - 2, cy: hy + 1, rx: 92, ry: 6, fill: 'rgba(40,70,20,.22)' }, g);
+  // מחסן אבן נמוך צמוד משמאל, עם דלת אסם
+  const ax0 = hx0 - 44, ah = 32;
+  el('rect', { x: ax0, y: hy - ah, width: 46, height: ah, fill: '#c3b69e', ...ST }, g);
+  el('path', { d: poly([[ax0 - 4, hy - ah + 3], [ax0 + 2, hy - ah - 12], [hx0 + 6, hy - ah - 18], [hx0 + 6, hy - ah + 3]]), fill: '#a8644a', ...ST }, g);
+  el('rect', { x: ax0 + 12, y: hy - 22, width: 20, height: 22, fill: '#7a5a3a', ...ST }, g);
+  el('path', { d: `M${ax0 + 12},${hy - 22}l20,22M${ax0 + 32},${hy - 22}l-20,22M${ax0 + 22},${hy - 22}v22`, stroke: '#5b3f26', 'stroke-width': 1 }, g);
+  // ארובה (מאחורי הגג)
+  const cx = hx1 - 26;
+  el('rect', { x: cx - 6, y: top - 46, width: 12, height: 46, fill: '#b3a690', ...ST }, g);
+  el('rect', { x: cx - 7.5, y: top - 48, width: 15, height: 4, fill: '#9c8f78' }, g);
+  // קיר ואבנים בגדלים שונים
+  el('rect', { x: hx0, y: top, width: w, height: h, fill: '#cbbfa8', ...ST }, g);
+  let st = '';
+  for (let yy = hy - 2, row = 0; yy > top + 2; yy -= 6.2, row++)
+    for (let xx = hx0 + 1 + (row % 2) * 4; xx < hx1 - 3;) {
+      const sw = Math.min(rg.rand(6, 13), hx1 - 1 - xx), sh = rg.rand(4.4, 5.8);
+      if (sw > 2.5) st += `M${n2(xx + 1)},${n2(yy)}h${n2(sw - 2)}q1,0 1,-1v${n2(-sh + 2)}q0,-1 -1,-1h${n2(-sw + 2)}q-1,0 -1,1v${n2(sh - 2)}q0,1 1,1z`;
+      xx += sw + .8;
+    }
+  el('path', { d: st, fill: '#d6cbb6', stroke: '#9c8f78', 'stroke-width': .55 }, g);
+  el('rect', { x: hx0, y: top, width: w, height: h, fill: 'none', ...ST }, g);
+  // גג רעפים ישן: צבעים לא אחידים וכתמי טחב
+  const P: Pt[] = [[hx0 - 7, top + 3], [hx0 + 18, top - 40], [hx1 - 18, top - 40], [hx1 + 7, top + 3]];
+  el('path', { d: poly(P), fill: '#b0674c', ...ST }, g);
+  el('path', { d: poly([[x + 20, top - 40], [hx1 - 18, top - 40], [hx1 + 7, top + 3], [x + 30, top + 3]]), fill: '#bd765a', opacity: .7 }, g);
+  roofTexture(g, P, 'tiles', '#b0674c', top - 40, top + 3);
+  let moss = '', worn = '';
+  for (let i = 0; i < 7; i++) moss += blob(rg.rand(hx0 + 10, hx1 - 10), rg.rand(top - 30, top - 4), rg.rand(4, 9), rg.rand(2, 3.5), 6, .2, i);
+  for (let i = 0; i < 10; i++) worn += `M${n2(rg.rand(hx0 + 14, hx1 - 14))},${n2(rg.rand(top - 34, top - 2))}h${n2(rg.rand(3, 6))}v2h${n2(-rg.rand(3, 6))}z`;
+  el('path', { d: worn, fill: '#8f5440', opacity: .6 }, g);
+  el('path', { d: moss, fill: '#7d9a52', opacity: .7 }, g);
+  el('path', { d: `M${hx0 + 18},${top - 40}H${hx1 - 18}`, stroke: '#8f5440', 'stroke-width': 2.4, 'stroke-linecap': 'round' }, g);
+  // חלונות קטנים ועמוקים עם קשת אבן ותריסי עץ
+  for (const wx of [hx0 + 20, hx1 - 22, x + 28]) {
+    el('path', { d: `M${wx - 9},${hy - 28}a9,7 0 0 1 18,0`, fill: 'none', stroke: '#b3a690', 'stroke-width': 3 }, g);
+    windowAt(g, wx, hy - 22, 9, 12, 'cross', '#e9dfcc', '#6f7d5a', null);
+    el('rect', { x: wx - 6, y: hy - 15.5, width: 12, height: 2.4, fill: '#b3a690' }, g);
+  }
+  // דלת עץ כבדה בקשת אבנים
+  const dx = x - 10;
+  el('path', { d: `M${dx - 11},${hy}v-20a11,11 0 0 1 22,0v20`, fill: '#b3a690', ...ST }, g);
+  let arch = ''; for (let k = 0; k <= 6; k++) { const a = Math.PI + k * Math.PI / 6; arch += `M${n2(dx + Math.cos(a) * 9)},${n2(hy - 20 + Math.sin(a) * 9)}L${n2(dx + Math.cos(a) * 12)},${n2(hy - 20 + Math.sin(a) * 12)}`; }
+  el('path', { d: arch, stroke: '#8f8270', 'stroke-width': .8 }, g);
+  el('path', { d: `M${dx - 8},${hy}v-20a8,8 0 0 1 16,0v20z`, fill: '#6b4a2f', ...ST }, g);
+  el('path', { d: `M${dx - 2.7},${hy - 27}V${hy}M${dx + 2.7},${hy - 27}V${hy}M${dx - 8},${hy - 18}h16M${dx - 8},${hy - 7}h16`, stroke: '#4f3520', 'stroke-width': .8 }, g);
+  el('circle', { cx: dx + 4.5, cy: hy - 11, r: 1.2, fill: '#3b3b46' }, g);
+  // קיסוס על הפינה הימנית
+  let ivy = ''; for (let i = 0; i < 16; i++) ivy += circ(hx1 - rg.rand(0, 6), hy - rg.rand(2, h - 4), rg.rand(2, 3.4));
+  el('path', { d: ivy, fill: '#5f9a48' }, g);
+  // ספסל ליד הדלת
+  el('rect', { x: dx + 16, y: hy - 7, width: 18, height: 3, rx: 1, fill: '#8a5a35' }, g);
+  el('path', { d: `M${dx + 18},${hy - 4}v4M${dx + 32},${hy - 4}v4`, stroke: '#5b3a22', 'stroke-width': 1.2 }, g);
+  for (let i = 0; i < 3; i++) smokeFx(el('circle', { cx, cy: top - 52, r: 5.5, fill: '#f4f1ea', opacity: 0 }, ctx.L.air), cx, top - 52, i * 1.6 + rg.rand(0, 1));
+
+  // ── מאחורי הבית: עץ פרי, ערימת עצים ולול עם תרנגולות ──
+  const tx = x + 108, ty = y - 70, tg = prop(ty);
+  el('ellipse', { cx: tx + 3, cy: ty, rx: 16, ry: 4, fill: 'rgba(40,70,20,.22)' }, tg);
+  el('path', { d: `M${tx - 2.4},${ty}L${tx - 1.2},${ty - 20}L${tx + 1.2},${ty - 20}L${tx + 2.4},${ty}Z`, fill: '#7a5230' }, tg);
+  el('path', { d: circ(tx, ty - 32, 15) + circ(tx - 10, ty - 24, 10) + circ(tx + 10, ty - 25, 11), fill: '#5fae55' }, tg);
+  let fruit = ''; for (let i = 0; i < 9; i++) fruit += circ(tx + rg.rand(-14, 14), ty - rg.rand(20, 42), 1.6);
+  el('path', { d: fruit, fill: '#f2c14e' }, tg);
+  const wp = prop(hy - 2);
+  let logs = ''; for (let r = 0; r < 3; r++) for (let k = 0; k < 4 - r; k++) logs += circ(ax0 - 14 + k * 5 + r * 2.5, hy - 3 - r * 4.4, 2.3);
+  el('path', { d: logs, fill: '#c9955c', stroke: '#7a4f2a', 'stroke-width': .7 }, wp);
+  const kx = x - 120, ky = y - 82, cp = prop(ky);
+  el('rect', { x: kx - 14, y: ky - 16, width: 28, height: 16, fill: '#b98552', ...ST }, cp);
+  el('path', { d: poly([[kx - 17, ky - 15], [kx, ky - 26], [kx + 17, ky - 15]]), fill: '#7a5a3a', ...ST }, cp);
+  el('path', { d: `M${kx - 3},${ky}v-8h6v8`, fill: '#4f3520' }, cp);
+  for (const [hx, hy2, c] of [[kx + 22, ky + 8, '#ffffff'], [kx + 32, ky + 2, '#c9772a'], [kx + 14, ky + 14, '#ffffff']] as [number, number, string][]) {
+    const hen = prop(hy2);
+    el('ellipse', { cx: hx, cy: hy2 - 3.5, rx: 3.6, ry: 2.8, fill: c, stroke: '#b9a990', 'stroke-width': .5 }, hen);
+    el('circle', { cx: hx + 3, cy: hy2 - 6, r: 1.7, fill: c }, hen);
+    el('path', { d: `M${hx + 3},${hy2 - 7.8}l.6,-1l.6,1`, stroke: '#e2453a', 'stroke-width': .7, fill: 'none' }, hen);
+    el('path', { d: `M${hx + 4.6},${hy2 - 6.4}l1.4,.5l-1.4,.5z`, fill: '#e2a33b' }, hen);
+  }
+  block(X0 - 12, Y0 - 50, X1 + 12, Y1 + 12);
 }
 
 function tunnelPortal(o: any) {
@@ -308,4 +351,4 @@ function well(o: any) {
   block(x - 25, y - 45, x + 25, y + 12);
 }
 
-register({ house, chalet, logCabin, modernHouse, shop, church, chapel, barn, windmill, station, lighthouse, waterTower, greenhouse, observatory, lookoutTower, castle, tunnelPortal, well });
+register({ house, chalet, logCabin, modernHouse, shop, church, chapel, barn, windmill, station, lighthouse, waterTower, greenhouse, observatory, lookoutTower, stoneFarm, tunnelPortal, well });

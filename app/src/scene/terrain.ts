@@ -1,6 +1,7 @@
 /* פני השטח: קרקע, דשא, דרכים, שבילים, חוף, נהר, ים, שלג והרים */
-import { el, n2, circ, shade, blob, smoothOpen, clamp } from '../core/util';
-import { rand, pick } from '../core/rng';
+import { el, n2, circ, blob, smoothOpen, clamp } from '../core/util';
+import { rand, pick, rngAt } from '../core/rng';
+import { buildMountains } from './mountains';
 import { ctx } from '../world/context';
 import { geo, edgeAt, occ, O_ROAD, O_RIVER } from '../world/geometry';
 import type { WorldData } from '../world/types';
@@ -77,20 +78,17 @@ export function buildTerrain(w: WorldData) {
   }
 
   /* צפון ההרים: קרקע מושלגת */
-  el('rect', { x: B.x0, y: B.y0, width: B.x1 - B.x0, height: T.snow.line - B.y0, fill: '#eaf3f7' }, L.ground);
+  // הגבול התחתון גלי (במעברים בין ההרים רואים אותו)
+  {
+    const v = rngAt(T.snow.line, 0, 71), pts: number[][] = [];
+    for (let x = B.x0 - 60; x <= B.x1 + 60; x += 70) pts.push([x, T.snow.line + v.rand(-22, 14)]);
+    el('path', { d: `M${B.x0 - 60},${B.y0}` + smoothOpen(pts).replace(/^M/, 'L') + `L${B.x1 + 60},${B.y0}Z`, fill: '#eaf3f7' }, L.ground);
+  }
   for (let i = 0; i < T.snow.patches; i++)
     el('path', { d: blob(rand(B.x0, B.x1), rand(B.y0 + 60, T.snow.patchesTo), rand(50, 140), rand(20, 50), 7, .12, rand(0, 6)), fill: pick(['#ffffff', '#dfecf2']), opacity: .8 }, L.ground);
 
-  /* רכסי הרים מושלגים */
-  for (const m of T.mountains) {
-    for (let x = B.x0 - 120; x < B.x1 + 120; x += m.step * rand(.75, 1.15)) {
-      const wd = rand(240, 330), h = rand(m.hMin, m.hMax), px = x + rand(-20, 20), top = m.baseY - h, base = m.baseY;
-      el('path', { d: `M${n2(px - wd / 2)},${base}L${n2(px)},${n2(top)}L${n2(px + wd / 2)},${base}Z`, fill: m.color, stroke: shade(m.color, -.08), 'stroke-width': 1.5, 'stroke-linejoin': 'round' }, L.ground);
-      el('path', { d: `M${n2(px)},${n2(top)}L${n2(px + wd / 2)},${base}L${n2(px + wd * .08)},${base}Z`, fill: shade(m.color, -.1) }, L.ground);
-      const sh = h * .3, sw = wd / 2 * .3;
-      el('path', { d: `M${n2(px - sw)},${n2(top + sh)}L${n2(px)},${n2(top)}L${n2(px + sw)},${n2(top + sh)}l-${n2(sw * .35)},${n2(-sh * .2)}l-${n2(sw * .35)},${n2(sh * .25)}l-${n2(sw * .3)},${n2(-sh * .3)}l-${n2(sw * .4)},${n2(sh * .2)}l-${n2(sw * .3)},${n2(-sh * .15)}Z`, fill: m.snow, 'stroke-linejoin': 'round' }, L.ground);
-    }
-  }
+  /* רכסי הרים, העמק שביניהם והפלג */
+  buildMountains(w);
   /* מפל שנשפך מההרים אל הנהר */
   if (T.waterfall) {
     const { x, top, bottom } = T.waterfall, h = bottom - top;

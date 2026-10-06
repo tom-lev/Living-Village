@@ -21,22 +21,25 @@ export class Horse {
     el('path', { d: rrect(-26, -46, 50, 20, 10), fill: color, ...st }, g);
     el('path', { d: 'M-14,-28v27M20,-28v27', stroke: color, 'stroke-width': 5, 'stroke-linecap': 'round' }, g);
     el('path', { d: 'M-14,-1h3M20,-1h3', stroke: '#3b2f2a', 'stroke-width': 4, 'stroke-linecap': 'round' }, g);
-    // צוואר וראש: מסתובבים יחד סביב בסיס הצוואר
-    this.neck = el('g', { transform: 'translate(18,-42)' }, g);
-    el('path', { d: 'M-4,4L4,-20L14,-18L10,6Z', fill: color, ...st }, this.neck);
-    el('path', { d: 'M-2,0L4,-22L8,-21L1,2Z', fill: mane }, this.neck);
-    el('path', { d: rrect(4, -26, 22, 10, 5), fill: color, ...st }, this.neck);
-    el('circle', { cx: 12, cy: -22, r: 1.2, fill: '#2b2220' }, this.neck);
-    el('path', { d: 'M8,-26l1,-6l3,5z', fill: dk }, this.neck);
-    el('circle', { cx: 23, cy: -20, r: .9, fill: shade(color, -.4) }, this.neck);
+    // צוואר וראש: מסתובבים יחד סביב נקודה קבועה בתוך הכתף; הכתף מצוירת מעל, כך שהמפרק לא נראה
+    this.neck = el('g', { transform: 'translate(16,-38)' }, g);
+    el('path', { d: 'M-7,6C-6,-6 -1,-18 4,-26L13,-23C11,-12 10,-2 9,6Z', fill: color, ...st }, this.neck);
+    el('path', { d: 'M-6,2C-5,-8 -1,-18 3,-27L7,-27C3,-18 0,-8 -1,2Z', fill: mane }, this.neck);
+    // ראש: מוארך, עם לוע כהה יותר, אוזן ועין
+    el('path', { d: 'M2,-30C6,-34 14,-33 24,-26C28,-23 28,-18 24,-17C17,-17 10,-19 4,-21C0,-23 -1,-28 2,-30Z', fill: color, ...st }, this.neck);
+    el('path', { d: 'M19,-25C24,-24 27,-21 25,-18C22,-17 19,-18 18,-19Z', fill: shade(color, -.18) }, this.neck);
+    el('path', { d: 'M4,-30l1,-6l4,5z', fill: dk, ...st }, this.neck);
+    el('circle', { cx: 9, cy: -27, r: 1.2, fill: '#2b2220' }, this.neck);
+    el('circle', { cx: 24.5, cy: -20.5, r: .8, fill: shade(color, -.45) }, this.neck);
+    el('ellipse', { cx: 15, cy: -36, rx: 9, ry: 8, fill: color }, g);   // כתף: מכסה את בסיס הצוואר
     this.a = 0; this.timer = rand(1, 4); this.graze = true;
   }
   update(dt: number) {
     this.timer -= dt;
     if (this.timer <= 0) { this.graze = !this.graze; this.timer = this.graze ? rand(5, 11) : rand(2, 4); }
-    this.a += ((this.graze ? 75 : 0) - this.a) * Math.min(1, dt * 2.2);
+    this.a += ((this.graze ? 112 : 0) - this.a) * Math.min(1, dt * 2.2);
     if (!inView(this.x, this.y - 30, 50)) return;   // הסוס לא זז ממקומו: מספיק לא לעדכן את הצוואר
-    this.neck.setAttribute('transform', `translate(18,${(-42 + this.a / 75 * 16).toFixed(1)}) rotate(${this.a.toFixed(1)})`);
+    this.neck.setAttribute('transform', `translate(16,-38) rotate(${this.a.toFixed(1)})`);
   }
 }
 

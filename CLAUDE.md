@@ -46,6 +46,7 @@ This file is the complete handoff. Work on this project so far happened in one l
   - full zoom-out showing the whole world, but with no empty bands.
 - **UI:**
   - Hebrew/RTL.
+  - **Text inside the world is English only:** shop signs, the station and character names (Noa, Itai, Grandpa Moshe…). The UI chrome stays Hebrew.
   - Bottom-left: + − (hidden on touch), ⤢ (home view), ❚❚/▶ (pause), 🎨 (palette menu). Bottom-right: the zoom label.
   - The follow pill appears when you tap a character.
   - There is no title card (removed at their request).
@@ -111,7 +112,11 @@ Order:
 - **Adding content:** add objects to `objects`.
   - The prefab type names are registered in `prefabs/*.ts` via `register({...})`:
     - **nature:** pine, roundTree, palm, deer.
-    - **buildings:** house `{x,y,w,h,rh,wall,roof,win,chimney,smoke,door,attic}`, chalet, logCabin, modernHouse `{x,y,w,upper,wall,wood}`, shop `{x,y,name,color,wall,variant: bakery|flowers|barber|icecream}`, church, chapel, barn, windmill, station, lighthouse, waterTower, greenhouse, observatory, lookoutTower, castle, tunnelPortal, well.
+    - **buildings:** house `{x,y,w,h,rh,wall,roof,win,chimney,smoke,door,attic}` (in `prefabs/house.ts`), chalet, logCabin, modernHouse `{x,y,w,upper,wall,wood}`, shop `{x,y,name,color,wall,variant, form?, awning?, sign?, door?}` (in `prefabs/shop.ts`), church, chapel, barn, windmill, station, lighthouse, waterTower, greenhouse, observatory, lookoutTower, stoneFarm, tunnelPortal, well.
+    - **No two buildings or trees are alike (owner's rule, also for future content).** Variation comes from `rngAt(x, y, salt)` in `core/rng.ts`: a local RNG seeded by position. It is stable across loads and does **not** consume the global RNG, so adding variety never moves the forest or anything else.
+      - `house()` picks the roof shape (gable, steep, hip, saltbox, gambrel, cross), the roof texture (tiles, shingles, slate, thatch), the walls (plaster, siding, boards, brick, stone, half-timber), window and door styles, shutters, flower boxes, canopy, chimney, dormer, annex, a second storey and small extras. The door always stays at `x`, because the plot path leads there. `snow` (white roof) and `logs` restrict the choices.
+      - `shop()` builds from parts: the form (cottage, townhouse, pavilion, glassfront), wall, awning, sign style and door side. A trade kit in `KITS` (bakery, flowers, barber, icecream) supplies the window display, outdoor props and sign icon. An unknown `variant` gets a generic shop.
+      - Pines and round trees jitter their size, lean, tint, trunk and crown slightly.
     - **props:** bench, lamp, bike, signpost, mailbox, haybale, umbrella, sailboat, buoy, ship, beehives, picnicTable, picnicBlanket, igloo, snowman, skater, iceHut, turbine, cave, scarecrow, footbridge `{x,y,angle}`, stoneBridge `{x,y,angle}`, pier, pigeon, noTrees `{rect}`.
     - **areas:** paddock `{id,x0,y0,x1,y1}`, lake `{id,cx,cy,rx,ry,reeds}`, plaza, fountain, flowerField, vegGarden, tent, campfire, field `{x,y,w,h,a,b,vertical}`, vineyard, orchard, railway, train, mountainLake, cableCar, ruins, playground, fishingPond, footballPitch, maze, sunflowerField, island, rockIslet, frozenLake, skiSlope, hotSpring.
     - **village:** plot `{x0,y0,x1,y1,fence: hedge|picket,door:[x,y],street: top|bottom}`, roundabout `{x,y,r}`.
@@ -170,9 +175,14 @@ Order:
   - a cable car (700, −1010) → (980, −1420), a mountain lake (280, −1180), a cave (−400, −1395).
 - **Middle north** (y −1440..0):
   - forest with trails and signposts; a railway at y = −380 (a bridge where the river crosses), a station (170, −406) and a train;
-  - a log cabin, a lookout tower (−800, −500), a castle with a moat (−950, 180), ruins, beehives, picnic spots, an orchard (−460, 470);
+  - a log cabin, a lookout tower (−800, −500), an old stone farmhouse with a walled yard and vegetable garden (`stoneFarm`, −950, 180; it replaced the castle at the owner's request), ruins, beehives, picnic spots, an orchard (−460, 470);
   - a maze (1570, 70), a vineyard (1192..1290, 300..820), a water tower, greenhouses (1520..1690, 1235), a sunflower field (1400, 1380).
 - **River:** from the waterfall (1080, −1430) south → into the lake (535, 262; rx 132, ry 112; ducks, fish, reeds) from the north-east → out of the lake at its south-west → through the village (x ≈ 300 at y 640..920, then south-east to x ≈ 500 at y 1350..1500) → into the sea at (540, 2330). It has stone bridges where roads cross and footbridges where trails cross; all were computed from intersections.
+- **Mountains and valley** (`scene/mountains.ts`, data in `terrain.mountains` and `terrain.creek`):
+  - Each range is built from separate massifs with gaps (passes) between them. A massif has 1–4 peaks, a jagged ridge, lit and shaded faces, uneven snow caps, gullies, foothills and rocks. Some massifs have a flat rock **ledge** at a low height, a ready spot for a future cabin or hikers.
+  - `anchors` force a massif behind the tunnel portals, the waterfall and the cave. `gaps` sets how sparse a range is: the front range is 0.65, so it reads as separate hills.
+  - **The valley** between the southern range (−1440) and the northern range (−2900) reads as a valley through two cues. First, shaded slopes descend into it on both sides (`valley: -1/1` on a range). Second, a frozen **creek** runs along the valley floor. Bridges are added automatically wherever a road or trail crosses the creek, and the creek is stamped in the occupancy grid so trees avoid it.
+  - Mountain shapes use local RNG. The old loop's global RNG calls are still consumed, so the forest keeps its exact place.
 - **Village** (home 0..800 × 0..1700, "village on the river"):
   - The north road N0 (250, 30) comes from the station and crosses the north bridge to B (480, 485).
   - The **roundabout** R (560, 770), r 46, has a fountain. Shops sit on its corners: bakery (440, 718), flowers (688, 718), barber (690, 950), ice cream (445, 938).

@@ -1,41 +1,47 @@
 /* טבע: עצים, דקלים, צבאים */
 import { el, n2, circ, shade } from '../core/util';
-import { rand, pick, R } from '../core/rng';
+import { rand, pick, R, rngAt } from '../core/rng';
 import { prop, block } from '../world/context';
 import { register } from './registry';
 
 export function pine(x: number, y: number, s: number, snowy = false) {
   // מעט צורות לכל עץ (גוף אחד והדגשה אחת לכל שלוש הקומות)
+  // כל עץ קצת אחר (אקראיות מקומית, כדי לא להזיז את שאר העולם): רוחב, גובה, הטיה, גוון, גזע
+  const v = rngAt(x, y, 3), wf = v.rand(.88, 1.12), hf = v.rand(.9, 1.12), lean = v.rand(-.06, .06) * s, trunk = v.rand(5, 7.5);
   const g = prop(y);
-  el('ellipse', { cx: x + 2 * s, cy: y, rx: 9 * s, ry: 2.6 * s, fill: 'rgba(40,70,20,.22)' }, g);
-  el('rect', { x: x - 1.4 * s, y: y - 6 * s, width: 2.8 * s, height: 6.5 * s, rx: .8 * s, fill: '#8b5a2b' }, g);
-  const tiers = [[5, 10.5, 14], [12, 8.5, 12], [18.5, 6.2, 10.5]];
-  const c = pick(['#3f9150', '#3a8a4c', '#459a55']);
+  el('ellipse', { cx: x + 2 * s, cy: y, rx: 9 * s * wf, ry: 2.6 * s, fill: 'rgba(40,70,20,.22)' }, g);
+  el('rect', { x: x - 1.4 * s, y: y - trunk * s, width: 2.8 * s, height: (trunk + .5) * s, rx: .8 * s, fill: shade('#8b5a2b', v.rand(-.08, .08)) }, g);
+  const tiers = [[5, 10.5, 14], [12, 8.5, 12], [18.5, 6.2, 10.5]].map(([dy, hw, th], i) => [(dy + trunk - 6) * hf, hw * wf * v.rand(.92, 1.08), th * hf * v.rand(.94, 1.06), lean * (i + 1) * 4]);
+  const c = shade(pick(['#3f9150', '#3a8a4c', '#459a55']), v.rand(-.06, .06));
   let body = '', hl = '';
-  for (const [dy, hw, th] of tiers) {
-    const by = y - dy * s;
-    body += `M${n2(x - hw * s)},${n2(by)}L${n2(x)},${n2(by - th * s)}L${n2(x + hw * s)},${n2(by)}Z`;
-    hl += `M${n2(x)},${n2(by - th * s)}L${n2(x + hw * s)},${n2(by)}L${n2(x + 1)},${n2(by)}Z`;
+  for (const [dy, hw, th, lx] of tiers) {
+    const by = y - dy * s, tx = x + lx;
+    body += `M${n2(x - hw * s)},${n2(by)}L${n2(tx)},${n2(by - th * s)}L${n2(x + hw * s)},${n2(by)}Z`;
+    hl += `M${n2(tx)},${n2(by - th * s)}L${n2(x + hw * s)},${n2(by)}L${n2(x + 1)},${n2(by)}Z`;
   }
   el('path', { d: body, fill: c, 'stroke-linejoin': 'round', stroke: c, 'stroke-width': 1.5 }, g);
   el('path', { d: hl, fill: shade(c, .12) }, g);
   if (snowy) {
     let sn = '';
-    for (const [dy, hw, th] of tiers) {
-      const by = y - dy * s, ty = by - th * s;
-      sn += `M${n2(x - hw * s * .45)},${n2(ty + th * s * .45)}L${n2(x)},${n2(ty)}L${n2(x + hw * s * .45)},${n2(ty + th * s * .45)}l${n2(-hw * s * .15)},${n2(-th * s * .08)}l${n2(-hw * s * .15)},${n2(th * s * .1)}l${n2(-hw * s * .15)},${n2(-th * s * .1)}Z`;
+    for (const [dy, hw, th, lx] of tiers) {
+      const by = y - dy * s, ty = by - th * s, tx = x + lx;
+      sn += `M${n2(tx - hw * s * .45)},${n2(ty + th * s * .45)}L${n2(tx)},${n2(ty)}L${n2(tx + hw * s * .45)},${n2(ty + th * s * .45)}l${n2(-hw * s * .15)},${n2(-th * s * .08)}l${n2(-hw * s * .15)},${n2(th * s * .1)}l${n2(-hw * s * .15)},${n2(-th * s * .1)}Z`;
     }
     el('path', { d: sn, fill: '#ffffff' }, g);
   }
 }
 
 export function roundTree(x: number, y: number, s: number, fruit = false) {
+  // כל עץ קצת אחר: גובה הגזע, גודל ומיקום הגושים בצמרת, וגוון
+  const v = rngAt(x, y, 5), tk = v.rand(12.5, 15.5), cr = v.rand(.9, 1.1), sx = v.rand(-1.2, 1.2) * s;
   const g = prop(y);
-  el('ellipse', { cx: x + 2 * s, cy: y, rx: 10 * s, ry: 3 * s, fill: 'rgba(40,70,20,.22)' }, g);
-  el('path', { d: `M${n2(x - 1.6 * s)},${n2(y)}L${n2(x - 1)},${n2(y - 14 * s)}L${n2(x + 1)},${n2(y - 14 * s)}L${n2(x + 1.6 * s)},${n2(y)}Z`, fill: '#8b5a2b' }, g);
-  const c = pick(['#5db85a', '#63bd5c', '#55ad55', '#7cc35a']);
-  el('path', { d: circ(x, y - 22 * s, 10.5 * s) + circ(x - 6.5 * s, y - 16.5 * s, 7 * s) + circ(x + 6.5 * s, y - 17 * s, 7.5 * s), fill: c }, g);
-  el('path', { d: circ(x - 3 * s, y - 26 * s, 4.2 * s), fill: shade(c, .2) }, g);
+  el('ellipse', { cx: x + 2 * s, cy: y, rx: 10 * s * cr, ry: 3 * s, fill: 'rgba(40,70,20,.22)' }, g);
+  el('path', { d: `M${n2(x - 1.6 * s)},${n2(y)}L${n2(x - 1 + sx * .3)},${n2(y - tk * s)}L${n2(x + 1 + sx * .3)},${n2(y - tk * s)}L${n2(x + 1.6 * s)},${n2(y)}Z`, fill: shade('#8b5a2b', v.rand(-.08, .08)) }, g);
+  const c = shade(pick(['#5db85a', '#63bd5c', '#55ad55', '#7cc35a']), v.rand(-.05, .05)), dy = (tk - 14) * s;
+  let crown = circ(x + sx, y - 22 * s - dy, 10.5 * s * cr) + circ(x - 6.5 * s * cr + sx, y - 16.5 * s - dy + v.rand(-1, 1) * s, 7 * s * v.rand(.88, 1.1)) + circ(x + 6.5 * s * cr + sx, y - 17 * s - dy + v.rand(-1, 1) * s, 7.5 * s * v.rand(.88, 1.1));
+  if (v.chance(.35)) crown += circ(x + sx + v.rand(-4, 4) * s, y - 29 * s - dy, 5.5 * s * v.rand(.8, 1.1));   // לפעמים גוש נוסף למעלה
+  el('path', { d: crown, fill: c }, g);
+  el('path', { d: circ(x - 3 * s + sx, y - 26 * s - dy, 4.2 * s), fill: shade(c, .2) }, g);
   let ticks = '';
   for (let i = 0; i < 3; i++) { const tx = x + rand(-6, 6) * s, ty = y - rand(14, 27) * s; ticks += `M${n2(tx)},${n2(ty)}q${n2(1.6 * s)},${n2(-1 * s)} ${n2(1.8 * s)},${n2(1 * s)}`; }
   el('path', { d: ticks, fill: 'none', stroke: shade(c, -.25), 'stroke-width': .9, 'stroke-linecap': 'round' }, g);

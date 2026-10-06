@@ -114,7 +114,7 @@ export class Walker {
 export class Dog {
   [k: string]: any;
   constructor(owner: Walker, color: string, name: string) {
-    this.owner = owner; this.name = `${name}, הכלב של ${owner.name}`;
+    this.owner = owner; this.name = `${name} (${owner.name}'s dog)`;
     this.g = el('g', { class: 'who' }, ctx.L.actors); this.el = this.g;
     el('ellipse', { rx: 10, ry: 2.6, fill: 'rgba(40,70,20,.25)' }, this.g);
     this.b = el('g', null, this.g);
