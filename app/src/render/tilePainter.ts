@@ -17,7 +17,7 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
 
   function render(l: number, tx: number, ty: number) {
     const sc = BASE * 2 ** l, tw = TILE / sc, x0 = B.x0 + tx * tw, y0 = B.y0 + ty * tw, x1 = x0 + tw, y1 = y0 + tw;
-    const cv = mk(TILE), c = cv.getContext('2d'), ids: number[] = []; stamp++;
+    const cv = mk(TILE), c = cv.getContext('2d', { willReadFrequently: true }), ids: number[] = []; stamp++;
     for (let cy = Math.floor(y0 / DLC); cy <= Math.floor(y1 / DLC); cy++)
       for (let cx = Math.floor(x0 / DLC); cx <= Math.floor(x1 / DLC); cx++)
         for (const id of grid.get(cx + ',' + cy) || []) if (seen[id] !== stamp) { seen[id] = stamp; ids.push(id); }

@@ -127,6 +127,8 @@ export class VNode {
   }
   appendChild(n: VNode) { return this.insertBefore(n, null); }
   insertBefore(n: VNode, ref: VNode | null) {
+    // כבר במקום (מיון עומק שלא שינה סדר): בלי להוציא ולהכניס, שזה מכריח לבנות מחדש את רשימת הציור
+    if (n.parentNode === this && (n === ref || n.nextSibling === ref)) return n;
     if (n.parentNode) n.parentNode.detach(n);
     const i = ref ? this.kids.indexOf(ref) : -1, at = i < 0 ? this.kids.length : i;
     this.kids.splice(at, 0, n); n.parentNode = this;
@@ -204,11 +206,21 @@ export class VNode {
   }
 }
 
+/* צורה "חמה" (נבנית מחדש שוב ושוב: רגלי כלב, רצועה, חצאית) מצוירת לבד, מחוץ לאצווה.
+   אחרת כל שינוי בה מכריח את Pixi לבנות מחדש את רשימת הציור של כל השכבה שלה, בכל פריים. */
+const HOT = 3, NEAR = 30;   // 3 בניות, כל אחת עד 30 פריימים אחרי הקודמת (החלפת פלטה לא נחשבת)
+const rebuilds = new WeakMap<VNode, [number, number]>();   // [מספר בניות ברצף, פריים אחרון]
+function markHot(n: VNode) {
+  const r = rebuilds.get(n), f = vstats.flushes, c = r && f - r[1] <= NEAR ? r[0] + 1 : 1;
+  rebuilds.set(n, [c, f]);
+  if (c === HOT && n.gfx instanceof Graphics) { n.gfx.context.batchMode = 'no-batch'; vstats.hot++; }
+}
+
 /** בונה מחדש את כל הצורות שהשתנו מאז הפריים הקודם (נקרא ממש לפני הציור) */
 export function flushVNodes() {
   if (!dirty.size) return;
-  for (const n of dirty) if (n.parentNode) { n.build(); dirty.delete(n); vstats.built++; }
+  for (const n of dirty) if (n.parentNode) { n.build(); markHot(n); dirty.delete(n); vstats.built++; }
   vstats.flushes++;   // מה שעוד לא חובר לעץ נשאר לפעם הבאה
 }
-export const vstats = { built: 0, flushes: 0 };
+export const vstats = { built: 0, flushes: 0, hot: 0 };
 export const isVNode = (x: any): x is VNode => x instanceof VNode;

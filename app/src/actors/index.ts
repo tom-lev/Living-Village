@@ -25,7 +25,11 @@ export function buildActors(A: Record<string, any>) {
     let f = 0;
     updates.push(dt => {
       for (const s of flockS) s.update(dt);
-      if (++f % 8 === 0) for (const s of flockS.slice().sort((a: any, b: any) => a.y - b.y)) ctx.L.pad.appendChild(s.g);
+      if (++f % 8 === 0) {
+        // מזיזים רק אם הסדר באמת השתנה (כל הזזה מכריחה לבנות מחדש את רשימת הציור)
+        const sorted = flockS.slice().sort((a: any, b: any) => a.y - b.y);
+        if (sorted.some((s: any, i: number) => s !== flockS[i])) { for (const s of sorted) ctx.L.pad.appendChild(s.g); flockS.splice(0, flockS.length, ...sorted); }
+      }
     });
   }
   if (A.ducks) updates.push(ducks(A.ducks));

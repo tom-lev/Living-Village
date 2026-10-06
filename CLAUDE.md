@@ -226,7 +226,17 @@ Order:
     - They then moved to local work (Claude Code in VS Code) so performance can be measured on a real GPU.
 
 ## 8. Where we stopped, and what to do next
-**Current task: make zoom and drag perfectly smooth on real devices.** This is the first thing to work on.
+**Measured on a real GPU (Windows laptop, Intel UHD, 1920×1080) on 2026-10-06, and fixed:**
+- **The main cause of the stutter:** the tile workers painted on GPU-accelerated OffscreenCanvas. That raster work ran in the browser's GPU process and stalled frames by 80–500 ms during zoom and drag, while the main thread was idle (no long tasks). The fix is `getContext('2d', { willReadFrequently: true })` in `tilePainter.ts`, which makes the workers paint on the CPU. After it, zoom and drag hold a steady 60 fps (p99 16.9 ms) at the real screen size and in the phone viewport, and tiles are still sharp within about 100 ms.
+- **Pixi rebuilt the instruction lists of every dynamic layer each frame**, because about 30 shapes rebuild each frame.
+  - Fix in `vnode.ts`: a shape rebuilt 3 times in quick succession becomes `batchMode = 'no-batch'`.
+  - Fix in `gpu.ts`: `validateRenderable` is patched, because Pixi's own check (`!!graphics._gpuData`) is always true.
+  - Depth sorts no longer move nodes that are already in place.
+- **Overdraw:** every coarser tile level used to be drawn under the current one across the whole screen. Now `gpu.ts` `pick()` shows exactly one tile per screen cell: the sharp tile, else 4 finer tiles, else one coarser tile.
+- **Large retina screens:** cutting the tile list to the cache budget dropped visible edge tiles once more than about 276 cells were on screen, so those tiles stayed blurry forever. The cache cap now grows with the screen.
+- Still open: at 3200×2000 device px this Intel GPU is fill-bound (clearing and presenting alone take about 7 ms). Real 2× screens with weak GPUs could benefit from a lower canvas resolution during gestures.
+
+The original plan follows. Steps 2–5 are optional now; measure before doing them.
 1. **Measure first, on this machine's GPU:**
    - `npm run build && npm run preview`, then `node tools/perf.mjs zoom http://localhost:4173/ --headed` and `drag`;
    - Chrome DevTools Performance during fast wheel zooms.

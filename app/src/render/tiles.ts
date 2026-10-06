@@ -70,7 +70,7 @@ function putTile(l: number, x: number, y: number, bmp: any) {
   tiles.set(key, bmp);
   if (gpu) { const t = TILE / tileScale(l); gpu.add(key, l, ctx.B.x0 + x * t, ctx.B.y0 + y * t, t, bmp); }
   for (const [k, v] of tiles) {
-    if (tiles.size <= TILE_CAP) break;
+    if (tiles.size <= cap) break;
     if (!k.startsWith('0/') && !wanted.has(k)) { tiles.delete(k); gpu?.remove(k); v.close?.(); }
   }
 }
@@ -85,6 +85,7 @@ const L0_KEYS: number[][] = [];
 export const tileStats = { missing: 0, painted: 0, mode: '' };
 let sDirty = true, sRaf = 0, lastNeed = '';
 let wanted = new Set<string>();   // האריחים שהתצוגה הנוכחית צריכה או מכינה מראש: לא נזרקים מהמטמון
+let cap = TILE_CAP;               // גודל המטמון: גדל במסכים גדולים, כדי שכל האריחים שעל המסך תמיד ייכנסו
 
 /** מנסה להפעיל את הכרטיס הגרפי. נקרא לפני בניית העולם, כדי לדעת איפה הדמויות יחיו.
  *  מחזיר את הקנבס לשימוש (קנבס חדש ונקי אם WebGL נכשל) */
@@ -161,7 +162,7 @@ function drawStatic() {
     if (t) cs.drawImage(t, X, Y, Wd, Ht); else standIn(l, i, j, X, Y, Wd, Ht);
   }
   // בכרטיס הגרפי: רק מטריצה אחת ורשימת אריחים נראים
-  if (gpu) gpu.compose(l, { x0: wx0, y0: wy0, x1: wx1, y1: wy1 }, cam);
+  if (gpu) gpu.compose(l, { ix0, ix1, iy0, iy1 }, cam);
   tileStats.missing = need.length;
   // את רשימת ההכנה בונים מחדש רק כשהאזור הנראה משתנה (לא בכל פריים של גרירה)
   const key = `${l}|${ix0}|${ix1}|${iy0}|${iy1}|${Math.round(ccx / tw * 2)}|${Math.round(ccy / tw * 2)}`;
@@ -186,8 +187,11 @@ function drawStatic() {
   };
   around(l, 1 + 2 * tw / Math.min(vwW, vhW));   // טבעת של אריח סביב המסך
   around(l - 1, 2); around(l + 1, .7); around(l - 2, 4); around(l + 2, .3);
-  const budget = TILE_CAP - L0_KEYS.length - 16;
-  if (want.length > budget) want.length = Math.max(budget, need.length);
+  // במסך גדול בצפיפות כפולה יש יותר מ-300 משבצות על המסך: קודם נחתכו מהרשימה גם אריחים נראים בקצוות, והם לא צוירו אף פעם
+  const nVis = (ix1 - ix0 + 1) * (iy1 - iy0 + 1);
+  cap = Math.max(TILE_CAP, Math.ceil(nVis * 1.6) + L0_KEYS.length + 16);
+  const budget = cap - L0_KEYS.length - 16;
+  if (want.length > budget) want.length = budget;
   wanted = new Set(want.map(q => tkey(q[0], q[1], q[2])));
   const list = want.filter(q => !tiles.has(tkey(q[0], q[1], q[2]))).map(q => q.slice(0, 3));
   for (const k of L0_KEYS) if (!tiles.has(tkey(k[0], k[1], k[2]))) list.push(k);   // תמיד גם סקירה של כל העולם
