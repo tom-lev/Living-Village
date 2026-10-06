@@ -9,7 +9,7 @@ import { DETAIL_GROUPS } from '../scene/terrain';
 import { view } from '../camera/view';
 import { createPainter, type DLItem } from './tilePainter';
 
-const TILE = 256, BASE = 1 / 8, LMAX = 10, TILE_CAP = 300, FADE = 220;
+const TILE = 256, BASE = 1 / 8, LMAX = 10, TILE_CAP = 300;
 const tileScale = (l: number) => BASE * 2 ** l;   // פיקסלים של המסך ליחידת עולם
 
 /** הופך את ה-SVG הסטטי לרשימת ציור (מסלול, צבעים, מטריצה ותיבה תוחמת לכל צורה) */
@@ -64,10 +64,9 @@ function getTile(l: number, x: number, y: number) {
   if (t && l > 0) { tiles.delete(k); tiles.set(k, t); }
   return t;
 }
-const born = new Map<string, number>();   // מתי הגיע כל אריח, למעבר רך מהאריח הזמני
 function putTile(l: number, x: number, y: number, bmp: any) {
-  tiles.set(tkey(l, x, y), bmp); born.set(tkey(l, x, y), performance.now());
-  for (const [k, v] of tiles) { if (tiles.size <= TILE_CAP) break; if (!k.startsWith('0/')) { tiles.delete(k); born.delete(k); v.close?.(); } }
+  tiles.set(tkey(l, x, y), bmp);
+  for (const [k, v] of tiles) { if (tiles.size <= TILE_CAP) break; if (!k.startsWith('0/')) { tiles.delete(k); v.close?.(); } }
 }
 
 let painters: { postMessage(m: any): void }[] = [];
@@ -85,7 +84,7 @@ export function initTiles(canvas: HTMLCanvasElement) {
   try {
     if (typeof OffscreenCanvas === 'undefined' || !('transferToImageBitmap' in OffscreenCanvas.prototype)) throw 0;
     // כמה ציירים במקביל: אריחים של רמת זום חדשה מוכנים מהר יותר
-    const n = clamp((navigator.hardwareConcurrency || 4) - 1, 1, 3);
+    const n = clamp(Math.floor((navigator.hardwareConcurrency || 4) / 2), 1, 3);
     for (let q = 0; q < n; q++) {
       const w = new Worker(new URL('./tileWorker.ts', import.meta.url), { type: 'module' });
       w.onmessage = e => onTile(e.data);
@@ -120,23 +119,15 @@ function drawStatic() {
   const ix0 = clamp(Math.floor((wx0 - B.x0) / tw), 0, nx - 1), ix1 = clamp(Math.floor((wx1 - B.x0) / tw), 0, nx - 1);
   const iy0 = clamp(Math.floor((wy0 - B.y0) / tw), 0, ny - 1), iy1 = clamp(Math.floor((wy1 - B.y0) / tw), 0, ny - 1);
   const sx = (i: number) => Math.round(((B.x0 + i * tw) * cam.k + cam.x) * dpr), sy = (j: number) => Math.round(((B.y0 + j * tw) * cam.k + cam.y) * dpr);
-  const now = performance.now(); let fading = false;
   const need: number[][] = [], ccx = (wx0 + wx1) / 2, ccy = (wy0 + wy1) / 2;
   cs.imageSmoothingEnabled = true; cs.imageSmoothingQuality = 'low';   // האריחים כמעט בגודל טבעי; איכות גבוהה רק מאטה
   for (let j = iy0; j <= iy1; j++) for (let i = ix0; i <= ix1; i++) {
     const X = sx(i), Y = sy(j), Wd = sx(i + 1) - X, Ht = sy(j + 1) - Y;
     const t = getTile(l, i, j);
-    if (t) {
-      const age = now - (born.get(tkey(l, i, j)) || 0);
-      if (age < FADE) {                                   // אריח שהגיע עכשיו נכנס ברכות מעל האריח הזמני
-        standIn(l, i, j, X, Y, Wd, Ht); cs.globalAlpha = age / FADE; fading = true;
-      }
-      cs.drawImage(t, X, Y, Wd, Ht); cs.globalAlpha = 1; continue;
-    }
+    if (t) { cs.drawImage(t, X, Y, Wd, Ht); continue; }
     need.push([l, i, j, (B.x0 + (i + .5) * tw - ccx) ** 2 + (B.y0 + (j + .5) * tw - ccy) ** 2]);
     standIn(l, i, j, X, Y, Wd, Ht);
   }
-  if (fading) requestStatic();
   tileStats.missing = need.length;
   need.sort((a, b) => a[3] - b[3]);
   // מראש: טבעת סביב המסך, ואותו אזור ברמה גסה יותר (להתרחקות חלקה)
@@ -149,7 +140,15 @@ function drawStatic() {
   }
   for (let j = iy0 - 1; j <= iy1 + 1; j++) for (let i = ix0 - 1; i <= ix1 + 1; i++)
     if (i >= 0 && j >= 0 && i < nx && j < ny && (i < ix0 || i > ix1 || j < iy0 || j > iy1) && !tiles.has(tkey(l, i, j))) list.push([l, i, j]);
-  if (l > 0) for (let j = iy0 >> 1; j <= iy1 >> 1; j++) for (let i = ix0 >> 1; i <= ix1 >> 1; i++) if (!tiles.has(tkey(l - 1, i, j))) list.push([l - 1, i, j]);
+  if (l > 0) {                                            // הרמה הגסה יותר על שטח כפול מהמסך: התרחקות מוצאת אריחים מוכנים
+    const tw1 = tw * 2, nx1 = Math.ceil(nx / 2), ny1 = Math.ceil(ny / 2), hx = (wx1 - wx0), hy = (wy1 - wy0);
+    const a0 = clamp(Math.floor((ccx - hx - B.x0) / tw1), 0, nx1 - 1), a1 = clamp(Math.floor((ccx + hx - B.x0) / tw1), 0, nx1 - 1);
+    const b0 = clamp(Math.floor((ccy - hy - B.y0) / tw1), 0, ny1 - 1), b1 = clamp(Math.floor((ccy + hy - B.y0) / tw1), 0, ny1 - 1);
+    const ring: number[][] = [];
+    for (let j = b0; j <= b1; j++) for (let i = a0; i <= a1; i++) if (!tiles.has(tkey(l - 1, i, j)))
+      ring.push([l - 1, i, j, (B.x0 + (i + .5) * tw1 - ccx) ** 2 + (B.y0 + (j + .5) * tw1 - ccy) ** 2]);
+    ring.sort((a, b) => a[3] - b[3]); for (const q of ring) list.push(q.slice(0, 3));
+  }
   for (const k of L0_KEYS) if (!tiles.has(tkey(k[0], k[1], k[2]))) list.push(k);   // תמיד גם סקירה של כל העולם
   const sig = list.map(q => q.join('/')).join(' ');
   if (sig !== lastNeed) {
@@ -183,7 +182,7 @@ export function requestStatic() { sDirty = true; if (!sRaf) sRaf = requestAnimat
 export function repaintTiles() {
   gen++; const cmap = colorMap();
   for (const v of tiles.values()) v.close?.();
-  tiles.clear(); born.clear(); lastNeed = '';
+  tiles.clear(); lastNeed = '';
   for (const p of painters) p.postMessage({ type: 'palette', cmap, gen });
   requestStatic();
 }
