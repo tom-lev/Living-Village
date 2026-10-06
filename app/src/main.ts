@@ -10,6 +10,7 @@ import { setPalette, regrade, grade, currentPalette } from './core/palette';
 import { buildActors, followables } from './actors';
 import { initCamera, cameraTick, loopState, zoomAt, animateTo } from './camera/camera';
 import { view } from './camera/view';
+import { applySharedNames } from './world/labels';
 
 const world = worldJson as unknown as WorldData;
 const stage = document.getElementById('stage');
@@ -122,6 +123,8 @@ async function boot() {
     const upd = (t: number) => { n++; if (t - t0 > 1000) { d.textContent = `${tileStats.mode || '…'} · ${n} fps`; n = 0; t0 = t; } requestAnimationFrame(upd); };
     requestAnimationFrame(upd);
   }
+
+  applySharedNames();   // השמות ששונו מהדפדפן (names.json המשותף)
 
   // לבדיקות אוטומטיות
   (window as any).__village = { cam: view.cam, walkers: actors.walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => view.fitK, items, tileStats, applyPalette, vstats };

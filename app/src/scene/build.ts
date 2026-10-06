@@ -1,7 +1,7 @@
 /* בניית הסצנה מקובץ העולם: גאומטריה → פני שטח → אובייקטים → מחוללים */
 import { setSeed } from '../core/rng';
 import { setPalette } from '../core/palette';
-import { ctx, initLayers, sortStatics, NO_TREE } from '../world/context';
+import { ctx, initLayers, sortStatics, NO_TREE, statics } from '../world/context';
 import { buildGeometry } from '../world/geometry';
 import type { WorldData } from '../world/types';
 import { PREFABS } from '../prefabs/registry';
@@ -27,10 +27,16 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
     const f = PREFABS[o.type];
     if (!f) { console.warn('אין prefab בשם', o.type, o); continue; }
     if (o.id) ctx.named[o.id] = o;
-    const n0 = NO_TREE.length;
+    const n0 = NO_TREE.length, s0 = statics.length;
     f(o);
-    // התווית יושבת מעל האובייקט: הקצה העליון של השטח שהוא חסם בזמן הציור
-    const top = NO_TREE.length > n0 ? Math.min(...NO_TREE.slice(n0).map(r => r[1])) + 8 : undefined;
+    // התווית יושבת ממש מעל האובייקט: הקצה העליון של החלק הגדול שצויר (גג, ארובה). אם אין ציור גבוה, השטח שהאובייקט חסם
+    let top: number | undefined;
+    if (o.name) {
+      // החלק הגדול ביותר שצויר (הבית עצמו, לא עץ או לול בחצר)
+      let area = 0;
+      for (const st of statics.slice(s0)) { try { const bb = st.el.getBBox(); if (bb.width * bb.height > area) { area = bb.width * bb.height; top = bb.y; } } catch {} }
+      if (top === undefined && NO_TREE.length > n0) top = Math.min(...NO_TREE.slice(n0).map(r => r[1])) + 8;
+    }
     if (o.name && o.type !== 'shop' && o.type !== 'station') addLabel(o, top);   // לחנות ולתחנה כבר יש שלט עם השם
   }
   for (const g of w.generators) {

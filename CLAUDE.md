@@ -50,7 +50,12 @@ This file is the complete handoff. Work on this project so far happened in one l
     - The label sits **above** the object. Its top comes from the `block()` rects the prefab registered while drawing (computed in `scene/build.ts`). `labelAt: [x, y]` overrides the position.
     - The look: a map-style italic serif, warm brown with a light halo. Labels appear only at about 4.5× the home view and keep a constant screen size (`world/labels.ts`, dynamic layer `labels`).
     - Shops and the station have no label, because their own sign shows the name.
-    - **Renaming in the browser.** Tapping a label opens a small dialog. The new name is saved in `localStorage['village-names']` (per device) and shows immediately. "העתק שינויים" copies a JSON list `{type, at, from, to}` that the owner sends you, and you apply it to `world.json`.
+    - **Renaming in the browser, shared with everyone (`world/namesStore.ts`).** Renames are stored in `app/public/names.json` in the repo, served as `names.json`. It maps the original name to the new name, and the original `world.json` name is the stable key.
+      - Every visitor loads the file at boot (`applySharedNames`).
+      - Only a device that has a GitHub fine-grained token can edit. The token is limited to this repo with Contents: read and write, and is stored only in `localStorage['village-gh-token']`. Open the site once with `?edit` to enter the token.
+      - On a device that can edit, tapping a label opens a dialog. Saving writes `names.json` through the GitHub contents API on branch `ccr-7419da80-z53gxw`, which triggers the Pages deploy, so everyone sees the new name in about 1–2 minutes. Pending local renames show immediately until the deployed file catches up.
+      - From time to time you may fold `names.json` into `world.json` and empty the file.
+    - Label position: the top of the largest prop group the prefab drew (via `getBBox` in `scene/build.ts`). If there is none, the top of its `block()` rects is used. Labels are 26 px on screen.
     - Use these names when talking with the owner about fixes.
   - **Text inside the world is English only:** shop signs, the station and character names (Noa, Itai, Grandpa Moshe…). The UI chrome stays Hebrew.
   - Bottom-left: + − (hidden on touch), ⤢ (home view), ❚❚/▶ (pause), 🎨 (palette menu). Bottom-right: the zoom label.
