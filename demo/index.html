@@ -29,8 +29,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); c
    בשכבה הדינמית מצוירים מחדש רק האזורים הקטנים שבהם משהו זז. כשהאצבע עוזבת, הכול מצויר מחדש וחד. */
 #stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 #stage.drag { cursor: grabbing; }
-#sWrap, #dWrap { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
-#mapS, #mapD { position: absolute; display: block; }
+#dWrap { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+#mapD { position: absolute; display: block; }
+#mapC { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+#mapS { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; }
 svg { shape-rendering: geometricPrecision; }
 svg text { font-family: "Rubik", system-ui, sans-serif; pointer-events: none; }
 .who, .veh { cursor: pointer; }
@@ -57,7 +59,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 </head>
 <body>
 <div id="stage" role="img" aria-label="מפה מצוירת של כפר">
-  <div id="sWrap"><svg id="mapS"></svg></div>
+  <canvas id="mapC"></canvas><svg id="mapS"></svg>
   <div id="dWrap"><svg id="mapD"></svg></div>
 </div>
 
@@ -75,8 +77,8 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 'use strict';
 const NS = 'http://www.w3.org/2000/svg';
 const W = 800, H = 1700;                  // הכפר עצמו (מה שרואים בפתיחה): לאורך, בפרופורציה של מסך טלפון
-const B = { x0: -1300, y0: -1700, x1: 2100, y1: 3300 };   // גבולות העולם כולו: נוף סביב הכפר לכל הכיוונים
-const stage = document.getElementById('stage'), sWrap = document.getElementById('sWrap'), dWrap = document.getElementById('dWrap');
+const B = { x0: -1300, y0: -3100, x1: 2100, y1: 3300 };   // גבולות העולם כולו: נוף סביב הכפר לכל הכיוונים
+const stage = document.getElementById('stage'), dWrap = document.getElementById('dWrap');
 const svgS = document.getElementById('mapS'), svgD = document.getElementById('mapD');
 
 /* ───────── כלי עזר ───────── */
@@ -175,6 +177,9 @@ const OUTER_ROADS = [
   [[405, 1955], 250, 1965, 0, 1995, [-230, 1985]],
   [[-280, 430], -450, 380, -700, 300, [-850, 235]], [[1300, 880], 1450, 900, 1650, 985, [1790, 985]],
   [[-230, 1985], -450, 1990, -700, 2040, [-860, 2050]], [[420, -610], 450, -750, 560, -900, [610, -1030]],
+  [[610, -1030], 650, -1200, 690, -1340, [700, -1420]], [[720, -1770], 740, -1900, 650, -2000, [600, -2120]],
+  [[600, -2120], 400, -2150, 100, -2250, [-120, -2290]], [[600, -2120], 800, -2100, 1050, -1950, [1230, -1880]],
+  [[600, -2120], 720, -2380, 1300, -2480, [1560, -2760]],
 ].map(([a, c1x, c1y, c2x, c2y, b]) => bez(a, c1x, c1y, c2x, c2y, b));
 /* שבילים להולכי רגל: צרים ומתפתלים, מחברים בין המקומות שמחוץ לכפר (ציור בלבד) */
 const TRAILS = [
@@ -195,6 +200,9 @@ const TRAILS = [
   [[1300, -600], [1600, -700], [1900, -900], [2000, -1150]], [[1350, 300], [1500, 330], [1580, 200]],
   [[-1250, 1250], [-1100, 1150], [-900, 1000]], [[1950, 400], [1850, 600], [1900, 800]],
   [[130, -1160], [250, -1250], [380, -1240], [470, -1150], [400, -1080]],
+  [[-120, -2290], [-450, -2180], [-700, -2080], [-850, -2010]], [[-850, -2010], [-1000, -2300], [-1100, -2580]],
+  [[600, -2120], [420, -2420], [280, -2650], [100, -2850]], [[1230, -1880], [1500, -1880], [1800, -1840], [2000, -2000]],
+  [[-300, -2520], [-480, -2660], [-700, -2850]], [[950, -2620], [700, -2780], [420, -2860]], [[1560, -2760], [1750, -2600], [1950, -2400]],
 ];
 const EDGES = EDGE_DEF.map(([a, b, c1x, c1y, c2x, c2y]) => {
   const p0 = NODES[a], p3 = NODES[b], N = 200, pts = [], acc = [0];
@@ -279,7 +287,7 @@ const block = (x0, y0, x1, y1) => NO_TREE.push([x0, y0, x1, y1]);
 const LAKE = { cx: 535, cy: 262, rx: 132, ry: 112 };
 WATERS.push(LAKE);
 function treeOk(x, y) {
-  if (x < B.x0 + 12 || x > B.x1 - 12 || y < -1380 || y > 2190) return false;   // לא על ההרים ולא על החוף
+  if (x < B.x0 + 12 || x > B.x1 - 12 || y < -2880 || (y < -1380 && y > -1780) || y > 2190) return false;   // לא על ההרים ולא על החוף
   if (occ(x, y, O_RIVER | O_TRAIL) || inWater(x, y, 30)) return false;
   // גם הצמרת (עד 34 יחידות מעל הבסיס) לא מסתירה בית, שדה או מבנה
   for (const [x0, y0, x1, y1] of NO_TREE) if (x > x0 - 8 && x < x1 + 8 && y > y0 && y - 34 < y1) return false;
@@ -354,6 +362,11 @@ function pine(x, y, s) {
   }
   el('path', { d: body, fill: c, 'stroke-linejoin': 'round', stroke: c, 'stroke-width': 1.5 }, sw);
   el('path', { d: hl, fill: shade(c, .12) }, sw);
+  if (y < -1700) {   // צפונה להרים: שלג על הענפים
+    let sn = '';
+    for (const [dy, hw, th] of tiers) { const by = y - dy * s, ty = by - th * s; sn += `M${n2(x - hw * s * .45)},${n2(ty + th * s * .45)}L${n2(x)},${n2(ty)}L${n2(x + hw * s * .45)},${n2(ty + th * s * .45)}l${n2(-hw * s * .15)},${n2(-th * s * .08)}l${n2(-hw * s * .15)},${n2(th * s * .1)}l${n2(-hw * s * .15)},${n2(-th * s * .1)}Z`; }
+    el('path', { d: sn, fill: '#ffffff' }, sw);
+  }
 }
 function roundTree(x, y, s, fruit) {
   const g = prop(y), sw = g;
@@ -515,7 +528,7 @@ shop(495, 965, { name: 'מספרה', c: '#3d7bd9', wall: '#eef3ff', extra: (g, x
   el('rect', { x: px - 3, y: y - 34, width: 6, height: 24, rx: 3 }, cp);
   el('rect', { x: px - 3, y: y - 34, width: 6, height: 24, rx: 3, fill: '#fff', stroke: '#9aa', 'stroke-width': .8 }, g);
   const sg = el('g', { 'clip-path': 'url(#poleClip)' }, L.fx), sp = el('g', null, sg);
-  FX.push(t => sp.setAttribute('transform', `translate(0,${n2(-8 * wrap1(t / 1.1))})`));
+  FX.push(t => sp.setAttribute('transform', `translate(0,${n2(-8 * wrap1(t / 2.6))})`));
   let d = '';
   for (let k = -2; k < 6; k++) d += `M${px - 4},${y - 30 + k * 8}l8,-5v3l-8,5z`;
   el('path', { d, fill: '#e2574c' }, sp);
@@ -616,7 +629,7 @@ const FIRE = [232, 398];
   el('path', { d: `M${FIRE[0] - 11},${FIRE[1] + 2}l22,-6M${FIRE[0] - 11},${FIRE[1] - 4}l22,6`, stroke: '#7a4f2a', 'stroke-width': 4, 'stroke-linecap': 'round' }, f);
   const fl = el('g', null, f), bx = FIRE[0], by = FIRE[1] - 2;
   FX.push(t => {
-    const u = (Math.sin(t * Math.PI * 2) + 1) / 2, w = (Math.sin(t * 7.3) + 1) / 2;
+    const u = (Math.sin(t * 2.6) + 1) / 2, w = (Math.sin(t * 3.4) + 1) / 2;
     fl.setAttribute('transform', `translate(${bx},${by}) scale(${(.92 + .14 * u).toFixed(3)},${(.9 + .22 * w).toFixed(3)}) skewX(${(-4 + 9 * u).toFixed(1)}) translate(${-bx},${-by})`);
     glow.setAttribute('opacity', (.35 + .25 * (Math.sin(t * 2) + 1) / 2).toFixed(2));
   });
@@ -885,7 +898,11 @@ for (let i = 0; i < 60; i++) {
   el('path', { d: blob(x, y, rand(7, 16), rand(5, 9), 6, .15, rand(0, 6)), fill: pick(['#a9b2b7', '#9aa3a8', '#b5bdc1']), stroke: '#8a9398', 'stroke-width': .8 }, L.groundProps);
 }
 
-/* הרים מושלגים ומפל (הכי למעלה) */
+/* צפון ההרים: קרקע מושלגת */
+el('rect', { x: B.x0, y: B.y0, width: B.x1 - B.x0, height: -1440 - B.y0, fill: '#eaf3f7' }, L.ground);
+for (let i = 0; i < 90; i++)
+  el('path', { d: blob(rand(B.x0, B.x1), rand(B.y0 + 60, -1800), rand(50, 140), rand(20, 50), 7, .12, rand(0, 6)), fill: pick(['#ffffff', '#dfecf2']), opacity: .8 }, L.ground);
+/* הרים מושלגים ומפל */
 {
   function mountains(baseY, hMin, hMax, col, snowCol, step) {
     for (let x = B.x0 - 120; x < B.x1 + 120; x += step * rand(.75, 1.15)) {
@@ -898,6 +915,7 @@ for (let i = 0; i < 60; i++) {
   }
   mountains(-1440, 200, 280, '#a8c3d1', '#ffffff', 170);
   mountains(-1385, 140, 230, '#86aabd', '#f4fbff', 200);
+  mountains(-2900, 170, 250, '#9fbccb', '#ffffff', 180);   // רכס בקצה הצפוני
   // מפל שנשפך אל הנהר
   el('path', { d: 'M1066,-1500h28l4,70h-36z', fill: '#bfeafa' }, L.ground);
   el('path', { d: 'M1072,-1498v62M1080,-1500v66M1088,-1498v62', stroke: '#ffffff', 'stroke-width': 2, 'stroke-linecap': 'round', opacity: .9 }, L.ground);
@@ -1185,6 +1203,218 @@ for (const [x, y, c] of [[0, 2700, '#e2574c'], [700, 2640, '#ffd23f'], [1000, 30
   el('rect', { x: x - 4, y: y - 8, width: 8, height: 3, fill: '#fff' }, g);
 }
 
+/* ═════════════════════ צפון ההרים: שלג (סטטי) ═════════════════════ */
+/* מנהרה דרך ההרים: פתח בכל צד */
+for (const [x, y] of [[700, -1418], [720, -1772]]) {
+  const g = prop(y);
+  el('path', { d: `M${x - 34},${y}v-30a34,32 0 0 1 68,0v30z`, fill: '#9aa3a8', stroke: '#7d868b', 'stroke-width': 1.5 }, g);
+  el('path', { d: `M${x - 24},${y}v-26a24,24 0 0 1 48,0v26z`, fill: '#2b2f35' }, g);
+  let d = ''; for (let k = -30; k <= 30; k += 12) d += `M${x + k},${y - 30 + Math.abs(k) * .3}l2,-6`;
+  el('path', { d, stroke: '#7d868b', 'stroke-width': 1.2 }, g);
+}
+/* כפר אלפיני: בקתות עץ עם גגות מושלגים וקפלה עם כיפה */
+[[440, -2010], [530, -1975], [360, -2060], [430, -2300], [530, -2330], [350, -2380], [880, -1880], [960, -2200]].forEach(([x, y], i) => {
+  house(x, y, { w: 52, h: 34, rh: 30, wall: i % 2 ? '#8a5a35' : '#a0643a', roof: '#ffffff', win: 2, chimney: i % 3 === 0, smoke: false, door: '#5b3a22' });
+  el('path', { d: `M${x - 32},${y - 32}h64`, stroke: '#cfe0e8', 'stroke-width': 2 }, statics[statics.length - 1].el);
+});
+{
+  const x = 250, y = -2420, g = prop(y);
+  el('ellipse', { cx: x + 4, cy: y + 1, rx: 36, ry: 5, fill: 'rgba(60,90,110,.2)' }, g);
+  el('rect', { x: x - 26, y: y - 46, width: 52, height: 46, fill: '#fffaf2', ...ST }, g);
+  el('rect', { x: x - 10, y: y - 78, width: 20, height: 32, fill: '#fde9c8', ...ST }, g);
+  el('path', { d: `M${x - 12},${y - 78}q0,-16 12,-22q12,6 12,22z`, fill: '#3d9bd9', ...ST }, g);
+  el('path', { d: `M${x},${y - 100}v-10M${x - 4},${y - 106}h8`, stroke: '#b8860b', 'stroke-width': 1.8 }, g);
+  el('path', { d: `M${x - 30},${y - 44}L${x},${y - 60}L${x + 30},${y - 44}Z`, fill: '#ffffff', ...ST }, g);
+  el('path', { d: `M${x - 7},${y}v-14a7,7 0 0 1 14,0v14z`, fill: '#8a5a35' }, g);
+  block(x - 40, y - 115, x + 40, y + 10);
+}
+/* אגם קפוא: מחליקים, בקתות דיג בקרח */
+{
+  const FL = { cx: -260, cy: -2430, rx: 210, ry: 105 }; WATERS.push(FL);
+  const d = blob(FL.cx, FL.cy, FL.rx, FL.ry, 11, .06, 8);
+  el('path', { d, fill: '#d3ecf5', stroke: '#ffffff', 'stroke-width': 12, 'stroke-linejoin': 'round' }, L.water);
+  el('path', { d: blob(FL.cx + 20, FL.cy - 10, FL.rx * .7, FL.ry * .55, 9, .08, 3), fill: '#e3f4fa' }, L.water);
+  let sc = '';
+  for (let i = 0; i < 26; i++) { const a = rand(0, 6.28), r = Math.sqrt(R()) * .8, x = FL.cx + Math.cos(a) * FL.rx * r, y = FL.cy + Math.sin(a) * FL.ry * r; sc += `M${n2(x)},${n2(y)}q${n2(rand(8, 18))},${n2(rand(-6, 6))} ${n2(rand(16, 32))},${n2(rand(-3, 3))}`; }
+  el('path', { d: sc, fill: 'none', stroke: '#ffffff', 'stroke-width': 1.2, opacity: .9 }, L.water);
+  for (const [x, y, c] of [[-380, -2470, '#e2574c'], [-330, -2490, '#ffd23f']]) {
+    const g = prop(y);
+    el('rect', { x: x - 11, y: y - 18, width: 22, height: 18, fill: c, ...ST }, g);
+    el('path', { d: `M${x - 13},${y - 18}L${x},${y - 28}L${x + 13},${y - 18}Z`, fill: '#ffffff', ...ST }, g);
+    el('rect', { x: x - 3, y: y - 10, width: 6, height: 10, fill: shade(c, -.3) }, g);
+    el('circle', { cx: x + 18, cy: y - 2, r: 3, fill: '#2b4c5a' }, g);
+  }
+  const skater = (x, y, c, f) => {
+    const g = prop(y), b = el('g', { transform: `translate(${x},${y}) scale(${f},1)` }, g);
+    el('ellipse', { cx: 0, cy: 1, rx: 6, ry: 1.6, fill: 'rgba(60,90,110,.25)' }, b);
+    el('path', { d: 'M0,-10L-5,0M0,-10L6,-2', stroke: '#3b3b46', 'stroke-width': 2.2, 'stroke-linecap': 'round' }, b);
+    el('path', { d: 'M-8,0.5h6M3,-1.5h6', stroke: '#9aa3a8', 'stroke-width': 1 }, b);
+    el('path', { d: 'M0,-10L1,-21', stroke: c, 'stroke-width': 5, 'stroke-linecap': 'round' }, b);
+    el('path', { d: 'M1,-19l-9,-3M1,-19l9,2', stroke: c, 'stroke-width': 1.8, 'stroke-linecap': 'round' }, b);
+    el('circle', { cx: 1.5, cy: -25, r: 3, fill: '#f1c7a5' }, b);
+    el('path', { d: 'M-1.5,-26.5a3,3 0 0 1 6,0z', fill: shade(c, -.2) }, b);
+  };
+  skater(-200, -2420, '#e2574c', 1); skater(-130, -2390, '#3d9bd9', -1); skater(-260, -2370, '#4caf50', 1);
+  block(FL.cx - FL.rx - 10, FL.cy - FL.ry - 10, FL.cx + FL.rx + 10, FL.cy + FL.ry + 10);
+}
+/* אתר סקי: מסלול, רכבל כיסאות, דגלי סלאלום, בקתות בבסיס ובפסגה */
+{
+  const a = [1320, -1880], b = [1640, -2660], w0 = 70, w1 = 50;
+  el('path', { d: `M${a[0] - w0},${a[1]}L${b[0] - w1},${b[1]}L${b[0] + w1},${b[1]}L${a[0] + w0},${a[1]}Z`, fill: '#ffffff', stroke: '#e3eef3', 'stroke-width': 3, 'stroke-linejoin': 'round' }, L.groundProps);
+  let gr = ''; for (let k = -50; k <= 50; k += 14) gr += `M${a[0] + k * 1.2},${a[1]}L${b[0] + k * .85},${b[1]}`;
+  el('path', { d: gr, stroke: '#edf4f7', 'stroke-width': 3 }, L.groundProps);
+  for (let t = .1; t < .95; t += .085) {
+    const x = a[0] + (b[0] - a[0]) * t + (Math.round(t * 12) % 2 ? 26 : -26), y = a[1] + (b[1] - a[1]) * t, c = Math.round(t * 12) % 2 ? '#e2574c' : '#3d7bd9', g = prop(y);
+    el('path', { d: `M${n2(x)},${n2(y)}v-14`, stroke: '#6b6f78', 'stroke-width': 1.2 }, g);
+    el('path', { d: `M${n2(x)},${n2(y - 14)}l9,3l-9,3z`, fill: c }, g);
+  }
+  const la = [a[0] - 110, a[1] - 10], lb = [b[0] - 95, b[1] - 10];
+  el('path', { d: `M${la[0]},${la[1] - 40}L${lb[0]},${lb[1] - 40}`, stroke: '#4a4a55', 'stroke-width': 1.2 }, L.groundProps);
+  for (let t = 0; t <= 1.001; t += .2) {
+    const x = la[0] + (lb[0] - la[0]) * t, y = la[1] + (lb[1] - la[1]) * t, g = prop(y);
+    el('path', { d: `M${n2(x)},${n2(y)}v-42M${n2(x - 7)},${n2(y - 42)}h14`, stroke: '#6b6f78', 'stroke-width': 2.4 }, g);
+  }
+  for (let t = .1; t < 1; t += .2) {
+    const x = la[0] + (lb[0] - la[0]) * t, y = la[1] + (lb[1] - la[1]) * t - 40, g = prop(y + 50);
+    el('path', { d: `M${n2(x)},${n2(y)}v10M${n2(x - 6)},${n2(y + 10)}h12v6`, stroke: '#3b3b46', 'stroke-width': 1.4, fill: 'none' }, g);
+  }
+  house(1200, -1840, { w: 80, h: 40, rh: 40, wall: '#a0643a', roof: '#ffffff', win: 4, door: '#5b3a22' });
+  house(1650, -2690, { w: 56, h: 30, rh: 30, wall: '#8a5a35', roof: '#e2574c', win: 2, door: '#5b3a22' });
+  block(a[0] - 130, b[1] - 40, b[0] + 70, a[1] + 10);
+}
+/* איגלו */
+for (const [x, y, s] of [[-850, -1990, 1], [-760, -2060, .8], [-955, -2075, .85]]) {
+  const g = prop(y);
+  el('ellipse', { cx: x + 3, cy: y + 1, rx: 30 * s, ry: 5 * s, fill: 'rgba(60,90,110,.18)' }, g);
+  el('path', { d: `M${x - 28 * s},${y}a28,26 0 0 1 ${56 * s},0z`, fill: '#ffffff', stroke: '#c9dde6', 'stroke-width': 1.2 }, g);
+  let d = ''; for (const yy of [-8, -16, -22]) { const hw = Math.sqrt(Math.max(0, 1 - (yy / 26) ** 2)) * 28 * s; d += `M${n2(x - hw)},${n2(y + yy * s)}h${n2(2 * hw)}`; }
+  for (const k of [-18, -6, 6, 18]) d += `M${x + k * s},${y}v${-8 * s}M${x + (k + 6) * s},${y - 8 * s}v${-8 * s}`;
+  el('path', { d, stroke: '#c9dde6', 'stroke-width': 1 }, g);
+  el('path', { d: `M${x + 14 * s},${y}v${-10 * s}a8,8 0 0 1 ${16 * s},0v${10 * s}z`, fill: '#ffffff', stroke: '#c9dde6', 'stroke-width': 1.2 }, g);
+  el('path', { d: `M${x + 17 * s},${y}v${-8 * s}a5,5 0 0 1 ${10 * s},0v${8 * s}z`, fill: '#2b4c5a' }, g);
+  block(x - 35, y - 32, x + 35, y + 8);
+}
+/* אנשי שלג */
+for (const [x, y, c] of [[300, -1900, '#e2574c'], [820, -1820, '#3d9bd9'], [-420, -2150, '#4caf50'], [1100, -2050, '#ffd23f']]) {
+  const g = prop(y);
+  el('ellipse', { cx: x + 2, cy: y + 1, rx: 12, ry: 3, fill: 'rgba(60,90,110,.2)' }, g);
+  el('path', { d: circ(x, y - 9, 10) + circ(x, y - 24, 7.5) + circ(x, y - 36, 5.5), fill: '#ffffff', stroke: '#c9dde6', 'stroke-width': 1 }, g);
+  el('path', { d: `M${x - 7},${y - 26}l-10,-6M${x + 7},${y - 26}l10,-7`, stroke: '#6b4a2f', 'stroke-width': 1.4, 'stroke-linecap': 'round' }, g);
+  el('path', { d: `M${x + 3},${y - 36}l7,1.5l-7,1.5z`, fill: '#f29e38' }, g);
+  el('path', { d: circ(x - 2, y - 38, .8) + circ(x + 2, y - 38, .8) + circ(x, y - 26, .9) + circ(x, y - 21, .9), fill: '#2b2220' }, g);
+  el('rect', { x: x - 6, y: y - 47, width: 12, height: 6, fill: '#2b2220' }, g); el('rect', { x: x - 8, y: y - 42, width: 16, height: 2, fill: '#2b2220' }, g);
+  el('path', { d: `M${x - 6},${y - 31}h12l-2,4`, stroke: c, 'stroke-width': 2.4, fill: 'none', 'stroke-linecap': 'round' }, g);
+  block(x - 18, y - 50, x + 18, y + 6);
+}
+/* מצפה כוכבים על גבעה */
+{
+  const x = 1560, y = -2790, g = prop(y);
+  el('path', { d: blob(x, y + 6, 90, 22, 8, .08, 2), fill: '#dfecf2' }, L.groundProps);
+  el('rect', { x: x - 30, y: y - 40, width: 60, height: 40, fill: '#f4f1ea', ...ST }, g);
+  el('path', { d: `M${x - 34},${y - 40}a34,30 0 0 1 68,0z`, fill: '#c9d4dc', ...ST }, g);
+  el('path', { d: `M${x - 4},${y - 70}h10l-2,30h-6z`, fill: '#3b3b46' }, g);
+  el('path', { d: `M${x + 1},${y - 66}l20,-18`, stroke: '#6b6f78', 'stroke-width': 5, 'stroke-linecap': 'round' }, g);
+  el('path', { d: `M${x - 6},${y}v-16a6,6 0 0 1 12,0v16z`, fill: '#5b3a22' }, g);
+  block(x - 50, y - 95, x + 50, y + 20);
+}
+/* טורבינות רוח */
+for (const [x, y, a] of [[-1100, -2580, 10], [-960, -2700, 50], [-1180, -2790, 85]]) {
+  const g = prop(y);
+  el('path', { d: `M${x - 3},${y}L${x - 1.5},${y - 110}h3L${x + 3},${y}Z`, fill: '#f4f7f8', stroke: '#c9d4dc', 'stroke-width': 1 }, g);
+  el('rect', { x: x - 6, y: y - 115, width: 14, height: 7, rx: 3, fill: '#f4f7f8', stroke: '#c9d4dc', 'stroke-width': 1 }, g);
+  for (let k = 0; k < 3; k++) {
+    const r = (a + k * 120) * Math.PI / 180;
+    el('path', { d: `M${x},${y - 111}l${n2(Math.cos(r) * 48 - Math.sin(r) * 3)},${n2(Math.sin(r) * 48 + Math.cos(r) * 3)}l${n2(Math.sin(r) * 5)},${n2(-Math.cos(r) * 5)}z`, fill: '#ffffff', stroke: '#c9d4dc', 'stroke-width': .8 }, g);
+  }
+  el('circle', { cx: x, cy: y - 111, r: 3, fill: '#dfe5e8' }, g);
+  block(x - 50, y - 165, x + 50, y + 8);
+}
+/* מעיין חם מהביל */
+{
+  const x = -500, y = -2700, HS = { cx: x, cy: y, rx: 60, ry: 30 }; WATERS.push(HS);
+  el('path', { d: blob(x, y, 72, 38, 9, .12, 1), fill: '#9aa3a8' }, L.water);
+  el('path', { d: blob(x, y, 58, 28, 9, .1, 2), fill: '#7fd6e0' }, L.water);
+  el('path', { d: `M${x - 30},${y - 10}q-6,-14 4,-26q8,-10 0,-22M${x + 4},${y - 6}q-6,-14 4,-26q8,-10 0,-22M${x + 34},${y - 8}q-6,-12 4,-22`, fill: 'none', stroke: '#ffffff', 'stroke-width': 3, 'stroke-linecap': 'round', opacity: .8 }, L.water);
+  block(x - 80, y - 70, x + 80, y + 45);
+}
+/* איילים בשלג */
+deer(1000, -2500, 1, true); deer(1040, -2475, -1, false); deer(960, -2460, 1, false); deer(-650, -2400, -1, true);
+
+/* ═════════════════════ ישן ומודרני: חשמל, בתים מודרניים, אופניים (בלי מכוניות) ═════════════════════ */
+function modernHouse(x, y, o = {}) {
+  const { w = 92, h = 46, wall = '#f4f1ea', wood = '#c9a27a', upper = false } = o, g = prop(y);
+  el('ellipse', { cx: x + 5, cy: y + 1, rx: w * .62, ry: 5, fill: 'rgba(40,70,20,.2)' }, g);
+  const top = upper ? y - h - 30 : y - h;
+  if (upper) {
+    el('rect', { x: x - w / 2 + 4, y: y - h - 30, width: w * .62, height: 30, fill: wall, ...ST }, g);
+    el('rect', { x: x - w / 2 + 12, y: y - h - 22, width: w * .42, height: 16, rx: 1, fill: '#9fd3ea', stroke: '#6b6f78', 'stroke-width': 1.2 }, g);
+  }
+  el('rect', { x: x - w / 2, y: y - h, width: w, height: h, fill: wall, ...ST }, g);
+  el('rect', { x: x + w * .12, y: y - h, width: w * .38, height: h, fill: wood, ...ST }, g);
+  let d = ''; for (let k = x + w * .12 + 5; k < x + w / 2 - 2; k += 5) d += `M${n2(k)},${y - h + 1}v${h - 2}`;
+  el('path', { d, stroke: shade(wood, -.15), 'stroke-width': .8 }, g);
+  el('rect', { x: x - w / 2 + 7, y: y - h + 9, width: w * .5, height: h - 9, fill: '#9fd3ea', stroke: '#6b6f78', 'stroke-width': 1.4 }, g);
+  el('path', { d: `M${n2(x - w / 2 + 7 + w * .25)},${y - h + 9}v${h - 9}M${x - w / 2 + 7},${y - h + 22}h${n2(w * .5)}`, stroke: '#6b6f78', 'stroke-width': 1.2 }, g);
+  el('path', { d: `M${n2(x - w / 2 + 10)},${y - h + 12}l8,-0v6z`, fill: '#e8f6fc', opacity: .8 }, g);
+  el('rect', { x: x + w * .22, y: y - 22, width: 13, height: 22, fill: '#4a4a55' }, g);
+  el('rect', { x: x - w / 2 - 3, y: y - h - 4, width: w + 6, height: 5, fill: '#4a4a55' }, g);
+  if (upper) el('rect', { x: x - w / 2 + 1, y: top - 4, width: w * .62 + 6, height: 5, fill: '#4a4a55' }, g);
+  // פאנלים סולאריים על הגג השטוח
+  const px = upper ? x + w * .2 : x - w / 2 + 8, pw = upper ? w * .28 : w * .6, py = y - h - 5;
+  el('path', { d: `M${n2(px)},${n2(py)}l8,-12h${n2(pw)}l-8,12z`, fill: '#2c4a7a', stroke: '#9fb3cc', 'stroke-width': .8 }, g);
+  let gr = `M${n2(px + 4)},${n2(py - 6)}h${n2(pw)}`;
+  for (let k = 1; k < 4; k++) gr += `M${n2(px + k * pw / 4)},${n2(py)}l8,-12`;
+  el('path', { d: gr, stroke: '#9fb3cc', 'stroke-width': .7 }, g);
+  el('path', { d: circ(x - w / 2 - 8, y - 6, 7) + circ(x + w / 2 + 7, y - 5, 6), fill: '#5db85a' }, g);
+  block(x - w / 2 - 18, top - 24, x + w / 2 + 16, y + 14);
+}
+modernHouse(565, 1500, { upper: true }); modernHouse(700, 1515, { w: 80, wood: '#b07a48' }); modernHouse(620, 1640, { w: 86, upper: true, wall: '#eef2f4' });
+modernHouse(-600, 1640, { upper: true }); modernHouse(-470, 1700, { w: 80 });
+modernHouse(1650, 1080, { w: 84, wood: '#a0643a' });
+
+/* פנסי רחוב לאורך דרכי הכפר */
+function lamp(x, y, f) {
+  const g = prop(y), b = el('g', { transform: `translate(${n2(x)},${n2(y)}) scale(${f},1)` }, g);
+  el('ellipse', { cx: 0, cy: 0, rx: 4, ry: 1.4, fill: 'rgba(40,70,20,.25)' }, b);
+  el('path', { d: 'M0,0v-30q0,-4 5,-4h4', stroke: '#3b3b46', 'stroke-width': 1.8, fill: 'none', 'stroke-linecap': 'round' }, b);
+  el('path', { d: 'M6,-34h7l-1.5,3h-4z', fill: '#3b3b46' }, b);
+  el('ellipse', { cx: 9.5, cy: -30.5, rx: 2.4, ry: 1.2, fill: '#ffe6a3' }, b);
+  el('circle', { cx: 9.5, cy: -29, r: 6, fill: '#fff3c4', opacity: .25 }, b);
+}
+for (const E of EDGES) {
+  for (let s = 40; s < E.len - 30; s += 150) {
+    const p = edgeAt(E, s), side = (Math.round(s / 150) % 2 ? 1 : -1), x = p.x - p.ty * 31 * side, y = p.y + p.tx * 31 * side;
+    if (NO_TREE.some(([x0, y0, x1, y1]) => x > x0 && x < x1 && y > y0 - 10 && y < y1 + 30) || inWater(x, y, 10)) continue;
+    lamp(x, y, side * (p.ty > 0 ? -1 : 1) >= 0 ? 1 : -1);
+  }
+}
+
+/* עמודי חשמל מעץ עם חוטים, לאורך הדרך המזרחית */
+{
+  const E = OUTER_ROADS[4], tops = [];
+  for (let s = 60; s < E.len; s += 120) {
+    const p = edgeAt(E, s), x = p.x + p.ty * 40, y = p.y - p.tx * 40, g = prop(y);
+    el('path', { d: `M${n2(x)},${n2(y)}v-52M${n2(x - 9)},${n2(y - 46)}h18`, stroke: '#7a4f2a', 'stroke-width': 2.2 }, g);
+    el('path', { d: circ(x - 7, y - 48, 1.4) + circ(x, y - 48, 1.4) + circ(x + 7, y - 48, 1.4), fill: '#cfd6da' }, g);
+    tops.push([x, y - 48]);
+  }
+  let d = '';
+  for (let i = 0; i < tops.length - 1; i++) for (const o of [-7, 0, 7]) {
+    const a = tops[i], b = tops[i + 1];
+    d += `M${n2(a[0] + o)},${n2(a[1])}Q${n2((a[0] + b[0]) / 2 + o)},${n2((a[1] + b[1]) / 2 + 9)} ${n2(b[0] + o)},${n2(b[1])}`;
+  }
+  el('path', { d, fill: 'none', stroke: '#4a4a55', 'stroke-width': .7, opacity: .8 }, prop(1e6));
+}
+
+/* אופניים חונים (במקום מכוניות) */
+function bike(x, y, c, f = 1) {
+  const g = prop(y), b = el('g', { transform: `translate(${x},${y}) scale(${f},1)` }, g);
+  el('path', { d: circ(-6, -4, 4) + circ(6, -4, 4), fill: 'none', stroke: '#3b3b46', 'stroke-width': 1.2 }, b);
+  el('path', { d: 'M-6,-4L-1,-11H6L6,-4M-1,-11L1,-4H-6M6,-11l-1,-3h-3M-2,-12h4', fill: 'none', stroke: c, 'stroke-width': 1.4, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, b);
+}
+bike(212, 985, '#e2574c'); bike(226, 987, '#3d9bd9', -1); bike(452, 985, '#4caf50'); bike(670, 985, '#ffd23f', -1);
+bike(250, -398, '#e2574c'); bike(264, -396, '#7a52a8');
+
 /* שתילת עצים */
 {
   const trees = [];
@@ -1198,7 +1428,7 @@ for (const [x, y, c] of [[0, 2700, '#e2574c'], [700, 2640, '#ffd23f'], [1000, 30
       for (const t of grid.get((cx + i) + ',' + (cy + j)) || []) if ((t[0] - x) ** 2 + ((t[1] - y) * 1.4) ** 2 < 30 * 30) return true;
     return false;
   };
-  for (let i = 0; i < 120000 && trees.length < 2600; i++) {
+  for (let i = 0; i < 160000 && trees.length < 3400; i++) {
     const x = rand(B.x0, B.x1), y = rand(B.y0, B.y1);
     if (R() > (forest(x, y) ? (inVillage(x, y) ? 1 : .7) : .18)) continue;
     if (!treeOk(x, y) || near(x, y)) continue;
@@ -1522,7 +1752,7 @@ class Dog {
       pe.setAttribute('d', `M${n2(hx)},-7.5L${n2(fx)},${n2(fy)}`);
     };
     leg(this.legsNear[0], 6, 0); leg(this.legsNear[1], -6, .5); leg(this.legsFar[0], 4.5, .5); leg(this.legsFar[1], -7.5, 0);
-    const wag = Math.sin(t * (moving ? 14 : 9)) * 22;
+    const wag = Math.sin(t * (moving ? 7 : 4)) * 16;
     this.tail.setAttribute('transform', `translate(-8,-10) rotate(${wag.toFixed(1)})`);
     this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y)})`);
     this.g.setAttribute('opacity', this.owner.alpha.toFixed(2));
@@ -1776,7 +2006,7 @@ const LOOKS = [
   { name: 'יעל', h: 32, headR: .1, skin: SKIN[2], hair: '#4a2c1a', hairStyle: 'pony', shirt: '#5b7bd5', pants: '#e9e4dc' },
   { name: 'אבי', h: 35, headR: .095, skin: SKIN[3], hair: '#1e1612', hairStyle: 'short', shirt: '#e2574c', pants: '#3b3b46' },
 ];
-const SPEEDS = [26, 27, 21, 16, 28, 25, 30, 24, 26];
+const SPEEDS = [22, 23, 18, 14, 23, 21, 24, 20, 22];   // קצב רגוע
 const walkers = LOOKS.map((l, i) => new Walker(l, SPEEDS[i]));
 const dog = new Dog(walkers[1], '#c8894e');
 const leash = new Leash(walkers[1], dog);
@@ -1794,14 +2024,174 @@ const camper = new Sitter({ name: 'תמר', h: 32, headR: .1, skin: SKIN[1], hai
     return [[.32 * h + w, -.42 * h], [.3 * h - w, -.4 * h]];
   });
 // רכבים: מכונית אדומה ומיניבוס צהוב שנוסעים בלולאה בכיוונים הפוכים
-const ROUTE = [[1, 1], [3, 1], [4, 1], [5, 1], [8, 1], [12, 1], [14, -1], [13, -1], [11, -1], [6, -1]];   // לולאה: האגם ואז היקף הכפר
-const ROUTE_REV = ROUTE.slice().reverse().map(([e, d]) => [e, -d]);
-new Vehicle({ name: 'המכונית האדומה', color: '#ef5b5b', len: 52, speed: 48, lane: 9, route: ROUTE });
-new Vehicle({ name: 'המיניבוס', color: '#ffc53d', len: 60, speed: 38, lane: 9, route: ROUTE_REV, tall: true, s: 40 });
+// בעולם הזה אין מכוניות (אפשר לנסוע באופניים)
 
 statics.sort((a, b) => a.y - b.y);
-const PROP_BANDS = Array.from({ length: NB }, () => el('g', null, L.props));
-for (const s of statics) { const bb = s.el.getBBox(); PROP_BANDS[tileOf(bb.x + bb.width / 2, s.y)].appendChild(s.el); }
+for (const s of statics) L.props.appendChild(s.el);   // סדר עומק לפי y; מה שגלוי קובע מנוע האריחים
+/* ═════════════════════ מנוע אריחים לשכבה הסטטית ═════════════════════
+   כמו באפליקציות מפה: כל הנוף הקבוע (קרקע, דרכים, בתים, עצים) עובר פעם אחת לרשימת ציור,
+   ו-Web Worker מצייר ממנה אריחי bitmap של 256 פיקסלים בכמה רמות זום, ברקע ובלי לעצור את המסך.
+   בכל פריים רק מרכיבים את האריחים המוכנים על קנבס, כך שקצב הפריימים לא תלוי בכמות התוכן.
+   אריח שעדיין לא מוכן מוחלף זמנית באריח מרמת זום אחרת. */
+const TILE = 256, BASE = 1 / 8, LMAX = 10;
+const tileScale = l => BASE * 2 ** l;                 // פיקסלים של המסך ליחידת עולם
+const cvS = document.getElementById('mapC'), cs = cvS.getContext('2d');
+let dpr = 1;
+const DL = [];
+{
+  worldS.removeAttribute('transform');
+  const DETAIL = new Set(DETAIL_BANDS);
+  const KEYS = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'font-size', 'font-weight', 'text-anchor'];
+  const walk = (node, inh, alpha, detail) => {
+    for (const e of [...node.children]) {
+      const st = { ...inh };
+      for (const k of KEYS) { const v = e.getAttribute(k); if (v !== null) st[k] = v; }
+      const a = alpha * (e.hasAttribute('opacity') ? +e.getAttribute('opacity') : 1), det = detail || DETAIL.has(e), tag = e.tagName;
+      if (tag === 'g') { walk(e, st, a, det); continue; }
+      const num = k => +e.getAttribute(k) || 0;
+      const m = e.getCTM();
+      if (tag === 'text') {
+        // טקסט עובר לשכבה הדינמית כ-SVG רגיל (חד בכל זום, ובלי צורך בגופן בתוך ה-Worker)
+        const t = el('text', { x: num('x'), y: num('y'), 'font-size': st['font-size'] || 12, 'font-weight': st['font-weight'] || 400,
+          'text-anchor': st['text-anchor'] || 'start', fill: st.fill || '#000', transform: `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})` }, L.fx);
+        t.textContent = e.textContent; continue;
+      }
+      let d;
+      if (tag === 'path') d = e.getAttribute('d') || '';
+      else if (tag === 'rect') { const rx = Math.min(num('rx'), num('width') / 2, num('height') / 2); d = rx > 0 ? rrect(num('x'), num('y'), num('width'), num('height'), rx) : `M${num('x')},${num('y')}h${num('width')}v${num('height')}h${-num('width')}z`; }
+      else if (tag === 'circle') d = circ(num('cx'), num('cy'), num('r'));
+      else if (tag === 'ellipse') { const cx = num('cx'), cy = num('cy'), rx = num('rx'), ry = num('ry'); d = `M${cx - rx},${cy}a${rx},${ry} 0 1,0 ${2 * rx},0a${rx},${ry} 0 1,0 ${-2 * rx},0`; }
+      else continue;
+      const bb = e.getBBox(), sw = st.stroke && st.stroke !== 'none' ? +(st['stroke-width'] || 1) : 0, pad = sw / 2 + 2;
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const [px, py] of [[bb.x - pad, bb.y - pad], [bb.x + bb.width + pad, bb.y - pad], [bb.x - pad, bb.y + bb.height + pad], [bb.x + bb.width + pad, bb.y + bb.height + pad]]) {
+        const X = m.a * px + m.c * py + m.e, Y = m.b * px + m.d * py + m.f;
+        x0 = Math.min(x0, X); y0 = Math.min(y0, Y); x1 = Math.max(x1, X); y1 = Math.max(y1, Y);
+      }
+      const fill = st.fill === undefined ? '#000' : st.fill;
+      DL.push({ d, m: [m.a, m.b, m.c, m.d, m.e, m.f], a, det, bb: [x0, y0, x1, y1],
+        fill: fill === 'none' || fill === 'transparent' ? null : fill, stroke: sw ? st.stroke : null, sw,
+        cap: st['stroke-linecap'] || 'butt', join: st['stroke-linejoin'] || 'miter',
+        dash: st['stroke-dasharray'] ? st['stroke-dasharray'].split(/[\s,]+/).map(Number) : null });
+    }
+  };
+  walk(worldS, {}, 1, false);
+  svgS.remove();   // ה-SVG הסטטי שימש רק לבנייה
+}
+/* ה-Worker: מקבל את רשימת הציור פעם אחת, ואז מצייר אריחים לפי בקשה (התור מתחלף בכל בקשה) */
+const TILE_WORKER = `
+let items = [], grid = new Map(), B, TILE, BASE, DLC = 160, queue = [], busy = false, stamp = 1, seen;
+const mk = n => typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(n, n) : Object.assign(document.createElement('canvas'), { width: n, height: n });
+function render(l, tx, ty) {
+  const sc = BASE * 2 ** l, tw = TILE / sc, x0 = B.x0 + tx * tw, y0 = B.y0 + ty * tw, x1 = x0 + tw, y1 = y0 + tw;
+  const cv = mk(TILE), c = cv.getContext('2d'), ids = []; stamp++;
+  for (let cy = Math.floor(y0 / DLC); cy <= Math.floor(y1 / DLC); cy++)
+    for (let cx = Math.floor(x0 / DLC); cx <= Math.floor(x1 / DLC); cx++)
+      for (const id of grid.get(cx + ',' + cy) || []) if (seen[id] !== stamp) { seen[id] = stamp; ids.push(id); }
+  ids.sort((a, b) => a - b);
+  for (const id of ids) {
+    const it = items[id], b = it.bb;
+    if (b[2] < x0 || b[0] > x1 || b[3] < y0 || b[1] > y1) continue;
+    if (it.det && sc < .6) continue;
+    if (Math.max(b[2] - b[0], b[3] - b[1]) * sc < .4) continue;
+    const m = it.m;
+    c.setTransform(sc * m[0], sc * m[1], sc * m[2], sc * m[3], sc * (m[4] - x0), sc * (m[5] - y0));
+    c.globalAlpha = it.a;
+    const p = it.p || (it.p = new Path2D(it.d));
+    if (it.fill) { c.fillStyle = it.fill; c.fill(p); }
+    if (it.stroke) { c.strokeStyle = it.stroke; c.lineWidth = it.sw; c.lineCap = it.cap; c.lineJoin = it.join; c.setLineDash(it.dash || []); c.stroke(p); }
+  }
+  return cv.transferToImageBitmap ? cv.transferToImageBitmap() : cv;
+}
+function pump() {
+  busy = false;
+  if (!queue.length) return;
+  const [l, i, j] = queue.shift(), bmp = render(l, i, j);
+  self.postMessage({ type: 'tile', l, i, j, bmp }, bmp.close ? [bmp] : undefined);
+  busy = true; setTimeout(pump, 0);
+}
+self.onmessage = e => {
+  const m = e.data;
+  if (m.type === 'init') {
+    ({ items, B, TILE, BASE } = m); seen = new Uint32Array(items.length);
+    items.forEach((it, id) => {
+      for (let cy = Math.floor(it.bb[1] / DLC); cy <= Math.floor(it.bb[3] / DLC); cy++)
+        for (let cx = Math.floor(it.bb[0] / DLC); cx <= Math.floor(it.bb[2] / DLC); cx++) {
+          const k = cx + ',' + cy; (grid.get(k) || grid.set(k, []).get(k)).push(id);
+        }
+    });
+  } else if (m.type === 'need') { queue = m.list; if (!busy) { busy = true; setTimeout(pump, 0); } }
+};`;
+const tiles = new Map(), TILE_CAP = 220;
+const tkey = (l, x, y) => l + '/' + x + '/' + y;
+function getTile(l, x, y) {
+  const k = tkey(l, x, y), t = tiles.get(k);
+  if (t && l > 0) { tiles.delete(k); tiles.set(k, t); }   // LRU
+  return t;
+}
+function putTile(l, x, y, bmp) {
+  tiles.set(tkey(l, x, y), bmp);
+  for (const [k, v] of tiles) { if (tiles.size <= TILE_CAP) break; if (!k.startsWith('0/')) { tiles.delete(k); v.close && v.close(); } }
+}
+let painter = null;
+{
+  const onTile = m => { if (m.type === 'tile') { putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
+  try {
+    if (typeof OffscreenCanvas === 'undefined' || !('transferToImageBitmap' in OffscreenCanvas.prototype)) throw 0;
+    painter = new Worker(URL.createObjectURL(new Blob([TILE_WORKER], { type: 'text/javascript' })));
+    painter.onmessage = e => onTile(e.data);
+    painter.onerror = () => { painter = null; };
+  } catch (e) {
+    // דפדפן ישן בלי OffscreenCanvas: אותו קוד רץ בדף עצמו (איטי יותר, אבל עובד)
+    const fake = { postMessage: m => setTimeout(() => onTile(m), 0) };
+    const run = new Function('self', TILE_WORKER + '\nreturn self.onmessage;');
+    const handler = run(fake);
+    painter = { postMessage: m => handler({ data: m }) };
+  }
+  painter.postMessage({ type: 'init', items: DL, B, TILE, BASE });
+}
+let sDirty = true, sRaf = 0, lastNeed = '';
+function levelFor(k) { return clamp(Math.ceil(Math.log2(k * dpr / BASE) - .15), 0, LMAX); }
+function drawStatic() {
+  cs.setTransform(1, 0, 0, 1, 0, 0);
+  cs.fillStyle = '#9cd162'; cs.fillRect(0, 0, cvS.width, cvS.height);
+  const l = levelFor(cam.k), tw = TILE / tileScale(l);
+  const nx = Math.ceil((B.x1 - B.x0) / tw), ny = Math.ceil((B.y1 - B.y0) / tw);
+  const wx0 = -cam.x / cam.k, wy0 = -cam.y / cam.k, wx1 = (vw - cam.x) / cam.k, wy1 = (vh - cam.y) / cam.k;
+  const ix0 = clamp(Math.floor((wx0 - B.x0) / tw), 0, nx - 1), ix1 = clamp(Math.floor((wx1 - B.x0) / tw), 0, nx - 1);
+  const iy0 = clamp(Math.floor((wy0 - B.y0) / tw), 0, ny - 1), iy1 = clamp(Math.floor((wy1 - B.y0) / tw), 0, ny - 1);
+  const sx = i => Math.round(((B.x0 + i * tw) * cam.k + cam.x) * dpr), sy = j => Math.round(((B.y0 + j * tw) * cam.k + cam.y) * dpr);
+  const need = [], ccx = (wx0 + wx1) / 2, ccy = (wy0 + wy1) / 2;
+  cs.imageSmoothingEnabled = true; cs.imageSmoothingQuality = 'low';   // האריחים כמעט בגודל טבעי; איכות גבוהה רק מאטה
+  for (let j = iy0; j <= iy1; j++) for (let i = ix0; i <= ix1; i++) {
+    const X = sx(i), Y = sy(j), Wd = sx(i + 1) - X, Ht = sy(j + 1) - Y;
+    const t = getTile(l, i, j);
+    if (t) { cs.drawImage(t, X, Y, Wd, Ht); continue; }
+    need.push([l, i, j, (B.x0 + (i + .5) * tw - ccx) ** 2 + (B.y0 + (j + .5) * tw - ccy) ** 2]);
+    let done = false;
+    for (let pl = l - 1; pl >= 0 && !done; pl--) {        // ממלאים זמנית מאריח של רמה גסה יותר
+      const f = 2 ** (l - pl), p = getTile(pl, Math.floor(i / f), Math.floor(j / f));
+      if (p) { const sub = TILE / f; cs.drawImage(p, (i % f) * sub, (j % f) * sub, sub, sub, X, Y, Wd, Ht); done = true; }
+    }
+    if (!done && l < LMAX)                                // או מארבעה אריחים של רמה חדה יותר
+      for (let q = 0; q < 4; q++) { const c = getTile(l + 1, 2 * i + (q & 1), 2 * j + (q >> 1)); if (c) cs.drawImage(c, X + (q & 1) * Wd / 2, Y + (q >> 1) * Ht / 2, Wd / 2, Ht / 2); }
+  }
+  need.sort((a, b) => a[3] - b[3]);
+  // מראש: טבעת סביב המסך, ואותו אזור ברמה גסה יותר (להתרחקות חלקה)
+  const list = need.map(q => q.slice(0, 3));
+  for (let j = iy0 - 1; j <= iy1 + 1; j++) for (let i = ix0 - 1; i <= ix1 + 1; i++)
+    if (i >= 0 && j >= 0 && i < nx && j < ny && (i < ix0 || i > ix1 || j < iy0 || j > iy1) && !tiles.has(tkey(l, i, j))) list.push([l, i, j]);
+  if (l > 0) for (let j = iy0 >> 1; j <= iy1 >> 1; j++) for (let i = ix0 >> 1; i <= ix1 >> 1; i++) if (!tiles.has(tkey(l - 1, i, j))) list.push([l - 1, i, j]);
+  for (const k of L0_KEYS) if (!tiles.has(tkey(...k))) list.push(k);   // תמיד גם סקירה של כל העולם
+  const sig = list.map(q => q.join('/')).join(' ');
+  if (sig !== lastNeed) { lastNeed = sig; painter.postMessage({ type: 'need', list }); }
+}
+function staticFrame() { sRaf = 0; if (sDirty) { sDirty = false; drawStatic(); } }
+function requestStatic() { sDirty = true; if (!sRaf) sRaf = requestAnimationFrame(staticFrame); }
+// אריחי סקירה של כל העולם (רמה 0) – תמיד בזיכרון, כדי שאף פעם לא יופיע חור
+const L0_KEYS = [];
+{ const tw0 = TILE / tileScale(0); for (let j = 0; j < Math.ceil((B.y1 - B.y0) / tw0); j++) for (let i = 0; i < Math.ceil((B.x1 - B.x0) / tw0); i++) L0_KEYS.push([0, i, j]); }
+
 sortDepth();
 
 /* ═════════════════════ מצלמה: זום וגרירה ═════════════════════ */
@@ -1810,41 +2200,24 @@ let fitK = 1, minK = 1, vw = 0, vh = 0, anim = null, following = null;
 const zoomLbl = document.getElementById('zoomLbl');
 const ptrs = new Map();
 let down = null, pinch = null;
-let committed = { k: 1, x: 0, y: 0 }, dcam = { k: 1, x: 0, y: 0 }, M = 0;
+let dcam = { k: 1, x: 0, y: 0 }, M = 0;
 let gesturing = false, gestureMoved = false, wheelTimer = 0;
 function measure() {
   const r = stage.getBoundingClientRect(); vw = r.width; vh = r.height;
   // בטלפון לאורך המפה ממלאת את המסך (כיסוי, חיתוך קטן בקצוות); במסך רחב רואים את כולה
   const fit = (w, h) => { const c = Math.min(vw / w, vh / h), v = Math.max(vw / w, vh / h); return v / c < 1.2 ? v : c; };
   fitK = fit(W, H);                                              // תצוגת הבית: הכפר
-  minK = Math.min(fitK, fit(B.x1 - B.x0, B.y1 - B.y0));          // הכי רחוק: כל העולם
+  minK = Math.min(fitK, Math.max(vw / (B.x1 - B.x0), vh / (B.y1 - B.y0)));   // הכי רחוק: העולם ממלא את המסך, בלי פסים בשוליים
   // השכבות גדולות מהמסך בשוליים M, כדי שבזמן גרירה/הקטנה לא ייחשפו חורים לפני הציור מחדש
   M = Math.round(Math.max(vw, vh) * .3);
-  for (const sv of [svgS, svgD]) {
-    sv.setAttribute('width', vw + 2 * M); sv.setAttribute('height', vh + 2 * M);
-    sv.style.left = -M + 'px'; sv.style.top = -M + 'px';
-  }
+  svgD.setAttribute('width', vw + 2 * M); svgD.setAttribute('height', vh + 2 * M);
+  svgD.style.left = -M + 'px'; svgD.style.top = -M + 'px';
+  dpr = Math.min(devicePixelRatio || 1, 3);
+  cvS.width = Math.round(vw * dpr); cvS.height = Math.round(vh * dpr);
 }
 const camMatrix = c => `matrix(${c.k} 0 0 ${c.k} ${(c.x + M).toFixed(2)} ${(c.y + M).toFixed(2)})`;
-/* ציור חד של השכבה הסטטית במצב המצלמה הנוכחי (יקר; קורה רק כשהמצלמה נחה) */
-const bandShown = [];
-function cullBands() {
-  const y0 = (-M - cam.y) / cam.k, y1 = (vh + M - cam.y) / cam.k, x0 = (-M - cam.x) / cam.k, x1 = (vw + M - cam.x) / cam.k, far = cam.k < fitK * .45;
-  for (let i = 0; i < NB; i++) {
-    const top = B.y0 + Math.floor(i / NC) * BAND, bot = top + BAND, left = B.x0 + (i % NC) * COL, right = left + COL;
-    // אובייקט בולט עד ~170 יחידות מעל הבסיס שלו ועד ~110 לצדדים
-    const vis = bot > y0 - 20 && top - 170 < y1 && right + 110 > x0 && left - 110 < x1;
-    const dv = vis && !far;                                  // דשא: מוסתר גם כשמתרחקים מאוד
-    if (bandShown[i] !== vis) { PROP_BANDS[i].setAttribute('display', vis ? 'inline' : 'none'); bandShown[i] = vis; }
-    if (bandShown[NB + i] !== dv) { DETAIL_BANDS[i].setAttribute('display', dv ? 'inline' : 'none'); bandShown[NB + i] = dv; }
-  }
-}
-function commit() {
-  committed = { k: cam.k, x: cam.x, y: cam.y };
-  cullBands();
-  worldS.setAttribute('transform', camMatrix(cam));
-  sWrap.style.transform = '';
-}
+/* השכבה הסטטית מצוירת מאריחים: בכל שינוי מצלמה רק מבקשים ציור חוזר (זול) */
+function commit() { requestStatic(); }
 function commitD() {
   dcam = { k: cam.k, x: cam.x, y: cam.y };
   worldD.setAttribute('transform', camMatrix(cam));
@@ -1868,12 +2241,12 @@ function applyCam() {
   clampCam();
   if (gesturing) {
     gestureMoved = true;
-    if (!cssMove(sWrap, committed)) commit();
+    requestStatic();
     if (!cssMove(dWrap, dcam)) commitD();
   } else {
     // מחוץ למחווה (למשל מעקב אחרי דמות): הדינמית מתעדכנת ממילא, הסטטית רק זזה
     commitD();
-    if (Math.abs(cam.k - committed.k) > 1e-9 || !cssMove(sWrap, committed)) commit();
+    requestStatic();
   }
   zoomLbl.textContent = '×' + (cam.k / fitK).toFixed(1);
 }
@@ -2005,15 +2378,15 @@ function tick(now) {
       Object.assign(FISH, { t: 0, x, y, dx: pick([-1, 1]) * rand(30, 44) }); fish.setAttribute('display', 'inline'); ripple(x, y, 9, 3.5);
     }
   } else {
-    FISH.t += dt / 1.1;
+    FISH.t += dt / 1.5;
     const u = Math.min(1, FISH.t), x = FISH.x + FISH.dx * u, y = FISH.y - 34 * 4 * u * (1 - u), vy = -34 * 4 * (1 - 2 * u);
     fish.setAttribute('transform', `translate(${n2(x)},${n2(y)}) scale(${FISH.dx > 0 ? 1 : -1},1) rotate(${(Math.atan2(vy, Math.abs(FISH.dx)) * 180 / Math.PI).toFixed(1)})`);
-    if (u >= 1) { FISH.t = -1; FISH.wait = rand(5, 10); fish.setAttribute('display', 'none'); ripple(x, FISH.y, 10, 3.5); ripple(x, FISH.y, 5, 2); }
+    if (u >= 1) { FISH.t = -1; FISH.wait = rand(12, 22); fish.setAttribute('display', 'none'); ripple(x, FISH.y, 10, 3.5); ripple(x, FISH.y, 5, 2); }
   }
   // פרפרים
   for (const b of BUTTERFLIES) {
     const s = b.s + T, x = b.cx + Math.sin(s * .37) * 60 + Math.sin(s * 1.3) * 14, y = b.cy + Math.sin(s * .53) * 45 + Math.cos(s * 1.7) * 8 - 10;
-    const flap = Math.abs(Math.sin(s * 15)) * .8 + .2;
+    const flap = Math.abs(Math.sin(s * 8)) * .8 + .2;
     b.g.setAttribute('transform', `translate(${n2(x)},${n2(y)})`);
     b.wl.setAttribute('transform', `translate(0,0) scale(${flap.toFixed(2)},1)`); b.wr.setAttribute('transform', `scale(${flap.toFixed(2)},1)`);
   }
@@ -2060,7 +2433,7 @@ cam.k = fitK; cam.x = vw / 2 - W / 2 * cam.k; cam.y = vh / 2 - H / 2 * cam.k; cl
 { running = true; tick(performance.now()); running = false; }
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 setRunning(!reduce);
-window.__village = { cam, walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => fitK };
+window.__village = { cam, walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => fitK, dbg: { drawStatic, DL, tiles } };
 })();
 </script>
 </body>
