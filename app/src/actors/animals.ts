@@ -44,7 +44,7 @@ export class Sheep {
   constructor(x: number, y: number, area: any, scale = 1) {
     this.x = x; this.y = y; this.area = area; this.scale = scale; this.flip = 1; this.state = 'graze'; this.timer = rand(1, 5); this.phase = 0; this.head = 0;
     this.g = el('g', null, ctx.L.pad);
-    el('ellipse', { cx: 0, cy: 1, rx: 12 * scale, ry: 3 * scale, fill: 'rgba(60,40,10,.22)' }, this.g);
+    el('ellipse', { cx: 0, cy: 1, rx: 12, ry: 3, fill: 'rgba(60,40,10,.22)' }, this.g);
     this.b = el('g', null, this.g);
     this.legs = [0, 1, 2, 3].map(() => el('path', { stroke: '#3b3633', 'stroke-width': 2, 'stroke-linecap': 'round' }, this.b));
     el('path', { d: circ(-6, -11, 5) + circ(0, -13, 6) + circ(6, -11, 5) + circ(-3, -7, 5) + circ(4, -7, 5) + circ(-8, -7, 4), fill: '#fbf8f2', stroke: '#e5ddcf', 'stroke-width': .8 }, this.b);
