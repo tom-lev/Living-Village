@@ -1,5 +1,6 @@
-name: Deploy demo to GitHub Pages
+name: Publish demo to gh-pages
 
+# GitHub Pages מוגש מהענף gh-pages. כל שינוי ב-demo/ מועתק לשם אוטומטית.
 on:
   push:
     branches: [main, ccr-7419da80-z53gxw]
@@ -7,27 +8,27 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  publish:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: demo
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Copy demo/ to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp -r demo /tmp/site && touch /tmp/site/.nojekyll
+          git fetch origin gh-pages
+          git worktree add /tmp/ghp origin/gh-pages
+          cd /tmp/ghp
+          git rm -rq . && cp -r /tmp/site/. .
+          git add -A
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "Publish demo from ${GITHUB_SHA::7}"
+          git push origin HEAD:gh-pages
