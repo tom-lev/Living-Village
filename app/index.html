@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>כפר חי</title>
+<meta name="description" content="מפה וקטורית מצוירת של כפר קטן עם דמויות חיות. אפשר להתקרב בלי לאבד חדות.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="stage" role="img" aria-label="מפה מצוירת של כפר">
+  <canvas id="mapC"></canvas><svg id="mapS"></svg>
+  <div id="dWrap"><svg id="mapD"></svg></div>
+</div>
+
+<div class="controls">
+  <button id="zin" aria-label="התקרבות">+</button>
+  <button id="zout" aria-label="התרחקות">−</button>
+  <button id="zfit" aria-label="חזרה לתצוגה המלאה">⤢</button>
+  <button id="play" aria-label="עצירה">❚❚</button>
+</div>
+<div class="zoom" id="zoomLbl">×1.0</div>
+<div class="follow" id="follow"><span id="followName"></span><button id="unfollow" aria-label="הפסקת מעקב">✕</button></div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

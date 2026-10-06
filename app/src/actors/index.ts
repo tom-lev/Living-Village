@@ -1,0 +1,45 @@
+/* בונה את כל מה שזז מתוך קובץ העולם, ומחזיר פונקציית עדכון אחת לכל פריים */
+import { ctx, FX } from '../world/context';
+import { Walker, Dog, Sitter, Balloon, Leash, sortDepth } from './people';
+import { Horse, Sheep, ducks, fish, butterflies } from './animals';
+import { clouds, flock } from './ambient';
+
+export { followables } from './people';
+
+export function buildActors(A: Record<string, any>) {
+  const updates: ((dt: number, T: number) => void)[] = [];
+  const walkers = (A.walkers || []).map((w: any) => new Walker(w.look, w.speed));
+  for (const c of A.companions || []) {
+    const owner = walkers[c.owner];
+    if (c.type === 'dog') { const d = new Dog(owner, c.color, c.name); const l = new Leash(owner, d); updates.push((dt, T) => { d.update(dt, T); l.update(); }); }
+    if (c.type === 'balloon') { const b = new Balloon(owner, c.color); updates.push((dt, T) => b.update(dt, T)); }
+  }
+  // הבלון והרצועה מתעדכנים אחרי שהבעלים זזו
+  const walkerUpdate = (dt: number, T: number) => { for (const w of walkers) w.update(dt, T); };
+  updates.unshift(walkerUpdate);
+  for (const s of A.sitters || []) { const st = new Sitter(s.look, s.x, s.y, s.seat, s.flip, s.behavior); updates.push((dt, T) => st.update(dt, T)); }
+  const horses = (A.horses || []).map((h: any) => new Horse(h));
+  updates.push(dt => { for (const h of horses) h.update(dt); });
+  if (A.sheep) {
+    const area = ctx.named[A.sheep.area], flockS = A.sheep.positions.map(([x, y]: number[]) => new Sheep(x, y, area, A.sheep.scale ?? 1));
+    let f = 0;
+    updates.push(dt => {
+      for (const s of flockS) s.update(dt);
+      if (++f % 8 === 0) for (const s of flockS.slice().sort((a: any, b: any) => a.y - b.y)) ctx.L.pad.appendChild(s.g);
+    });
+  }
+  if (A.ducks) updates.push(ducks(A.ducks));
+  if (A.fish) updates.push(fish(A.fish));
+  if (A.butterflies) updates.push(butterflies(A.butterflies));
+  if (A.clouds) updates.push(clouds(A.clouds));
+  if (A.flock) updates.push(flock(A.flock));
+  let frame = 0;
+  return {
+    walkers,
+    update(dt: number, T: number) {
+      for (const f of FX) f(T, dt);
+      for (const u of updates) u(dt, T);
+      if (++frame % 6 === 0) sortDepth();
+    },
+  };
+}
