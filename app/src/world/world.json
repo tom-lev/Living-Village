@@ -78,6 +78,20 @@
     "#4caf50": "#78b375",
     "rgba(70,45,25,.35)": "rgba(100,72,50,.28)"
    }
+  },
+  {
+   "name": "פילם 90",
+   "base": "מאוזנת",
+   "saturation": 0.82,
+   "contrast": 0.86,
+   "lift": 0.01,
+   "tint": "#f3dcae",
+   "tintAmount": 0.07,
+   "highlightTint": "#ffd98c",
+   "shadowTint": "#2e6b66",
+   "splitAmount": 0.16,
+   "blackPoint": 38,
+   "grain": 0.34
   }
  ],
  "home": [

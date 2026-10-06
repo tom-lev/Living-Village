@@ -5,23 +5,40 @@ const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 
 export interface PaletteSpec {
   name?: string;
+  base?: string;           // פלטה שעליה נשענים (מעבדים קודם אותה)
   saturation?: number;   // מכפיל רוויה (1 = בלי שינוי)
   contrast?: number;     // דחיסת בהירות סביב האמצע (1 = בלי שינוי)
   lift?: number;         // הבהרה כללית
   tint?: string;         // גוון לערבוב
   tintAmount?: number;   // כמה מהגוון לערבב
   map?: Record<string, string>;
+  blackPoint?: number;      // הבהרת השחורים (0-255): הכהה ביותר הופך לאפור רך
+  highlightTint?: string;   // גוון לטונים הבהירים (פילם: זהוב)
+  shadowTint?: string;      // גוון לטונים הכהים (פילם: ירקרק-כחלחל)
+  splitAmount?: number;     // עוצמת הגוונים
+  grain?: number;           // גרעון פילם מעל המפה (0 = בלי)
 }
 
-const DEFAULTS: Required<PaletteSpec> = { name: '', saturation: 1, contrast: 1, lift: 0, tint: '#ffffff', tintAmount: 0, map: {} };
-let spec = DEFAULTS;
-let tintRGB = [255, 255, 255];
+const DEFAULTS: Required<PaletteSpec> = { name: '', base: '', saturation: 1, contrast: 1, lift: 0, tint: '#ffffff', tintAmount: 0, map: {},
+  blackPoint: 0, highlightTint: '#ffffff', shadowTint: '#000000', splitAmount: 0, grain: 0 };
+/** שלב עיבוד אחד: הגדרות מלאות + גוונים מפוענחים */
+interface Stage { sp: Required<PaletteSpec>; tint: number[]; hi: number[]; sh: number[] }
+let stages: Stage[] = [];      // מהבסיס ועד הפלטה הנבחרת
+let spec = DEFAULTS;           // הפלטה הנבחרת (לגרעון ולתצוגה)
 const cache = new Map<string, string>();
 
-export function setPalette(p: PaletteSpec | undefined) {
-  spec = { ...DEFAULTS, ...(p || {}), map: {} };
-  for (const [k, v] of Object.entries(p?.map || {})) spec.map[k.toLowerCase()] = v;
-  tintRGB = parseColor(spec.tint)?.slice(0, 3) || [255, 255, 255];
+function stage(p: PaletteSpec): Stage {
+  const sp = { ...DEFAULTS, ...p, map: {} as Record<string, string> };
+  for (const [k, v] of Object.entries(p.map || {})) sp.map[k.toLowerCase()] = v;
+  const rgb = (c: string, d: number[]) => parseColor(c)?.slice(0, 3) || d;
+  return { sp, tint: rgb(sp.tint, [255, 255, 255]), hi: rgb(sp.highlightTint, [255, 255, 255]), sh: rgb(sp.shadowTint, [0, 0, 0]) };
+}
+
+/** בוחר פלטה. palette יכולה להישען על פלטה אחרת (base): קודם הבסיס, אחר כך היא */
+export function setPalette(p: PaletteSpec | undefined, all: PaletteSpec[] = []) {
+  stages = [];
+  for (let q = p, n = 0; q && n < 5; q = all.find(x => x.name === q.base), n++) stages.unshift(stage(q));
+  spec = stages.length ? stages[stages.length - 1].sp : DEFAULTS;
   cache.clear();
 }
 
@@ -60,24 +77,32 @@ function hsl2rgb(h: number, s: number, l: number) {
 
 const hex = (c: number[]) => '#' + c.map(v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('');
 
+function applyStage(st: Stage, c: string): string {
+  const { sp } = st, key = c.toLowerCase().replace(/\s+/g, '');
+  if (sp.map[key]) return sp.map[key];
+  const p = parseColor(key);
+  if (!p) return c;
+  const [h, s, l] = rgb2hsl(p[0], p[1], p[2]);
+  const l2 = clamp(.5 + (l - .5) * sp.contrast + sp.lift, 0, 1);
+  const t = sp.tintAmount, sa = sp.splitAmount, bp = sp.blackPoint;
+  // גוון בהירים / כהים לפי הבהירות (split toning), ואז נקודת שחור מורמת
+  const wHi = sa * clamp((l2 - .45) / .55, 0, 1) ** 1.5, wSh = sa * clamp((.6 - l2) / .6, 0, 1) ** 1.2;
+  const rgb = hsl2rgb(h, s * sp.saturation, l2).map((v, i) => {
+    v = v * (1 - t) + st.tint[i] * t;
+    v = v * (1 - wHi) + st.hi[i] * wHi; v = v * (1 - wSh) + st.sh[i] * wSh;
+    return bp + v * (1 - bp / 255);
+  });
+  return p[3] < 1 ? `rgba(${rgb.map(Math.round).join(',')},${p[3]})` : hex(rgb);
+}
+
 /** מחזיר את הצבע אחרי הפלטה. ערכים שאינם צבע (none, url(...)) עוברים כמו שהם */
 export function grade(c: string): string {
   if (typeof c !== 'string') return c;
-  const key = c.toLowerCase().replace(/\s+/g, '');
-  const hit = cache.get(key);
+  const hit = cache.get(c);
   if (hit) return hit;
-  let out = spec.map[key];
-  if (!out) {
-    const p = parseColor(key);
-    if (!p) out = c;
-    else {
-      const [h, s, l] = rgb2hsl(p[0], p[1], p[2]);
-      const l2 = clamp(.5 + (l - .5) * spec.contrast + spec.lift, 0, 1);
-      const t = spec.tintAmount, rgb = hsl2rgb(h, s * spec.saturation, l2).map((v, i) => v * (1 - t) + tintRGB[i] * t);
-      out = p[3] < 1 ? `rgba(${rgb.map(Math.round).join(',')},${p[3]})` : hex(rgb);
-    }
-  }
-  cache.set(key, out);
+  let out = c;
+  for (const st of stages) out = applyStage(st, out);
+  cache.set(c, out);
   return out;
 }
 
@@ -93,3 +118,5 @@ export const rawColor = (e: Element, k: string) => raw.get(e)?.[k];
 export function regrade(root: Element) {
   for (const e of root.querySelectorAll('*')) { const r = raw.get(e); if (r) for (const k in r) e.setAttribute(k, grade(r[k])); }
 }
+
+export const currentPalette = () => spec;

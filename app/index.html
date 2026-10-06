@@ -13,6 +13,7 @@
 <div id="stage" role="img" aria-label="מפה מצוירת של כפר">
   <canvas id="mapC"></canvas><svg id="mapS"></svg>
   <div id="dWrap"><svg id="mapD"></svg></div>
+  <div id="grain" hidden></div>
 </div>
 
 <div class="controls">
@@ -20,10 +21,10 @@
   <button id="zout" aria-label="התרחקות">−</button>
   <button id="zfit" aria-label="חזרה לתצוגה המלאה">⤢</button>
   <button id="play" aria-label="עצירה">❚❚</button>
-  <button id="pal" aria-label="החלפת סכימת צבעים">🎨</button>
+  <button id="pal" aria-label="סכימת צבעים" aria-haspopup="menu" aria-expanded="false">🎨</button>
 </div>
 <div class="zoom" id="zoomLbl">×1.0</div>
-<div class="toast" id="toast" role="status"></div>
+<div class="palMenu" id="palMenu" role="menu" aria-label="סכימת צבעים" hidden></div>
 <div class="follow" id="follow"><span id="followName"></span><button id="unfollow" aria-label="הפסקת מעקב">✕</button></div>
 
 <script type="module" src="/src/main.ts"></script>
