@@ -1,5 +1,6 @@
 /* בניית הסצנה מקובץ העולם: גאומטריה → פני שטח → אובייקטים → מחוללים */
 import { setSeed } from '../core/rng';
+import { setPalette } from '../core/palette';
 import { ctx, initLayers, sortStatics } from '../world/context';
 import { buildGeometry } from '../world/geometry';
 import type { WorldData } from '../world/types';
@@ -16,6 +17,7 @@ const rect = ([x0, y0, x1, y1]: number[]) => ({ x0, y0, x1, y1 });
 export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElement) {
   ctx.world = w; ctx.B = rect(w.bounds); ctx.home = rect(w.home);
   setSeed(w.seed);
+  setPalette(w.palette);
   initLayers(svgS, svgD);
   buildGeometry(w);
   buildTerrain(w);

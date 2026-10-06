@@ -16,7 +16,10 @@ export interface Look {
   shirt: string; pants: string; skirt?: string; hat?: string; hold?: 'leash' | 'balloon';
 }
 
+import type { PaletteSpec } from '../core/palette';
+
 export interface WorldData {
+  palette?: PaletteSpec;
   seed: number;
   /** האזור שמוצג בפתיחה (הכפר) */
   home: Rect;

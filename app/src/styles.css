@@ -1,15 +1,15 @@
 :root {
-  --bg: #7fb84d;
+  --bg: #b4c994;
   --ink: #3b2f25;
   --ink-soft: #6b5a4a;
   --card: rgba(255, 252, 244, .94);
   --line: rgba(59, 47, 37, .14);
-  --accent: #e2574c;
+  --accent: #c97b63;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: #4d7a33; --card: rgba(40, 36, 30, .92); --ink: #f6eee2; --ink-soft: #cdbfae; --line: rgba(255, 255, 255, .14); }
+  :root:not([data-theme="light"]) { --bg: #6f8460; --card: rgba(40, 36, 30, .92); --ink: #f6eee2; --ink-soft: #cdbfae; --line: rgba(255, 255, 255, .14); }
 }
-:root[data-theme="dark"] { --bg: #4d7a33; --card: rgba(40, 36, 30, .92); --ink: #f6eee2; --ink-soft: #cdbfae; --line: rgba(255, 255, 255, .14); }
+:root[data-theme="dark"] { --bg: #6f8460; --card: rgba(40, 36, 30, .92); --ink: #f6eee2; --ink-soft: #cdbfae; --line: rgba(255, 255, 255, .14); }
 
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
   font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-tap-highlight-color: transparent; }

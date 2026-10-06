@@ -3,6 +3,7 @@
    של 256 פיקסלים בכמה רמות זום, ברקע. בכל פריים רק מרכיבים את האריחים המוכנים על קנבס,
    כך שקצב הפריימים לא תלוי בכמות התוכן. אריח שעדיין לא מוכן מוחלף זמנית באריח מרמה אחרת. */
 import { el, clamp, rrect, circ } from '../core/util';
+import { grade } from '../core/palette';
 import { ctx } from '../world/context';
 import { DETAIL_GROUPS } from '../scene/terrain';
 import { view } from '../camera/view';
@@ -103,7 +104,7 @@ const levelFor = (k: number) => clamp(Math.ceil(Math.log2(k * view.dpr / BASE) -
 function drawStatic() {
   const { B } = ctx, { cam, vw, vh, dpr } = view;
   cs.setTransform(1, 0, 0, 1, 0, 0);
-  cs.fillStyle = '#9cd162'; cs.fillRect(0, 0, cvS.width, cvS.height);
+  cs.fillStyle = grade('#9cd162'); cs.fillRect(0, 0, cvS.width, cvS.height);
   const l = levelFor(cam.k), tw = TILE / tileScale(l);
   const nx = Math.ceil((B.x1 - B.x0) / tw), ny = Math.ceil((B.y1 - B.y0) / tw);
   const wx0 = -cam.x / cam.k, wy0 = -cam.y / cam.k, wx1 = (vw - cam.x) / cam.k, wy1 = (vh - cam.y) / cam.k;
