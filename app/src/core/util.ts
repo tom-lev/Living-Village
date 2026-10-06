@@ -1,12 +1,15 @@
 /* כלי עזר משותפים: SVG, מספרים, צבעים ומסלולים */
-import { grade, COLOR_ATTRS } from './palette';
+import { grade, COLOR_ATTRS, rememberColor } from './palette';
 
 export const NS = 'http://www.w3.org/2000/svg';
 
 /** יוצר אלמנט SVG עם תכונות, ומוסיף אותו להורה (אם ניתן) */
 export function el(tag: string, a?: Record<string, any> | null, parent?: Element | null): any {
   const e = document.createElementNS(NS, tag);
-  if (a) for (const k in a) e.setAttribute(k, COLOR_ATTRS.has(k) ? grade(a[k]) : a[k]);
+  if (a) for (const k in a) {
+    if (COLOR_ATTRS.has(k)) { rememberColor(e, k, a[k]); e.setAttribute(k, grade(a[k])); }
+    else e.setAttribute(k, a[k]);
+  }
   if (parent) parent.appendChild(e);
   return e;
 }

@@ -4,6 +4,7 @@
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 
 export interface PaletteSpec {
+  name?: string;
   saturation?: number;   // מכפיל רוויה (1 = בלי שינוי)
   contrast?: number;     // דחיסת בהירות סביב האמצע (1 = בלי שינוי)
   lift?: number;         // הבהרה כללית
@@ -12,12 +13,13 @@ export interface PaletteSpec {
   map?: Record<string, string>;
 }
 
-let spec: Required<PaletteSpec> = { saturation: 1, contrast: 1, lift: 0, tint: '#ffffff', tintAmount: 0, map: {} };
+const DEFAULTS: Required<PaletteSpec> = { name: '', saturation: 1, contrast: 1, lift: 0, tint: '#ffffff', tintAmount: 0, map: {} };
+let spec = DEFAULTS;
 let tintRGB = [255, 255, 255];
 const cache = new Map<string, string>();
 
 export function setPalette(p: PaletteSpec | undefined) {
-  spec = { ...spec, ...(p || {}), map: {} };
+  spec = { ...DEFAULTS, ...(p || {}), map: {} };
   for (const [k, v] of Object.entries(p?.map || {})) spec.map[k.toLowerCase()] = v;
   tintRGB = parseColor(spec.tint)?.slice(0, 3) || [255, 255, 255];
   cache.clear();
@@ -80,3 +82,14 @@ export function grade(c: string): string {
 }
 
 export const COLOR_ATTRS = new Set(['fill', 'stroke', 'stop-color', 'flood-color', 'lighting-color']);
+
+/* הצבע המקורי של כל אלמנט נשמר, כדי שאפשר יהיה להחליף פלטה בלי לבנות את העולם מחדש */
+const raw = new WeakMap<Element, Record<string, string>>();
+export function rememberColor(e: Element, k: string, v: string) {
+  const r = raw.get(e); if (r) r[k] = v; else raw.set(e, { [k]: v });
+}
+export const rawColor = (e: Element, k: string) => raw.get(e)?.[k];
+/** צובע מחדש את כל האלמנטים תחת root לפי הפלטה הנוכחית */
+export function regrade(root: Element) {
+  for (const e of root.querySelectorAll('*')) { const r = raw.get(e); if (r) for (const k in r) e.setAttribute(k, grade(r[k])); }
+}

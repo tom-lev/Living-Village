@@ -1,6 +1,6 @@
 /* דמות אדם וקטורית: תנוחות הליכה וישיבה, וציור שמתעדכן בכל פריים */
 import { el, n2, P, circ, rrect, shade, wrap1 } from '../core/util';
-import { grade } from '../core/palette';
+import { grade, rememberColor } from '../core/palette';
 import type { Look } from '../world/types';
 
 /* פרופורציות (×גובה), כמו בסעיף 3 במדריך */
@@ -131,7 +131,8 @@ export class Figure {
     if (p.view !== this.view) {
       this.view = p.view;
       this.torso.setAttribute('stroke-width', n2((p.view === 'side' ? .165 : .205) * h));
-      this.head.setAttribute('fill', grade(p.view === 'back' && !look.hat ? look.hair : look.skin));
+      const hc = p.view === 'back' && !look.hat ? look.hair : look.skin;
+      rememberColor(this.head, 'fill', hc); this.head.setAttribute('fill', grade(hc));
     }
     // בצד: 0 קרוב (A), 1 רחוק (B). מלפנים/מאחור: 0 שמאל (B), 1 ימין (A)
     const [iA, iB] = p.view === 'side' ? [0, 1] : [1, 0];

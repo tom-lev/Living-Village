@@ -5,13 +5,14 @@ export interface DLItem {
   fill: string | null; stroke: string | null; sw: number; cap: string; join: string; dash: number[] | null;
   p?: Path2D;
 }
-export interface TileMsg { type: 'tile'; l: number; i: number; j: number; bmp: any }
+export interface TileMsg { type: 'tile'; l: number; i: number; j: number; bmp: any; gen: number }
 
 const DLC = 160;   // גודל תא באינדקס המרחבי
 
 export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
   let items: DLItem[] = [], grid = new Map<string, number[]>(), B: any, TILE = 256, BASE = 1 / 8;
   let queue: number[][] = [], busy = false, stamp = 1, seen: Uint32Array;
+  let cmap: Record<string, string> = {}, gen = 0;   // צבע מקורי → צבע אחרי הפלטה
   const mk = (n: number): any => typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(n, n) : Object.assign(document.createElement('canvas'), { width: n, height: n });
 
   function render(l: number, tx: number, ty: number) {
@@ -30,8 +31,8 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
       c.setTransform(sc * m[0], sc * m[1], sc * m[2], sc * m[3], sc * (m[4] - x0), sc * (m[5] - y0));
       c.globalAlpha = it.a;
       const p = it.p || (it.p = new Path2D(it.d));
-      if (it.fill) { c.fillStyle = it.fill; c.fill(p); }
-      if (it.stroke) { c.strokeStyle = it.stroke; c.lineWidth = it.sw; c.lineCap = it.cap; c.lineJoin = it.join; c.setLineDash(it.dash || []); c.stroke(p); }
+      if (it.fill) { c.fillStyle = cmap[it.fill] || it.fill; c.fill(p); }
+      if (it.stroke) { c.strokeStyle = cmap[it.stroke] || it.stroke; c.lineWidth = it.sw; c.lineCap = it.cap; c.lineJoin = it.join; c.setLineDash(it.dash || []); c.stroke(p); }
     }
     return cv.transferToImageBitmap ? cv.transferToImageBitmap() : cv;
   }
@@ -40,7 +41,7 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
     busy = false;
     if (!queue.length) return;
     const [l, i, j] = queue.shift(), bmp = render(l, i, j);
-    post({ type: 'tile', l, i, j, bmp }, bmp.close ? [bmp] : undefined);
+    post({ type: 'tile', l, i, j, bmp, gen }, bmp.close ? [bmp] : undefined);
     busy = true; setTimeout(pump, 0);
   }
 
@@ -53,6 +54,8 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
             const k = cx + ',' + cy; (grid.get(k) || grid.set(k, []).get(k)).push(id);
           }
       });
+    } else if (m.type === 'palette') {
+      cmap = m.cmap; gen = m.gen; queue = [];
     } else if (m.type === 'need') {
       queue = m.list;                     // התור מתחלף בכל בקשה: תמיד מה שרלוונטי עכשיו
       if (!busy) { busy = true; setTimeout(pump, 0); }

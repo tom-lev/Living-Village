@@ -3,7 +3,8 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
-import { initTiles, tileStats } from './render/tiles';
+import { initTiles, tileStats, repaintTiles } from './render/tiles';
+import { setPalette, regrade, grade } from './core/palette';
 import { buildActors, followables } from './actors';
 import { initCamera, cameraTick, loopState, zoomAt, animateTo } from './camera/camera';
 import { view } from './camera/view';
@@ -13,6 +14,9 @@ const stage = document.getElementById('stage');
 const svgS = document.getElementById('mapS') as unknown as SVGSVGElement;
 const svgD = document.getElementById('mapD') as unknown as SVGSVGElement;
 
+// הפלטה שנבחרה בפעם הקודמת (אם יש)
+const PAL_KEY = 'village-palette';
+try { const p = localStorage.getItem(PAL_KEY); if (world.palettes?.some(x => x.name === p)) world.palette = p; } catch {}
 buildScene(world, svgS, svgD);
 const actors = buildActors(world.actors);
 const items = initTiles(document.getElementById('mapC') as HTMLCanvasElement);
@@ -37,9 +41,25 @@ function setRunning(on: boolean) {
 }
 playBtn.onclick = () => setRunning(!loopState.running);
 
+/* ───────── החלפת סכימת צבעים (להשוואה) ───────── */
+const toast = document.getElementById('toast'); let toastT = 0;
+function applyPalette(name: string) {
+  setPalette(world.palettes.find(p => p.name === name)); world.palette = name;
+  regrade(svgD); repaintTiles();
+  document.documentElement.style.setProperty('--bg', grade('#9cd162'));
+  try { localStorage.setItem(PAL_KEY, name); } catch {}
+}
+document.getElementById('pal').onclick = () => {
+  const P = world.palettes, i = P.findIndex(p => p.name === world.palette), next = P[(i + 1) % P.length];
+  applyPalette(next.name);
+  toast.textContent = `צבעים: ${next.name} (${(i + 1) % P.length + 1}/${P.length})`; toast.classList.add('on');
+  clearTimeout(toastT); toastT = window.setTimeout(() => toast.classList.remove('on'), 1800);
+};
+document.documentElement.style.setProperty('--bg', grade('#9cd162'));
+
 // פריים ראשון, כדי שגם במצב "פחות תנועה" הדמויות יופיעו
 actors.update(.016, 0);
 setRunning(!matchMedia('(prefers-reduced-motion: reduce)').matches);
 
 // לבדיקות אוטומטיות
-(window as any).__village = { cam: view.cam, walkers: actors.walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => view.fitK, items, tileStats };
+(window as any).__village = { cam: view.cam, walkers: actors.walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => view.fitK, items, tileStats, applyPalette };

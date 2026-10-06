@@ -19,7 +19,8 @@ export interface Look {
 import type { PaletteSpec } from '../core/palette';
 
 export interface WorldData {
-  palette?: PaletteSpec;
+  palette?: string;            // שם הפלטה שבה מתחילים
+  palettes?: PaletteSpec[];
   seed: number;
   /** האזור שמוצג בפתיחה (הכפר) */
   home: Rect;

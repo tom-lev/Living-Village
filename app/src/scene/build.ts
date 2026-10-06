@@ -17,7 +17,7 @@ const rect = ([x0, y0, x1, y1]: number[]) => ({ x0, y0, x1, y1 });
 export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElement) {
   ctx.world = w; ctx.B = rect(w.bounds); ctx.home = rect(w.home);
   setSeed(w.seed);
-  setPalette(w.palette);
+  setPalette(w.palettes?.find(p => p.name === w.palette));
   initLayers(svgS, svgD);
   buildGeometry(w);
   buildTerrain(w);

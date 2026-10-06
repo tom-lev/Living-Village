@@ -3,7 +3,7 @@
    של 256 פיקסלים בכמה רמות זום, ברקע. בכל פריים רק מרכיבים את האריחים המוכנים על קנבס,
    כך שקצב הפריימים לא תלוי בכמות התוכן. אריח שעדיין לא מוכן מוחלף זמנית באריח מרמה אחרת. */
 import { el, clamp, rrect, circ } from '../core/util';
-import { grade } from '../core/palette';
+import { grade, rawColor } from '../core/palette';
 import { ctx } from '../world/context';
 import { DETAIL_GROUPS } from '../scene/terrain';
 import { view } from '../camera/view';
@@ -21,7 +21,7 @@ function extractDisplayList(): DLItem[] {
   const walk = (node: Element, inh: Record<string, string>, alpha: number, detail: boolean) => {
     for (const e of [...node.children] as any[]) {
       const st = { ...inh };
-      for (const k of KEYS) { const v = e.getAttribute(k); if (v !== null) st[k] = v; }
+      for (const k of KEYS) { const v = rawColor(e, k) ?? e.getAttribute(k); if (v !== null) st[k] = v; }   // צבע מקורי; הפלטה מוחלת בצייר
       const a = alpha * (e.hasAttribute('opacity') ? +e.getAttribute('opacity') : 1), det = detail || DETAIL.has(e), tag = e.tagName;
       if (tag === 'g') { walk(e, st, a, det); continue; }
       const num = (k: string) => +e.getAttribute(k) || 0;
@@ -71,6 +71,8 @@ function putTile(l: number, x: number, y: number, bmp: any) {
 }
 
 let painters: { postMessage(m: any): void }[] = [];
+let gen = 0, colors: string[] = [];
+const colorMap = () => Object.fromEntries(colors.map(c => [c, grade(c)]));
 let cvS: HTMLCanvasElement, cs: CanvasRenderingContext2D;
 const L0_KEYS: number[][] = [];
 export const tileStats = { missing: 0 };
@@ -79,7 +81,7 @@ let sDirty = true, sRaf = 0, lastNeed = '';
 export function initTiles(canvas: HTMLCanvasElement) {
   cvS = canvas; cs = canvas.getContext('2d');
   const DL = extractDisplayList();
-  const onTile = (m: any) => { if (m.type === 'tile') { putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
+  const onTile = (m: any) => { if (m.type === 'tile' && m.gen === gen) { putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
   try {
     if (typeof OffscreenCanvas === 'undefined' || !('transferToImageBitmap' in OffscreenCanvas.prototype)) throw 0;
     // כמה ציירים במקביל: אריחים של רמת זום חדשה מוכנים מהר יותר
@@ -94,7 +96,8 @@ export function initTiles(canvas: HTMLCanvasElement) {
     const handle = createPainter(m => setTimeout(() => onTile(m), 0));
     painters = [{ postMessage: m => handle(m) }];
   }
-  for (const p of painters) p.postMessage({ type: 'init', items: DL, B: ctx.B, TILE, BASE });
+  colors = [...new Set(DL.flatMap(it => [it.fill, it.stroke]).filter(Boolean))];
+  for (const p of painters) { p.postMessage({ type: 'init', items: DL, B: ctx.B, TILE, BASE }); p.postMessage({ type: 'palette', cmap: colorMap(), gen }); }
   const { B } = ctx, tw0 = TILE / tileScale(0);
   for (let j = 0; j < Math.ceil((B.y1 - B.y0) / tw0); j++) for (let i = 0; i < Math.ceil((B.x1 - B.x0) / tw0); i++) L0_KEYS.push([0, i, j]);
   return DL.length;
@@ -175,3 +178,12 @@ function standIn(l: number, i: number, j: number, X: number, Y: number, Wd: numb
 function staticFrame() { sRaf = 0; if (sDirty) { sDirty = false; drawStatic(); } }
 /** בקשה לצייר מחדש את השכבה הסטטית בפריים הבא (זול: רק הרכבת אריחים) */
 export function requestStatic() { sDirty = true; if (!sRaf) sRaf = requestAnimationFrame(staticFrame); }
+
+/** אחרי החלפת פלטה: זורקים את כל האריחים ומבקשים אותם מחדש בצבעים החדשים */
+export function repaintTiles() {
+  gen++; const cmap = colorMap();
+  for (const v of tiles.values()) v.close?.();
+  tiles.clear(); born.clear(); lastNeed = '';
+  for (const p of painters) p.postMessage({ type: 'palette', cmap, gen });
+  requestStatic();
+}
