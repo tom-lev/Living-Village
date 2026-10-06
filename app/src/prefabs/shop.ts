@@ -146,16 +146,35 @@ const GENERIC: Kit = {
   },
 };
 
-/* ───────── שלט ───────── */
-function signBoard(g: any, cx: number, cy: number, text: string, bg: string, fg: string, kit: Kit, style: string) {
-  const tw = text.length * 5.6 + (kit.icon ? 12 : 0) + 10, th = 13;
-  if (style === 'oval') el('ellipse', { cx, cy, rx: tw / 2 + 2, ry: th / 2 + 1, fill: bg, ...ST }, g);
-  else el('rect', { x: cx - tw / 2, y: cy - th / 2, width: tw, height: th, rx: style === 'pill' ? th / 2 : 1.5, fill: bg, ...ST }, g);
-  if (style === 'board') el('rect', { x: cx - tw / 2 + 1.5, y: cy - th / 2 + 1.5, width: tw - 3, height: th - 3, rx: 1, fill: 'none', stroke: shade(bg, -.18), 'stroke-width': .7 }, g);
-  const tx = cx + (kit.icon ? 5 : 0);
-  if (kit.icon) kit.icon(g, cx - tw / 2 + 8, cy, fg);
-  const t = el('text', { x: tx, y: cy + 3.3, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 700, fill: fg }, g);
-  t.textContent = text;
+/* ───────── שלט: כמו שלט של חנות אמיתית ───────── */
+const SERIF = 'Georgia, "Times New Roman", serif';
+/** style: 'fascia' (לוח עץ על החזית), 'painted' (אותיות צבועות על הקיר), 'hanging' (לוח קטן תלוי) */
+function shopSign(g: any, cx: number, cy: number, text: string, kit: Kit, style: string, c: string, rg: LocalRng, maxW: number) {
+  const italic = rg.chance(.35), small = style === 'hanging';
+  let fs = small ? 7.5 : 9;
+  const iconW = kit.icon && style !== 'painted' ? 11 : 0;
+  fs = Math.min(fs, (maxW - 16 - iconW) / (text.length * .6));
+  const tw = text.length * fs * .6 + iconW;
+  const label = (fill: string, x: number) => {
+    const t = el('text', { x, y: cy + fs * .36, 'text-anchor': 'middle', 'font-size': n2(fs), 'font-weight': 700, 'font-family': SERIF, 'font-style': italic ? 'italic' : 'normal', fill }, g);
+    t.textContent = text;
+  };
+  if (style === 'painted') {
+    // אותיות צבועות ישר על הקיר, עם קו קישוט עדין מתחת
+    const ink = shade(c, -.42);
+    label(ink, cx);
+    el('path', { d: `M${n2(cx - tw * .32)},${n2(cy + fs * .75)}q${n2(tw * .32)},2 ${n2(tw * .64)},0`, fill: 'none', stroke: ink, 'stroke-width': .7, 'stroke-linecap': 'round' }, g);
+    return;
+  }
+  // לוח עץ (כהה או צבוע) עם מסגרת פנימית, מסמרים, אייקון וכיתוב בצבע שמנת/זהב
+  const wood = rg.pick(['#7a5232', '#5d4030', '#2f4a3a', '#2c3e50', shade(c, -.38)]), ink = rg.pick(['#f4e3b5', '#fdf6e3', '#e8c66a']);
+  const bw = tw + 14, bh = fs + 7, x0 = cx - bw / 2, y0 = cy - bh / 2;
+  if (small && rg.chance(.5)) el('path', { d: `M${n2(x0)},${n2(y0 + 3)}q${n2(bw / 2)},-5 ${n2(bw)},0v${n2(bh - 3)}h${n2(-bw)}z`, fill: wood, stroke: shade(wood, -.3), 'stroke-width': .9 }, g);
+  else el('rect', { x: x0, y: y0, width: bw, height: bh, rx: 1.5, fill: wood, stroke: shade(wood, -.3), 'stroke-width': .9 }, g);
+  el('rect', { x: x0 + 1.8, y: y0 + 1.8, width: bw - 3.6, height: bh - 3.6, rx: 1, fill: 'none', stroke: shade(wood, .25), 'stroke-width': .5, opacity: .7 }, g);
+  if (!small) el('path', { d: circ(x0 + 3.2, y0 + 3.2, .6) + circ(x0 + bw - 3.2, y0 + 3.2, .6) + circ(x0 + 3.2, y0 + bh - 3.2, .6) + circ(x0 + bw - 3.2, y0 + bh - 3.2, .6), fill: '#c9b58a' }, g);
+  if (iconW) kit.icon!(g, x0 + 9, cy, ink);
+  label(ink, cx + iconW / 2);
 }
 
 /* ───────── גגון ───────── */
@@ -272,15 +291,19 @@ export function shop(o: any) {
   const aw: string = o.awning ?? (form === 'pavilion' ? 'none' : rg.pick(['scallop', 'stripes', 'plain', 'pergola', 'none']));
   const ay = ftop - 4;
   if (aw !== 'none') rg.chance(.5) ? awning(g, x0 + 2, x1 - 2, ay, aw, c) : awning(g, fx0 - 2, fx1 + 2, ay, aw, c);
-  // שלט: לוח על החזית, שלט תלוי בולט, או שלט על הגג
-  const sign: string = o.sign ?? rg.pick(['board', 'pill', 'oval', 'hanging', 'roof']);
-  const bg = rg.pick(['#fffaf0', '#f6eedf', shade(c, .75), '#3d4a3f']), fg = bg === '#3d4a3f' ? '#f4e9c8' : shade(c, -.45);
+  // שלט: לוח עץ על החזית, אותיות צבועות על הקיר, או שלט קטן תלוי על זרוע ברזל
+  const sign: string = o.sign ?? rg.pick(['fascia', 'fascia', 'painted', 'hanging']);
   if (sign === 'hanging') {
-    const hx = x + side * -1 * (w / 2 + 2), hy = y - gh + 8;
-    el('path', { d: `M${n2(x - side * (w / 2 - 2))},${n2(hy - 6)}H${n2(hx - side * 14)}M${n2(hx - side * 9)},${n2(hy - 6)}v3M${n2(hx + side * -19)},${n2(hy - 6)}v3`, stroke: '#3b3b46', 'stroke-width': 1 }, g);
-    signBoard(g, hx - side * 14, hy + 2, name, bg, fg, kit, 'board');
-  } else if (sign === 'roof') signBoard(g, x, roofTop - 6, name, bg, fg, kit, 'pill');
-  else signBoard(g, x, form === 'townhouse' ? y - gh - 7 : Math.max(roofTop + 8, top + 6), name, bg, fg, kit, sign);
+    // זרוע ברזל מסולסלת שבולטת מהקיר, ושתי שרשראות קצרות
+    const wx = x - side * (w / 2), dir = -side, hy = y - gh + 6, bx = wx + dir * 17;
+    el('path', { d: `M${n2(wx)},${n2(hy)}H${n2(wx + dir * 30)}M${n2(wx)},${n2(hy + 8)}L${n2(wx + dir * 12)},${n2(hy)}`, fill: 'none', stroke: '#3b3b46', 'stroke-width': 1.1, 'stroke-linecap': 'round' }, g);
+    el('path', { d: `M${n2(wx + dir * 30)},${n2(hy)}a2,2 0 1 ${dir > 0 ? 1 : 0} ${n2(-dir * 2)},2.5`, fill: 'none', stroke: '#3b3b46', 'stroke-width': .9 }, g);
+    el('path', { d: `M${n2(bx - 9)},${n2(hy)}v4M${n2(bx + 9)},${n2(hy)}v4`, stroke: '#55555f', 'stroke-width': .6, 'stroke-dasharray': '1 .6' }, g);
+    shopSign(g, bx, hy + 11, name, kit, 'hanging', c, rg, 46);
+  } else {
+    const cy = form === 'townhouse' ? y - gh - 7 : top + 7.5;
+    shopSign(g, x, cy, name, kit, sign === 'painted' ? 'painted' : 'fascia', c, rg, w - 4);
+  }
 
   if (kit.extra && o.variant !== 'bakery') kit.extra(g, x, y, roofTop, w, c, rg);
   (kit.outside || GENERIC.outside)!(g, x, y, side, w, c, rg);

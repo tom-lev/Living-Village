@@ -7,7 +7,7 @@
 import { el, n2, blob, shade, smoothOpen } from '../core/util';
 import { rand, rngAt, type LocalRng } from '../core/rng';
 import { ctx } from '../world/context';
-import { geo } from '../world/geometry';
+import { geo, ROAD_W } from '../world/geometry';
 import type { WorldData } from '../world/types';
 
 type Pt = number[];
@@ -128,8 +128,9 @@ function creek(pts: Pt[], trails: Pt[][]) {
   for (const h of hits) {
     const g = el('g', { transform: `translate(${n2(h.x)},${n2(h.y)}) rotate(${n2(h.a)})` }, L.groundProps);
     if (h.road) {
-      el('rect', { x: -20, y: -29, width: 40, height: 6, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, g);
-      el('rect', { x: -20, y: 23, width: 40, height: 6, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, g);
+      const h = ROAD_W / 2 + 3;
+      el('rect', { x: -20, y: -h - 3, width: 40, height: 6, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, g);
+      el('rect', { x: -20, y: h - 3, width: 40, height: 6, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, g);
     } else {
       el('rect', { x: -16, y: -7, width: 32, height: 14, rx: 2, fill: '#b98552', stroke: '#8a5f39', 'stroke-width': 1 }, g);
       let pl = ''; for (let k = -13; k <= 13; k += 5) pl += `M${k},-7v14`;

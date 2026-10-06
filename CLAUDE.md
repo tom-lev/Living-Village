@@ -46,11 +46,12 @@ This file is the complete handoff. Work on this project so far happened in one l
   - full zoom-out showing the whole world, but with no empty bands.
 - **UI:**
   - Hebrew/RTL.
-  - **Object names.** Any object in `world.json` can have a unique English `name`, such as "Carter House", "Duck Lake" or "Old Stone Farm".
-    - The name shows as a small label under the object once zoom passes about 3× the home view, and it keeps a constant screen size (`world/labels.ts`, dynamic layer `labels`).
+  - **Object names.** Any object in `world.json` can have a unique English `name`, such as "Carter House", "Duck Lake" or "Old Stone Farm". About 99 initial names exist; houses use surnames and snowy ones are "… Lodge".
+    - The label sits **above** the object. Its top comes from the `block()` rects the prefab registered while drawing (computed in `scene/build.ts`). `labelAt: [x, y]` overrides the position.
+    - The look: a map-style italic serif, warm brown with a light halo. Labels appear only at about 4.5× the home view and keep a constant screen size (`world/labels.ts`, dynamic layer `labels`).
+    - Shops and the station have no label, because their own sign shows the name.
+    - **Renaming in the browser.** Tapping a label opens a small dialog. The new name is saved in `localStorage['village-names']` (per device) and shows immediately. "העתק שינויים" copies a JSON list `{type, at, from, to}` that the owner sends you, and you apply it to `world.json`.
     - Use these names when talking with the owner about fixes.
-    - Shops and the station show their name on their own sign, so they get no label. `labelAt: [x, y]` overrides the label position.
-    - About 99 initial names exist. Houses use surnames, and snowy ones are "… Lodge". Trees and small props have no names.
   - **Text inside the world is English only:** shop signs, the station and character names (Noa, Itai, Grandpa Moshe…). The UI chrome stays Hebrew.
   - Bottom-left: + − (hidden on touch), ⤢ (home view), ❚❚/▶ (pause), 🎨 (palette menu). Bottom-right: the zoom label.
   - The follow pill appears when you tap a character.
@@ -118,6 +119,7 @@ Order:
   - The prefab type names are registered in `prefabs/*.ts` via `register({...})`:
     - **nature:** pine, roundTree, palm, deer.
     - **buildings:** house `{x,y,w,h,rh,wall,roof,win,chimney,smoke,door,attic}` (in `prefabs/house.ts`), chalet, logCabin, modernHouse `{x,y,w,upper,wall,wood}`, shop `{x,y,name,color,wall,variant, form?, awning?, sign?, door?}` (in `prefabs/shop.ts`), church, chapel, barn, windmill, station, lighthouse, waterTower, greenhouse, observatory, lookoutTower, stoneFarm, tunnelPortal, well.
+    - **Shop signs look like real shop signs, not UI chips:** a wooden fascia board with a frame, nails and serif lettering; letters painted straight on the wall; or a small board hanging from a wrought-iron bracket. Text supports `font-family`, `font-style` and a halo `stroke` (VNode text and the static-to-dynamic text move in `tiles.ts`).
     - **No two buildings or trees are alike (owner's rule, also for future content).** Variation comes from `rngAt(x, y, salt)` in `core/rng.ts`: a local RNG seeded by position. It is stable across loads and does **not** consume the global RNG, so adding variety never moves the forest or anything else.
       - `house()` picks the roof shape (gable, steep, hip, saltbox, gambrel, cross), the roof texture (tiles, shingles, slate, thatch), the walls (plaster, siding, boards, brick, stone, half-timber), window and door styles, shutters, flower boxes, canopy, chimney, dormer, annex, a second storey and small extras. The door always stays at `x`, because the plot path leads there. `snow` (white roof) and `logs` restrict the choices.
       - `shop()` builds from parts: the form (cottage, townhouse, pavilion, glassfront), wall, awning, sign style and door side. A trade kit in `KITS` (bakery, flowers, barber, icecream) supplies the window display, outdoor props and sign icon. An unknown `variant` gets a generic shop.
@@ -183,6 +185,7 @@ Order:
   - a log cabin, a lookout tower (−800, −500), an old stone farmhouse with a walled yard and vegetable garden (`stoneFarm`, −950, 180; it replaced the castle at the owner's request), ruins, beehives, picnic spots, an orchard (−460, 470);
   - a maze (1570, 70), a vineyard (1192..1290, 300..820), a water tower, greenhouses (1520..1690, 1235), a sunflower field (1400, 1380).
 - **River:** from the waterfall (1080, −1430) south → into the lake (535, 262; rx 132, ry 112; ducks, fish, reeds) from the north-east → out of the lake at its south-west → through the village (x ≈ 300 at y 640..920, then south-east to x ≈ 500 at y 1350..1500) → into the sea at (540, 2330). It has stone bridges where roads cross and footbridges where trails cross; all were computed from intersections.
+- **Roads:** narrow (`ROAD_W` = 32 in `world/geometry.ts`) earthen village lanes with no centre stripe. They have worn patches, pebbles and grass tufts on the verges. Walker lanes, lamp offset (22), bridge widths and plot paths all follow `ROAD_W`. The old global RNG calls are still consumed, so the forest keeps its place.
 - **Mountains and valley** (`scene/mountains.ts`, data in `terrain.mountains` and `terrain.creek`):
   - **Flat style (owner's request; they disliked strong 3D shading).** Each range is built from separate massifs with gaps (passes) between them. A massif has 1–3 broad peaks, a gently jagged ridge, one body colour, one subtle shadow face, uneven snow caps, foothills and rocks. The broad slopes leave room for future houses, paths and people.
   - `anchors` force a massif behind the tunnel portals, the waterfall and the cave. `gaps` sets how sparse a range is: the front range is 0.65.

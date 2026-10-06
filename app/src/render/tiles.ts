@@ -18,7 +18,7 @@ function extractDisplayList(): DLItem[] {
   const DL: DLItem[] = [], { worldS, svgS, L } = ctx;
   worldS.removeAttribute('transform');
   const DETAIL = new Set(DETAIL_GROUPS);
-  const KEYS = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'font-size', 'font-weight', 'text-anchor'];
+  const KEYS = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'font-size', 'font-weight', 'font-family', 'font-style', 'text-anchor'];
   const walk = (node: Element, inh: Record<string, string>, alpha: number, detail: boolean) => {
     for (const e of [...node.children] as any[]) {
       const st = { ...inh };
@@ -29,8 +29,10 @@ function extractDisplayList(): DLItem[] {
       const m = e.getCTM();
       if (tag === 'text') {
         // טקסט עובר לשכבה הדינמית כ-SVG רגיל (חד בכל זום, ובלי צורך בגופן בתוך ה-Worker)
-        const t = el('text', { x: num('x'), y: num('y'), 'font-size': st['font-size'] || 12, 'font-weight': st['font-weight'] || 400,
-          'text-anchor': st['text-anchor'] || 'start', fill: st.fill || '#000', transform: `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})` }, L.fx);
+        const ta: Record<string, any> = { x: num('x'), y: num('y'), 'font-size': st['font-size'] || 12, 'font-weight': st['font-weight'] || 400,
+          'text-anchor': st['text-anchor'] || 'start', fill: st.fill || '#000', transform: `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})` };
+        for (const k of ['font-family', 'font-style', 'stroke', 'stroke-width']) if (st[k] !== undefined) ta[k] = st[k];
+        const t = el('text', ta, L.fx);
         t.textContent = e.textContent; continue;
       }
       let d: string;

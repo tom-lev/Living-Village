@@ -3679,7 +3679,7 @@
   {
    "type": "streetLamps",
    "spacing": 150,
-   "offset": 31
+   "offset": 22
   },
   {
    "type": "powerLine",

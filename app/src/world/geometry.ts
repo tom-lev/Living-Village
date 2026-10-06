@@ -38,6 +38,8 @@ export const geo = {
 const OC = 10;
 let OGW = 0, OGH = 0, OCC: Uint8Array;
 export const O_ROAD = 1, O_RIVER = 2, O_TRAIL = 4;
+/** רוחב הדרכים: דרכי עפר צרות של כפר בלי מכוניות */
+export const ROAD_W = 32;
 function stamp(pts: number[][], r: number, bit: number) {
   const { B } = ctx, rc = Math.ceil(r / OC);
   for (const [x, y] of pts) {
@@ -85,7 +87,7 @@ export function buildGeometry(w: WorldData) {
     }
   }
   if (C) geo.CREEK_SAMPLES.push(C[C.length - 1]);
-  stamp(roadSamples, 36, O_ROAD); stamp(trailSamples, 15, O_TRAIL); stamp(geo.RIVER_SAMPLES, 44, O_RIVER); stamp(geo.CREEK_SAMPLES, 20, O_RIVER);
+  stamp(roadSamples, ROAD_W / 2 + 12, O_ROAD); stamp(trailSamples, 15, O_TRAIL); stamp(geo.RIVER_SAMPLES, 44, O_RIVER); stamp(geo.CREEK_SAMPLES, 20, O_RIVER);
 }
 
 /** אפשר לשתול עץ כאן? (לא על דרך/שביל/נהר/מים, וגם הצמרת לא מסתירה מבנה או דרך) */

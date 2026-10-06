@@ -3,7 +3,7 @@ import { el, n2, circ, blob, smoothOpen, clamp } from '../core/util';
 import { rand, pick, rngAt } from '../core/rng';
 import { buildMountains } from './mountains';
 import { ctx } from '../world/context';
-import { geo, edgeAt, occ, O_ROAD, O_RIVER } from '../world/geometry';
+import { geo, edgeAt, occ, O_ROAD, O_RIVER, ROAD_W } from '../world/geometry';
 import type { WorldData } from '../world/types';
 
 /** קבוצות של פרטים קטנים (דשא) לפי אריח: מנוע האריחים מדלג עליהם כשמתרחקים */
@@ -26,17 +26,27 @@ export function buildTerrain(w: WorldData) {
   }
   parts.forEach((d, i) => d && el('path', { d, fill: 'none', stroke: '#7fb84d', 'stroke-width': 1.1, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: .8 }, DETAIL_GROUPS[i]));
 
-  /* דרכים: שוליים, משטח ופס בהיר באמצע */
-  const roads = [...geo.EDGES, ...geo.OUTER], all = roads.map(E => E.d).join('');
-  el('path', { d: all, fill: 'none', stroke: '#e2b087', 'stroke-width': 58, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.roads);
-  el('path', { d: all, fill: 'none', stroke: '#f6d4b2', 'stroke-width': 50, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.roads);
-  el('path', { d: all, fill: 'none', stroke: '#fbe2c9', 'stroke-width': 16, 'stroke-linecap': 'round', opacity: .55 }, L.roads);
-  let pebbles = '';
-  for (let i = 0; i < 520; i++) {
-    const E = pick(roads), p = edgeAt(E, rand(0, E.len)), o = rand(-20, 20);
-    pebbles += circ(p.x - p.ty * o, p.y + p.tx * o, rand(.7, 1.5));
+  /* דרכים: דרכי עפר צרות (אין מכוניות): שוליים רכים, כתמים שנשחקו מהליכה, אבנים קטנות ודשא בשוליים */
+  const roads = [...geo.EDGES, ...geo.OUTER], all = roads.map(E => E.d).join(''), rv = rngAt(1, 2, 81), hw = ROAD_W / 2;
+  el('path', { d: all, fill: 'none', stroke: '#e2b087', 'stroke-width': ROAD_W + 5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.roads);
+  el('path', { d: all, fill: 'none', stroke: '#f6d4b2', 'stroke-width': ROAD_W, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.roads);
+  // האבנים הישנות צרכו מספרים מהמחולל הכללי; צורכים אותם גם עכשיו, כדי שהיער ושאר העולם יישארו במקומם
+  for (let i = 0; i < 520; i++) { pick(roads); rand(0, 1); rand(-20, 20); rand(.7, 1.5); }
+  let worn = '', pebbles = '';
+  const verge = DETAIL_GROUPS.map(() => '');
+  for (const E of roads) for (let s = rv.rand(0, 30); s < E.len; s += rv.rand(18, 40)) {
+    const p = edgeAt(E, s), nx = -p.ty, ny = p.tx;
+    if (rv.chance(.45)) { const o = rv.rand(-5, 5); worn += blob(p.x + nx * o, p.y + ny * o, rv.rand(6, 13), rv.rand(2.5, 4.5), 6, .2, rv.rand(0, 6)); }
+    for (let k = 0; k < 2; k++) { const o = rv.rand(-hw + 3, hw - 3); pebbles += circ(p.x + nx * o, p.y + ny * o, rv.rand(.7, 1.4)); }
+    // גבעולי דשא בשולי הדרך (פרט שמופיע רק בזום קרוב)
+    for (const side of [-1, 1]) if (rv.chance(.6)) {
+      const o = side * (hw + rv.rand(2, 5)), x = p.x + nx * o, y = p.y + ny * o;
+      verge[tileOf(x, y)] += `M${n2(x - 2.5)},${n2(y)}l1.3,-3.6l1.2,3.6l1.2,-2.8l1,2.8`;
+    }
   }
-  el('path', { d: pebbles, fill: '#e0b08a', opacity: .7 }, L.roads);
+  el('path', { d: worn, fill: '#fbe2c9', opacity: .7 }, L.roads);
+  el('path', { d: pebbles, fill: '#e0b08a', opacity: .75 }, L.roads);
+  verge.forEach((d, i) => d && el('path', { d, fill: 'none', stroke: '#7fb84d', 'stroke-width': 1, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: .85 }, DETAIL_GROUPS[i]));
 
   /* שבילים צרים להולכי רגל (מתחת לדרכים) */
   {

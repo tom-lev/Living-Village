@@ -1,7 +1,7 @@
 /* בניית הסצנה מקובץ העולם: גאומטריה → פני שטח → אובייקטים → מחוללים */
 import { setSeed } from '../core/rng';
 import { setPalette } from '../core/palette';
-import { ctx, initLayers, sortStatics } from '../world/context';
+import { ctx, initLayers, sortStatics, NO_TREE } from '../world/context';
 import { buildGeometry } from '../world/geometry';
 import type { WorldData } from '../world/types';
 import { PREFABS } from '../prefabs/registry';
@@ -27,8 +27,11 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
     const f = PREFABS[o.type];
     if (!f) { console.warn('אין prefab בשם', o.type, o); continue; }
     if (o.id) ctx.named[o.id] = o;
+    const n0 = NO_TREE.length;
     f(o);
-    if (o.name && o.type !== 'shop') addLabel(o);   // לחנות כבר יש שלט עם השם
+    // התווית יושבת מעל האובייקט: הקצה העליון של השטח שהוא חסם בזמן הציור
+    const top = NO_TREE.length > n0 ? Math.min(...NO_TREE.slice(n0).map(r => r[1])) + 8 : undefined;
+    if (o.name && o.type !== 'shop' && o.type !== 'station') addLabel(o, top);   // לחנות ולתחנה כבר יש שלט עם השם
   }
   for (const g of w.generators) {
     const f = GENERATORS[g.type];

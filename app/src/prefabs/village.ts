@@ -3,6 +3,7 @@ import { el, circ, rrect, n2, blob } from '../core/util';
 import { rand, R, rngAt } from '../core/rng';
 import { ctx, block } from '../world/context';
 import { register } from './registry';
+import { ROAD_W } from '../world/geometry';
 
 /** מגרש של בית: מדשאה, גדר חיה או גדר כלונסאות, שביל מהדלת לרחוב וערוגה ליד הבית.
  *  door: [x, y] של דלת הבית; street: 'top' | 'bottom' – לאיזה צד של המגרש פונה הרחוב */
@@ -16,7 +17,8 @@ function plot(o: any) {
   }
   if (door) {
     // שביל מרוצף מהדלת לשער
-    const [dx, dy] = door, ey = street === 'bottom' ? y1 + 3 : y0 - 3, top = Math.min(dy, ey), h = Math.abs(ey - dy);
+    // השביל מגיע עד שפת הדרך הצרה (המגרשים תוכננו לדרך רחבה יותר)
+    const reach = 3 + (25 - ROAD_W / 2), [dx, dy] = door, ey = street === 'bottom' ? y1 + reach : y0 - reach, top = Math.min(dy, ey), h = Math.abs(ey - dy);
     el('rect', { x: dx - 5, y: top, width: 10, height: h, rx: 2, fill: '#ecd7b5' }, G);
     let d = ''; for (let yy = top + 5; yy < top + h - 2; yy += 7) d += `M${dx - 4},${yy}h8`;
     el('path', { d, stroke: '#dcc29b', 'stroke-width': .9 }, G);

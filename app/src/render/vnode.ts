@@ -7,8 +7,8 @@ import { Container, Graphics, GraphicsPath, Sprite, Text, Texture, Matrix } from
 const S = 8;
 const SHAPES = new Set(['path', 'rect', 'circle', 'ellipse', 'line', 'polygon', 'polyline']);
 const GEOM = new Set(['d', 'x', 'y', 'width', 'height', 'rx', 'ry', 'cx', 'cy', 'r', 'x1', 'y1', 'x2', 'y2', 'points']);
-const STYLE = new Set(['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-weight', 'text-anchor', 'fill-opacity', 'stroke-opacity']);
-const INHERIT = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-weight', 'text-anchor'];
+const STYLE = new Set(['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-weight', 'font-family', 'font-style', 'text-anchor', 'fill-opacity', 'stroke-opacity']);
+const INHERIT = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-weight', 'font-family', 'font-style', 'text-anchor'];
 const dirty = new Set<VNode>();
 let defsRoot: Element | null = null;
 export const setDefs = (e: Element) => { defsRoot = e; };
@@ -162,6 +162,11 @@ export class VNode {
       const t = this.gfx as Text;
       t.text = this._text;
       t.style.fontSize = size * S; t.style.fontWeight = (this.style('font-weight') || '400') as any; t.style.fill = fill[0];
+      t.style.fontFamily = this.style('font-family') || 'Rubik, system-ui, sans-serif';
+      t.style.fontStyle = (this.style('font-style') || 'normal') as any;
+      // קו מתאר לטקסט (הילה סביב האותיות), רק אם הוגדר על הטקסט עצמו
+      const sc = a.stroke && parseColor(a.stroke);
+      t.style.stroke = sc ? { color: sc[0], alpha: sc[1], width: +(a['stroke-width'] || 1) * S, join: 'round' } : undefined as any;
       t.alpha = fill[1]; t.scale.set(1 / S);
       t.anchor.set(anchor === 'middle' ? .5 : anchor === 'end' ? 1 : 0, .78);   // y של SVG הוא קו הבסיס
       t.position.set(num('x'), num('y'));

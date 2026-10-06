@@ -3,6 +3,7 @@ import { el, n2, circ, shade, wrap1, rrect, ST } from '../core/util';
 import { rand, pick } from '../core/rng';
 import { ctx, prop, block, fxAt } from '../world/context';
 import { register } from './registry';
+import { ROAD_W } from '../world/geometry';
 
 export function bench(o: any) {
   const { x, y } = o, g = prop(y), c = '#b07a48', d = shade(c, -.25);
@@ -202,9 +203,10 @@ function footbridge(o: any) {
 /** מעקות אבן של גשר דרך מעל הנהר */
 function stoneBridge(o: any) {
   const { x, y, angle = 0 } = o, G = el('g', { transform: `translate(${x},${y}) rotate(${angle})` }, ctx.L.groundProps);
-  el('rect', { x: -40, y: -27, width: 80, height: 54, fill: '#e9dcc6' }, G);   // סיפון הגשר מעל המים
-  el('rect', { x: -46, y: -31, width: 92, height: 7, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, G);
-  el('rect', { x: -46, y: 24, width: 92, height: 7, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, G);
+  const h = ROAD_W / 2 + 3;
+  el('rect', { x: -40, y: -h, width: 80, height: 2 * h, fill: '#e9dcc6' }, G);   // סיפון הגשר מעל המים
+  el('rect', { x: -46, y: -h - 4, width: 92, height: 7, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, G);
+  el('rect', { x: -46, y: h - 3, width: 92, height: 7, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, G);
 }
 
 function pier(o: any) {

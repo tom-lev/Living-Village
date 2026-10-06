@@ -54,7 +54,7 @@ export class Walker {
     this.look = look; this.name = look.name; this.speed = speed;
     const ei = Math.floor(R() * geo.EDGES.length);
     this.rv = new Rover(ei, R() < .5 ? 1 : -1, rand(0, geo.EDGES[ei].len));
-    this.lane = look.hold === 'leash' ? 18 : (R() < .5 ? 1 : -1) * rand(14, 20);
+    this.lane = look.hold === 'leash' ? 8 : (R() < .5 ? 1 : -1) * rand(4, 9);   // בתוך הדרך הצרה (לא על הדשא)
     this.fig = new Figure(ctx.L.actors, look); this.el = this.fig.g;
     const p = this.rv.at(this.lane);
     this.x = p[0]; this.y = p[1]; this.hx = 1; this.hy = 0;

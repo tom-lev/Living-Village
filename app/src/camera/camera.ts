@@ -5,6 +5,7 @@ import { clamp } from '../core/util';
 import { ctx } from '../world/context';
 import { requestStatic, resizeCanvas } from '../render/tiles';
 import { view } from './view';
+import { pickLabel, openRename } from '../world/labels';
 
 const { cam } = view;
 let stage: HTMLElement, dWrap: HTMLElement, zoomLbl: HTMLElement, followEl: HTMLElement;
@@ -135,7 +136,8 @@ export function initCamera(followables: any[]) {
     ptrs.set(e.pointerId, [e.clientX, e.clientY]);
     if (ptrs.size === 1) {
       const f = view.gpu ? null : (e.target as Element).closest('[data-f]') as any;
-      down = { x: e.clientX, y: e.clientY, f: f ? +f.dataset.f : view.gpu ? pick(e.clientX, e.clientY) : null, moved: false };
+      const r = stage.getBoundingClientRect(), fi = f ? +f.dataset.f : view.gpu ? pick(e.clientX, e.clientY) : null;
+      down = { x: e.clientX, y: e.clientY, f: fi, label: fi === null ? pickLabel(e.clientX - r.left, e.clientY - r.top) : null, moved: false };
     }
     if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), c: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; if (down) down.moved = true; }
     anim = null; stage.classList.add('drag'); beginGesture();
@@ -161,6 +163,7 @@ export function initCamera(followables: any[]) {
     if (ptrs.size === 0) {
       stage.classList.remove('drag');
       if (down && !down.moved && down.f !== null) startFollow(followables[down.f]);
+      else if (down && !down.moved && down.label) openRename(down.label);   // לחיצה על שם של מקום: שינוי השם
       down = null;
       endGesture();
     }
