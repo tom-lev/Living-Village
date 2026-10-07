@@ -1,4 +1,5 @@
 /* פני השטח: קרקע, דשא, דרכים, שבילים, חוף, נהר, ים, שלג והרים */
+import { curvePts } from '../world/curve';
 import { el, n2, circ, blob, smoothOpen, clamp } from '../core/util';
 import { rand, pick, rngAt } from '../core/rng';
 import { buildMountains } from './mountains';
@@ -70,7 +71,7 @@ export function buildTerrain(w: WorldData) {
       const ends = geo.TRAIL_FREE.filter(f => f.trail === i);
       if (!ends.length) return smoothOpen(t);
       // שביל עם קצה פנוי: מציירים מהעקומה הצפופה עצמה, כדי שהקצה הנמוג ימשיך אותה בדיוק
-      let pts = denseCurve(t);
+      let pts = curvePts(t, 3);
       for (const f of ends) {
         const src = f.start ? pts.slice().reverse() : pts;
         let acc = 0, j = src.length - 1;
@@ -166,20 +167,4 @@ export function buildTerrain(w: WorldData) {
     el('path', { d: `M${x - 8},${top + 2}v${h - 6}M${x},${top}v${h - 2}M${x + 8},${top + 2}v${h - 6}`, stroke: '#ffffff', 'stroke-width': 2, 'stroke-linecap': 'round', opacity: .9 }, L.ground);
     el('ellipse', { cx: x, cy: bottom, rx: 28, ry: 9, fill: '#e8f8fd' }, L.ground);
   }
-}
-
-/** עקומת Catmull-Rom צפופה (נקודה כל ~3 יחידות), אותה עקומה ש-smoothOpen מצייר */
-function denseCurve(P: number[][]) {
-  const out: number[][] = [];
-  for (let i = 0; i < P.length - 1; i++) {
-    const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    const n = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 3));
-    for (let k = 0; k < n; k++) {
-      const t = k / n, u = 1 - t;
-      out.push([u * u * u * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p2[0], u * u * u * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p2[1]]);
-    }
-  }
-  out.push(P[P.length - 1]);
-  return out;
 }

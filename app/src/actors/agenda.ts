@@ -51,10 +51,11 @@ export function prependRoute(R: Route, p: Pt): Route { return mk([p, ...R.pts], 
 
 /** הדרכים לחבר נקודה (דלת, נקודת עמידה, מיקום נוכחי) לרשת ההליכה, במסלול שמכבד את כללי העולם:
  *  לא דרך מבנים, גדרות, מים או שדות, ומגרש פרטי רק לדייריו. כמה אפשרויות, מהקרובה לרחוקה */
-function connects(p: Pt, rules: WalkRules) {
+export function connects(p: Pt, rules: WalkRules) {
   const out: { node: number; path: number[][] }[] = [];
-  for (const n of [...new Set([...nearNodes(p[0], p[1], 420, 16), nearestNode(p[0], p[1])])]) {
-    const q = nodeAt(n); if (q.lane < 0) continue;
+  // עד 40 צמתים מהקרוב לרחוק: ליד מכשול (מכלאה, נהר) הקרובים ביותר יכולים להיות כולם מעבר לו, והדרך האמיתית רחוקה קצת יותר
+  for (const n of [...new Set([...nearNodes(p[0], p[1], 600, 40), nearestNode(p[0], p[1])])]) {
+    const q = nodeAt(n); if (q.lane < 0 || !q.nb.length) continue;   // צומת מבודד (נחתך בתוך מבנה או גדר) לא מוביל לשום מקום: לא מבזבזים עליו את ארבעת החיבורים
     const path = gridPath(p, [q.x, q.y], rules, 120);
     if (path) out.push({ node: n, path });
     if (out.length >= 4) break;
@@ -103,11 +104,12 @@ function addHikes() {
 }
 /** אפשר להגיע? מקום נכנס לבחירה רק אם יש אליו מסלול מהכפר שמכבד את כללי העולם (נבדק פעם אחת לכל מקום) */
 const reachCache = new Map<number, boolean>();
-function reachable(p: Place) {
-  let r = reachCache.get(p.id);
+export function reachable(p: Place, priv = -1) {
+  const key = p.id * 1000 + priv + 1;
+  let r = reachCache.get(key);
   if (r === undefined) {
     const H = ctx.home, from = nearestWalkable((H.x0 + H.x1) / 2, (H.y0 + H.y1) / 2) || [(H.x0 + H.x1) / 2, (H.y0 + H.y1) / 2];
-    r = !!routeTo(from, p, { priv: -1 }); reachCache.set(p.id, r);
+    r = !!routeTo(from, p, { priv }); reachCache.set(key, r);
   }
   return r;
 }

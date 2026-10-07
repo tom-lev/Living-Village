@@ -34,6 +34,7 @@ function plot(o: any) {
       walk = [[dx, dy], [dx, fy], [sx, fy], [sx, back ? back.y + back.hw : y0 - reach]];
       gateX = sx;
     }
+    o._pathEnd = [...walk[walk.length - 1], walk.length === 2 ? 1 : -1];   // לבדיקת העולם: השביל באמת נוגע בדרך
     // פינות מעוגלות ברדיוס 7
     let d = `M${n2(walk[0][0])},${n2(walk[0][1])}`;
     for (let i = 1; i < walk.length - 1; i++) {

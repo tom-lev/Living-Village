@@ -1,4 +1,6 @@
 /* בניית הסצנה מקובץ העולם: גאומטריה → פני שטח → אובייקטים → מחוללים */
+import { declOf } from '../world/decl';
+import { finish, need, note, resetStages } from '../world/issues';
 import { setSeed } from '../core/rng';
 import { setPalette } from '../core/palette';
 import { ctx, initLayers, sortStatics, NO_TREE, statics } from '../world/context';
@@ -23,23 +25,26 @@ import { WATERS } from '../world/context';
 const rect = ([x0, y0, x1, y1]: number[]) => ({ x0, y0, x1, y1 });
 
 export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElement) {
+  resetStages();   // הסדר הקבוע של שלבי הבנייה: world/issues.ts (כלל תשתית 3)
   ctx.world = w; ctx.B = rect(w.bounds); ctx.home = rect(w.home);
   setSeed(w.seed);
   setPalette(w.palettes?.find(p => p.name === w.palette), w.palettes);
   initLayers(svgS, svgD);
-  buildGeometry(w);
+  finish('setup');
+  buildGeometry(w);                        // דרכים, דגימת הנהר והפלג, כללי השבילים, צמתים
+  finish('geometry');
   initWalk();   // מפת מעבר: מסמנים תוך כדי בנייה מה מותר לדרוך עליו
   buildTerrain(w);
   markTerrain(w);
+  finish('terrain');
   // אגמים ובריכות מסומנים כמים כבר עכשיו, לפני שחפצים קטנים מחפשים מקום (אחרת ספסל יכול "לזוז" לתוך אגם)
-  for (const o of w.objects) {
-    if (['lake', 'mountainLake', 'fishingPond', 'frozenLake'].includes(o.type)) markEllipse(o.cx, o.cy, o.rx, o.ry, WATER);
-    if (o.type === 'hotSpring') markEllipse(o.x, o.y, 60, 30, WATER);
-  }
+  for (const o of w.objects) { const e = declOf(o.type).water?.(o); if (e) markEllipse(e[0], e[1], e[2], e[3], WATER); }
+  finish('water');
   alignBridges(w);   // גשר מהנתונים: בדיוק איפה שהדרך או השביל חוצים את המים, בכיוון שלהם
+  finish('bridges');
   for (const o of w.objects) {
     const f = PREFABS[o.type];
-    if (!f) { console.warn('אין prefab בשם', o.type, o); continue; }
+    if (!f) { note('undeclared', `No prefab named "${o.type}"`, o.x ?? o.x0 ?? o.cx ?? 0, o.y ?? o.y0 ?? o.cy ?? 0); continue; }
     if (o.id) ctx.named[o.id] = o;
     placeSmall(o);                             // כלל המיקום: חפץ לא עומד על שביל, על מים או על שפת רחבה
     const n0 = NO_TREE.length, s0 = statics.length, p0 = places.length;
@@ -54,13 +59,15 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
       for (const st of statics.slice(s0)) { try { const bb = st.el.getBBox(); if (bb.width * bb.height > area) { area = bb.width * bb.height; top = bb.y; } } catch {} }
       if (top === undefined && NO_TREE.length > n0) top = Math.min(...NO_TREE.slice(n0).map(r => r[1])) + 8;
     }
-    if (o.name && o.type !== 'shop' && o.type !== 'station') addLabel(o, top);   // לחנות ולתחנה כבר יש שלט עם השם
+    if (o.name && !declOf(o.type).noLabel) addLabel(o, top);   // לחנות ולתחנה כבר יש שלט עם השם (noLabel בהצהרה)
   }
+  finish('objects');
   for (const g of w.generators) {
     const f = GENERATORS[g.type];
     if (!f) { console.warn('אין מחולל בשם', g.type, g); continue; }
     f(g);
   }
+  finish('generators');
   sortStatics();
   // מכשולים קטנים: כל דבר שעומד על הקרקע (עצים, ספסלים, פנסים, חביות) חוסם רק את הבסיס שלו (גזע, רגליים), לא את הצמרת
   for (const st of statics) { try { const bb = st.el.getBBox(); if (bb.width > 0) markEllipse(bb.x + bb.width / 2, st.y - 2, Math.min(bb.width / 2, 4.5), 3, SOFT); } catch {} }
@@ -68,26 +75,18 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   // גשרים אוטומטיים מעל הנהר, איפה שדרך או שביל חוצים אותו ואין שם גשר מהנתונים
   autoBridges(geo.RIVER_SAMPLES, w.trails.map(t => catmull(t)), 34, w.objects.filter(o => o.type === 'stoneBridge' || o.type === 'footbridge').map(o => [o.x, o.y]));
   for (const W of WATERS) clearPathIn(W.cx, W.cy, W.rx, W.ry);   // אגם: הדרך או השביל לא חוצים אותו (חוץ מגשר)
+  finish('obstacles');
+  finish('ready');
 }
 
 /* כלל המיקום של חפצים קטנים: כל השטח המצויר של החפץ, כולל הגובה שלו (גוף הכוורת, משענת הספסל),
-   כי חלק גבוה שעומד מול שביל מסתיר אותו ונראה כאילו השביל נכנס לתוכו */
-const FOOT: Record<string, (o: any) => number[]> = {
-  bench: o => o.facing === 'e' || o.facing === 'w' ? [o.x - 12, o.y - 43, o.x + 12, o.y + 4] : [o.x - 22, o.y - 24, o.x + 22, o.y + 4],
-  picnicTable: o => [o.x - 20, o.y - 18, o.x + 20, o.y + 4],
-  picnicBlanket: o => [o.x - 22, o.y - 16, o.x + 22, o.y + 16],
-  haybale: o => [o.x - 9, o.y - 9, o.x + 9, o.y + 9],
-  mailbox: o => [o.x - 8, o.y - 26, o.x + 8, o.y + 2],
-  bike: o => [o.x - 11, o.y - 16, o.x + 11, o.y + 2],
-  well: o => [o.x - 18, o.y - 38, o.x + 18, o.y + 7],
-  signpost: o => [o.x + 2, o.y - 12, o.x + 28, o.y + 12],   // 4. שלט לא עומד על הצומת: הוא מצויר מימין לנקודה שלו
-  beehives: o => [o.x - 13, o.y - 32, o.x + (Math.min(o.count ?? 5, 3) - 1) * 32 + 13, o.y + (Math.ceil((o.count ?? 5) / 3) - 1) * 34 + 4],
-};
+   כי חלק גבוה שעומד מול שביל מסתיר אותו ונראה כאילו השביל נכנס לתוכו. השטח מוצהר בסוג עצמו (foot ב-world/decl.ts) */
+const footOf = (o: any) => declOf(o.type).foot?.(o);
 /** חפצים שהוזזו בבנייה בגלל כלל המיקום (מי שקשור אליהם זז איתם: יושב על ספסל, יונים) */
 export const relocated: { type: string; from: number[]; to: number[] }[] = [];
 function placeSmall(o: any) {
   if (o.type === 'bench') orientBench(o);   // קודם הכיוון (ממנו נגזר השטח שהספסל תופס), ואחרי הזזה – שוב
-  const f0 = FOOT[o.type]?.(o), fp = f0 && [f0[0] - 4, f0[1] - 4, f0[2] + 4, f0[3] + 4];   // מרווח קטן: לא נוגע בשביל ממש בקצה
+  const f0 = footOf(o), fp = f0 && [f0[0] - 4, f0[1] - 4, f0[2] + 4, f0[3] + 4];   // מרווח קטן: לא נוגע בשביל ממש בקצה
   if (fp && !placeOk(fp[0], fp[1], fp[2], fp[3])) {
     const d = findPlace(fp);
     if (d) { relocated.push({ type: o.type, from: [o.x, o.y], to: [o.x + d[0], o.y + d[1]] }); o.x += d[0]; o.y += d[1]; }
@@ -106,12 +105,9 @@ type Target = { x: number; y: number; r: (dx: number, dy: number) => number };
 function benchTargets() {
   const T: Target[] = [];
   const ell = (cx: number, cy: number, rx: number, ry: number) => T.push({ x: cx, y: cy, r: (dx, dy) => { const a = Math.atan2(dy, dx); return rx * ry / Math.hypot(ry * Math.cos(a), rx * Math.sin(a)); } });
-  for (const o of ctx.world.objects as any[]) {
-    if (['lake', 'mountainLake', 'fishingPond', 'frozenLake'].includes(o.type)) ell(o.cx, o.cy, o.rx, o.ry);
-    else if (o.type === 'hotSpring') ell(o.x, o.y, 60, 30);
-    else if (o.type === 'roundabout') ell(o.x, o.y, (o.r ?? 40) + 42, (o.r ?? 40) + 42);
-    else if (o.type === 'plaza') ell(o.x, o.y, o.rx, o.ry);
-    else if (o.type === 'fountain') ell(o.x, o.y, 36, 16);
+  for (const o of ctx.world.objects as any[]) {   // מים ורחבות: מה שהסוג הצהיר (water / square ב-world/decl.ts)
+    const D = declOf(o.type), e = D.water?.(o) ?? D.square?.(o);
+    if (e) ell(e[0], e[1], e[2], e[3]);
   }
   for (const [P, half] of [[geo.RIVER_SAMPLES, 24], [geo.CREEK_SAMPLES, 10]] as [number[][], number][])
     for (let i = 0; i < P.length; i += 2) T.push({ x: P[i][0], y: P[i][1], r: () => half });
@@ -119,6 +115,7 @@ function benchTargets() {
 }
 let TARGETS: Target[] | null = null;
 function orientBench(o: any) {
+  need('water', 'orientBench');
   if (o.facingSet ?? (o.facingSet = o.facing !== undefined)) return;
   TARGETS ??= benchTargets();
   let best = 180, dx = 0, dy = 0;
@@ -136,6 +133,7 @@ function orientBench(o: any) {
       for (let r = 12; r < best; r += 6) if (flagsAt(o.x + Math.cos(t) * r, o.y - 6 + Math.sin(t) * r) & PATH) { best = r; dx = Math.cos(t); dy = Math.sin(t); break; }
     }
   }
+  if (!dx && !dy) note('bench', 'Bench has nothing to face (no water, square or path nearby)', o.x, o.y, o);
   o.facing = !dx && !dy ? 's' : Math.abs(dx) > Math.abs(dy) * 1.8 ? (dx > 0 ? 'e' : 'w') : dy > 0 ? 's' : 'n';
 }
 
@@ -178,11 +176,9 @@ function markTerrain(w: WorldData) {
   for (const t of w.trails) markPath(catmull(t), 6);
 }
 
-/* מבנים: חוסמים את הבסיס (כמה יחידות מעל קו הקרקע, בכל הרוחב). שטחים: שדות וערוגות לא דורכים; מבוך, מכלאה, מזרקה: חסומים לגמרי */
-const BUILDINGS = new Set(['modernHouse', 'chalet', 'logCabin', 'church', 'chapel', 'barn', 'windmill', 'station', 'lighthouse', 'waterTower',
-  'greenhouse', 'observatory', 'lookoutTower', 'stoneFarm', 'well', 'tent', 'igloo', 'iceHut', 'turbine']);   // פתחי מנהרה ומערה: הדרך עוברת דרכם, לא חוסמים
+/* מבנים (solidBase בהצהרה): חוסמים את הבסיס. שטחים: שדות וערוגות לא דורכים; מבוך, מכלאה, מזרקה: חסומים לגמרי */
 function markObject(o: any, s0: number) {
-  if (BUILDINGS.has(o.type)) {
+  if (declOf(o.type).solidBase) {
     // החלק הגדול שצויר הוא המבנה עצמו; הבסיס שלו חוסם (הדלת בקו הקרקע נשארת פתוחה)
     let best: any = null, area = 0;
     for (const st of statics.slice(s0)) { try { const bb = st.el.getBBox(); if (bb.width * bb.height > area) { area = bb.width * bb.height; best = { bb, y: st.y }; } } catch {} }

@@ -2,6 +2,7 @@
    נבנית פעם אחת אחרי בניית העולם. כל קטע מקבל "רוחב" (דרך או שביל), כדי שההולכים יתפזרו לרוחב הדרך
    אבל יישארו במרכז שביל צר. */
 import { ctx } from './context';
+import { curvePts } from './curve';
 import { geo, ROAD_W } from './geometry';
 import type { Pt } from './places';
 import { flagsAt, privateAt, gridPath, SOLID, WATER, PATH } from './walk';
@@ -12,20 +13,8 @@ const CELL = 40, grid = new Map<string, number[]>();
 const cellKey = (x: number, y: number) => `${Math.floor(x / CELL)},${Math.floor(y / CELL)}`;
 let built = false;
 
-/** דגימה של עקומת Catmull-Rom (כמו ששבילים מצוירים) */
-export function catmull(P: Pt[]): Pt[] {
-  const out: Pt[] = [];
-  for (let i = 0; i < P.length - 1; i++) {
-    const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    for (let t = 0; t < 1; t += .1) {
-      const u = 1 - t;
-      out.push([u * u * u * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p2[0], u * u * u * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p2[1]]);
-    }
-  }
-  out.push(P[P.length - 1]);
-  return out;
-}
+/** העקומה המצוירת של שביל (מקור אחד: world/curve.ts) */
+export const catmull = (P: Pt[]): Pt[] => curvePts(P, 4);
 /** דגימה מחדש במרווחים שווים */
 function resample(P: Pt[], step: number): Pt[] {
   const out: Pt[] = [P[0]]; let carry = 0;

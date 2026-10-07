@@ -4,6 +4,7 @@
    לחיצה על תווית פותחת חלון לשינוי השם, אבל רק במכשיר שיש בו מפתח GitHub (או בכתובת עם ?edit, כדי להזין אותו). */
 import { el, n2, clamp } from '../core/util';
 import { ctx } from './context';
+import { declOf } from './decl';
 import { view } from '../camera/view';
 import { VNode } from '../render/vnode';
 import { requestStatic } from '../render/tiles';
@@ -11,8 +12,6 @@ import { loadNames, saveName, getToken, setToken } from './namesStore';
 
 const FS = 10, PX = 26;                 // גודל הגופן ביחידות עולם, והגודל הרצוי על המסך בפיקסלים
 const SHOW_FROM = 4.2, FULL_AT = 5;     // יחס לזום הבית: מתחילים להופיע, ונראים במלואם
-/* סוגים שבהם x,y הוא הפינה השמאלית העליונה של מלבן (ולא המרכז או קו הקרקע) */
-const TOP_LEFT = new Set(['vegGarden', 'field', 'footballPitch', 'pier']);
 const PENDING = 'village-names-pending';   // שינויים שנשמרו אבל עוד לא הגיעו לאתר שנפרס
 
 interface Label { o: any; key: string; original: string; x: number; y: number; x0: number; y0: number; g: any; inner: any; text: any }
@@ -28,7 +27,7 @@ const canEdit = () => !!getToken() || new URLSearchParams(location.search).has('
 function anchorOf(o: any, top?: number): number[] | null {
   if (o.labelAt) return o.labelAt;
   let x: number, y: number;
-  if (TOP_LEFT.has(o.type)) { x = o.x + (o.w ?? 0) / 2; y = o.y; }
+  if (declOf(o.type).topLeft) { x = o.x + (o.w ?? 0) / 2; y = o.y; }
   else if (o.cx !== undefined) { x = o.cx; y = o.cy - (o.ry ?? o.r ?? 0); }
   else if (o.x0 !== undefined) { x = (o.x0 + o.x1) / 2; y = o.y0; }
   else if (o.a && o.b) { x = (o.a[0] + o.b[0]) / 2; y = Math.min(o.a[1], o.b[1]); }
@@ -87,6 +86,19 @@ function layoutLabels() {
     l.g.setAttribute('transform', `translate(${n2(l.x)},${n2(l.y)})`);
   }
   laidFor = view.fitK;
+}
+
+/** לבדיקת העולם: זוגות תוויות שהטקסט שלהן חופף בזום שבו הן מופיעות (התיבה כאן היא הטקסט עצמו, בלי המרווח של הסידור) */
+export function labelOverlaps() {
+  if (laidFor !== view.fitK) layoutLabels();
+  const k = view.fitK * SHOW_FROM, H = PX / k;
+  const box = (l: Label) => { const w = l.text.textContent.length * .5 * PX / k; return [l.x - w / 2, l.y - H * .75, l.x + w / 2, l.y + H * .15]; };
+  const out: { a: string; b: string; x: number; y: number }[] = [];
+  for (let i = 0; i < labels.length; i++) for (let j = i + 1; j < labels.length; j++) {
+    const p = box(labels[i]), q = box(labels[j]);
+    if (p[0] < q[2] && p[2] > q[0] && p[1] < q[3] && p[3] > q[1]) out.push({ a: labels[i].text.textContent, b: labels[j].text.textContent, x: labels[i].x, y: labels[i].y });
+  }
+  return out;
 }
 
 /** בכל פריים: שקיפות לפי הזום, וקנה מידה הפוך כדי שהתווית תישאר באותו גודל על המסך */

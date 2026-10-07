@@ -2,6 +2,9 @@
 import { clamp, P } from '../core/util';
 import { ctx, NO_TREE, inWater } from './context';
 import type { Pt, WorldData } from './types';
+import { curveFixed, curvePts, curveWithSegs } from './curve';
+import { declOf, doorX } from './decl';
+export { doorX } from './decl';
 
 export interface Edge { a?: string; b?: string; pts: number[][]; acc: number[]; len: number; d: string }
 
@@ -33,8 +36,8 @@ export const geo = {
   RIVER_SAMPLES: [] as number[][],
   TRAIL_FLARES: [] as { x: number; y: number; mx: number; my: number; tx: number; ty: number }[],   // שביל שנכנס לדרך: התרחבות רכה בשולי הדרך
   TRAIL_FREE: [] as { trail: number; start: boolean }[],
-  TRAIL_FILLETS: [] as number[][][],
-  DOOR_TRAILS: new Set<number>(),      // שבילים שנוספו מדלת של מבנה אל הרשת (כלל 6): הקצה שבדלת לא נמוג   // שביל שפוגש שביל: פינה מעוגלת בכל צד (עקומה ריבועית: נקודה על השביל המארח, הצומת, נקודה על השביל הנכנס)
+  TRAIL_FILLETS: [] as number[][][],   // שביל שפוגש שביל: פינה מעוגלת בכל צד (עקומה ריבועית: נקודה על השביל המארח, הצומת, נקודה על השביל הנכנס)
+  DOOR_TRAILS: new Set<number>(),      // שבילים שנוספו מדלת של מבנה אל הרשת (כלל 23): הקצה שבדלת לא נמוג
   ROAD_TAPERS: [] as { x: number; y: number; dx: number; dy: number }[],   // דרך ללא מוצא שממשיכה כשביל: הדרך הולכת ונהיית צרה
    // קצה שביל שלא מוביל לשום מקום: נמוג בהדרגה
   CREEK_SAMPLES: [] as number[][],   // הפלג שבעמק
@@ -76,26 +79,10 @@ export function buildGeometry(w: WorldData) {
   [...geo.EDGES, ...geo.OUTER].forEach(E => { for (let i = 0; i < E.pts.length; i += 5) roadSamples.push(E.pts[i]); });
   // הנהר: דוגמים את העקומה החלקה שמצוירת (ולא קווים ישרים בין הנקודות), כדי שגשרים וחציות ייפלו בדיוק על המים.
   // אותו מספר דגימות כמו קודם, כדי שהגלים (שצורכים מספרים אקראיים לכל דגימה) לא יזיזו את שאר העולם
-  const R = w.river; geo.RIVER_SAMPLES = [];
-  for (let i = 0; i < R.length - 1; i++) {
-    const p0 = R[Math.max(0, i - 1)], p1 = R[i], p2 = R[i + 1], p3 = R[Math.min(R.length - 1, i + 2)];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    for (let t = 0; t < 1; t += .05) {
-      const u = 1 - t;
-      geo.RIVER_SAMPLES.push([u * u * u * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p2[0], u * u * u * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p2[1]]);
-    }
-  }
-  // הפלג בעמק: דוגמים את אותה עקומה חלקה שמצוירת (Catmull-Rom), כדי שגם הגשרים ייפלו במקום
-  const C = w.terrain.creek as number[][] | undefined; geo.CREEK_SAMPLES = [];
-  if (C) for (let i = 0; i < C.length - 1; i++) {
-    const p0 = C[Math.max(0, i - 1)], p1 = C[i], p2 = C[i + 1], p3 = C[Math.min(C.length - 1, i + 2)];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    for (let t = 0; t < 1; t += .05) {
-      const u = 1 - t;
-      geo.CREEK_SAMPLES.push([u * u * u * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p2[0], u * u * u * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p2[1]]);
-    }
-  }
-  if (C) geo.CREEK_SAMPLES.push(C[C.length - 1]);
+  // הנהר והפלג: אותה עקומה שמצוירת, 20 דגימות לכל קטע (המספר קבוע: גלי הנהר צורכים מספר אקראי לכל דגימה)
+  geo.RIVER_SAMPLES = curveFixed(w.river, 20);
+  const C = w.terrain.creek as number[][] | undefined;
+  geo.CREEK_SAMPLES = C ? curveFixed(C, 20, true) : [];
   trailRules(w);
   joinTrails(w.trails);
   const trailSamples: number[][] = [];
@@ -165,21 +152,7 @@ function joinTrails(T: number[][][]) {
      אחרת הקצה נוחת לידה, בולט ממנה עם כיפה עגולה, ונראה כמו איקס. הוא נכנס בזווית נעימה (כמו לדרך),
      והפינות בין השבילים מתעגלות בהתרחבות רכה */
   const TRAIL_HW = 6;
-  const curve = (o: number[][]) => {
-    const out: number[][] = [], seg: number[] = [];
-    for (let j = 0; j < o.length - 1; j++) {
-      const p0 = o[Math.max(0, j - 1)], p1 = o[j], p2 = o[j + 1], p3 = o[Math.min(o.length - 1, j + 2)];
-      const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-      const n = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 3));
-      for (let k = 0; k < n; k++) {
-        const s = k / n, u = 1 - s;
-        out.push([u * u * u * p1[0] + 3 * u * u * s * c1[0] + 3 * u * s * s * c2[0] + s * s * s * p2[0], u * u * u * p1[1] + 3 * u * u * s * c1[1] + 3 * u * s * s * c2[1] + s * s * s * p2[1]]);
-        seg.push(j);
-      }
-    }
-    out.push(o[o.length - 1]); seg.push(o.length - 2);
-    return { out, seg };
-  };
+  const curve = (o: number[][]) => { const c = curveWithSegs(o, 3); return { out: c.out, seg: c.segs }; };
   // הנקודה הקרובה על העקומה המצוירת של שביל אחר (או של אותו שביל, רחוק מהקצה הזה), והכיוון שם
   const nearTrail = (p: number[], i: number, start: boolean) => {
     let d = Infinity, c: number[] = [], tg: number[] = [1, 0], host: number[][] = [], hj = 0;
@@ -330,8 +303,6 @@ function joinTrails(T: number[][][]) {
    1. שביל לא נצמד למים: מתרחק מהגדה, וחוצה נהר או פלג כמעט בניצב (הגשר מסתדר לבד לפי החצייה).
    2. אין שני שבילים צמודים: קטע ארוך שבו שני שבילים רצים קרוב זה לזה – אחד מהם מתרחק. */
 const RIVER_CLEAR = 52, CREEK_CLEAR = 38, CROSS_MIN = 55;
-/** איפה הדלת של מבנה (ברוב המבנים במרכז; בבית המודרני – בצד ימין של החזית) */
-export const doorX = (o: any) => o.type === 'modernHouse' ? o.x + (o.w ?? 92) * .22 + 6.5 : o.x;
 function nearOn(P: number[][], p: number[]) {
   let d = Infinity, c = P[0], j = 0;
   for (let i = 0; i < P.length - 1; i++) {
@@ -355,15 +326,14 @@ function trailRules(w: WorldData) {
   const roads = [...geo.EDGES, ...geo.OUTER];
   // 6. דלת בלי דרך או שביל לידה
   geo.DOOR_TRAILS = new Set();
-  const DOOR_TYPES = new Set(['house', 'modernHouse', 'chalet', 'logCabin', 'chapel', 'barn', 'windmill', 'lighthouse', 'observatory', 'lookoutTower', 'greenhouse']);
   const plots = w.objects.filter(o => o.type === 'plot');
   for (const o of w.objects) {
-    if (!DOOR_TYPES.has(o.type) || o.x === undefined || o.noPath) continue;
+    if (!declOf(o.type).doorPath || o.x === undefined || o.noPath) continue;
     if (plots.some(q => o.x >= q.x0 - 4 && o.x <= q.x1 + 4 && o.y >= q.y0 - 4 && o.y <= q.y1 + 4)) continue;   // מגרש: יש לו שביל מרוצף משלו
     const dx = doorX(o), door = [dx, o.y - 3], step = [dx, o.y + 22];
     let best = { d: Infinity, c: [] as number[], tx: 1, ty: 0, hw: 0 };
     for (const E of roads) { const r = nearOn(E.pts, step); if (r.d - ROAD_W / 2 < best.d) best = { d: r.d - ROAD_W / 2, c: r.c, tx: r.tx, ty: r.ty, hw: ROAD_W / 2 }; }
-    for (const t of T) { const r = nearOn(catmullPts(t), step); if (r.d - 6 < best.d) best = { d: r.d - 6, c: r.c, tx: r.tx, ty: r.ty, hw: 6 }; }
+    for (const t of T) { const r = nearOn(curvePts(t), step); if (r.d - 6 < best.d) best = { d: r.d - 6, c: r.c, tx: r.tx, ty: r.ty, hw: 6 }; }
     if (best.d < 14 || best.d > 320) continue;   // כבר ליד הרשת, או רחוק מדי לשביל גינה
     if (waters.some(W => crossAt(step, best.c, W.P))) continue;   // לא בונים גשר בשביל שביל גינה
     /* שביל גינה: עקומה אחת חלקה. יוצא מהדלת ישר קדימה (דרומה), ומגיע לשביל או לדרך בזווית נעימה (בערך 60°),
@@ -380,6 +350,28 @@ function trailRules(w: WorldData) {
     }
     T.push(pts);
     geo.DOOR_TRAILS.add(T.length - 1);
+  }
+  // 1ב. אגמים ובריכות (water בהצהרה): נקודה שבתוך האגם או קרובה לשפה זזה החוצה, לאורך הקו מהמרכז, עד 16 מעבר לשפה.
+  //     קטע שאמצעו נכנס לאגם מקבל נקודת ביניים בחוץ. שביל לא חוצה אגם (אין גשרים על אגמים)
+  const LAKE_CLEAR = 16;
+  const lakes = (w.objects as any[]).map(o => declOf(o.type).water?.(o)).filter(Boolean) as number[][];
+  const outOf = (p: number[], e: number[]) => {
+    const dx = p[0] - e[0], dy = p[1] - e[1], a = Math.atan2(dy * e[2], dx * e[3]);   // הזווית על האליפסה
+    const bx = e[0] + Math.cos(a) * e[2], by = e[1] + Math.sin(a) * e[3];
+    const nx = Math.cos(a) / e[2], ny = Math.sin(a) / e[3], nl = Math.hypot(nx, ny);   // הניצב לשפה
+    return { inside: (dx / (e[2] + LAKE_CLEAR)) ** 2 + (dy / (e[3] + LAKE_CLEAR)) ** 2 < 1, p: [bx + nx / nl * LAKE_CLEAR, by + ny / nl * LAKE_CLEAR] };
+  };
+  for (const t of T.filter((_, i) => !geo.DOOR_TRAILS.has(i))) for (let it = 0; it < 3; it++) {
+    for (const e of lakes) for (let k = 0; k < t.length; k++) { const r = outOf(t[k], e); if (r.inside) t[k] = r.p; }
+    // העקומה המצוירת עצמה (לא רק הנקודות): בכל קטע שנכנס לאגם, הנקודה העמוקה ביותר יוצאת החוצה ונוספת לשביל
+    for (const e of lakes) {
+      const { out, segs } = curveWithSegs(t, 4), deep = new Map<number, number[]>();
+      out.forEach((q, k) => {
+        const d = ((q[0] - e[0]) / (e[2] + LAKE_CLEAR)) ** 2 + ((q[1] - e[1]) / (e[3] + LAKE_CLEAR)) ** 2;
+        if (d < 1 && (!deep.has(segs[k]) || d < deep.get(segs[k])![0])) deep.set(segs[k], [d, k]);
+      });
+      [...deep.keys()].sort((a, b) => b - a).forEach(j => t.splice(j + 1, 0, outOf(out[deep.get(j)![1]], e).p));
+    }
   }
   // 1. מים: חצייה כמעט בניצב, ואחר כך התרחקות מהגדה
   for (const W of waters) for (const t of T.filter((_, i) => !geo.DOOR_TRAILS.has(i))) {
@@ -413,7 +405,7 @@ function trailRules(w: WorldData) {
   const SIDE = 30, FAR = 44;
   for (let i = 0; i < T.length; i++) for (let j = 0; j < T.length; j++) {
     if (i === j || geo.DOOR_TRAILS.has(i)) continue;
-    const Pi = catmullPts(T[i]), Pj = catmullPts(T[j]), ends = [T[i][0], T[i][T[i].length - 1], T[j][0], T[j][T[j].length - 1]];
+    const Pi = curvePts(T[i]), Pj = curvePts(T[j]), ends = [T[i][0], T[i][T[i].length - 1], T[j][0], T[j][T[j].length - 1]];
     const nearEnd = (p: number[]) => ends.some(e => Math.hypot(e[0] - p[0], e[1] - p[1]) < 90);
     let run = 0;
     for (let k = 1; k < Pi.length; k++) {
@@ -438,19 +430,4 @@ function trailRules(w: WorldData) {
     const r = Math.min(40, la * .4, lb * .4);
     t.splice(k, 1, [v[0] + (a[0] - v[0]) * r / la, v[1] + (a[1] - v[1]) * r / la], [v[0] + (b[0] - v[0]) * r / lb, v[1] + (b[1] - v[1]) * r / lb]);
   }
-}
-/** אותה עקומה שמצוירת (Catmull-Rom), בצעדים של 4 יחידות */
-function catmullPts(o: number[][]) {
-  const out: number[][] = [];
-  for (let j = 0; j < o.length - 1; j++) {
-    const p0 = o[Math.max(0, j - 1)], p1 = o[j], p2 = o[j + 1], p3 = o[Math.min(o.length - 1, j + 2)];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    const n = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 4));
-    for (let k = 0; k < n; k++) {
-      const s = k / n, u = 1 - s;
-      out.push([u * u * u * p1[0] + 3 * u * u * s * c1[0] + 3 * u * s * s * c2[0] + s * s * s * p2[0], u * u * u * p1[1] + 3 * u * u * s * c1[1] + 3 * u * s * s * c2[1] + s * s * s * p2[1]]);
-    }
-  }
-  out.push(o[o.length - 1]);
-  return out;
 }

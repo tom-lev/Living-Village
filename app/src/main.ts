@@ -129,8 +129,34 @@ async function boot() {
     d.style.cssText = 'position:fixed;top:8px;right:8px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:12px;z-index:9';
     document.body.appendChild(d);
     let n = 0, t0 = performance.now();
-    const upd = (t: number) => { n++; if (t - t0 > 1000) { d.textContent = `${tileStats.mode || '…'} · ${n} fps`; n = 0; t0 = t; } requestAnimationFrame(upd); };
+    let issueText = '';
+    const upd = (t: number) => { n++; if (t - t0 > 1000) { d.textContent = `${tileStats.mode || '…'} · ${n} fps${issueText}`; n = 0; t0 = t; } requestAnimationFrame(upd); };
     requestAnimationFrame(upd);
+    // בדיקת העולם (נטענת רק כאן, אז למבקרים רגילים היא לא עולה כלום): מספר ההפרות בתג, ולחיצה פותחת רשימה
+    import('./world/check').then(({ runChecks }) => {
+      const run = () => runChecks();
+      (window as any).__check = run;
+      setTimeout(() => {
+        const list = run();
+        issueText = ` · ${list.length} issue${list.length === 1 ? '' : 's'}`;
+        d.style.cursor = 'pointer';
+        d.onclick = () => {
+          let panel = document.getElementById('issues');
+          if (panel) { panel.remove(); return; }
+          panel = document.createElement('div'); panel.id = 'issues';
+          panel.style.cssText = 'position:fixed;top:36px;right:8px;max-width:min(420px,calc(100vw - 32px));max-height:60vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:8px;font-size:12px;z-index:9';
+          panel.innerHTML = list.length ? '' : '<div style="padding:8px">No issues</div>';
+          for (const it of list) {
+            const row = document.createElement('div');
+            row.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--line);cursor:pointer';
+            row.textContent = `${it.rule}: ${it.msg} (${it.x}, ${it.y})`;
+            row.onclick = () => animateTo(view.fitK * 6, it.x, it.y, 900);
+            panel.appendChild(row);
+          }
+          document.body.appendChild(panel);
+        };
+      }, 1500);
+    });
   }
 
   applySharedNames();   // השמות ששונו מהדפדפן (names.json המשותף)

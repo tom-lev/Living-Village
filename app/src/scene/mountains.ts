@@ -4,6 +4,7 @@
    בין המסות יש לפעמים מעבר, כדי שהרכס לא ייראה כמו שורה אחידה.
    העמק שבין שני הרכסים: גבעות מושלגות בבסיס הרכס הצפוני, ופלג קפוא לאורך קרקעית העמק,
    עם גשרים אוטומטיים בכל מקום שדרך או שביל חוצים אותו. */
+import { curvePts } from '../world/curve';
 import { el, n2, blob, shade, smoothOpen } from '../core/util';
 import { rand, rngAt, type LocalRng } from '../core/rng';
 import { ctx } from '../world/context';
@@ -172,5 +173,5 @@ export function buildMountains(w: WorldData) {
   // הרכסים הישנים צרכו מספרים מהמחולל הכללי; צורכים אותם גם עכשיו, כדי שהיער ושאר העולם יישארו במקומם
   for (const m of T.mountains) for (let x = B.x0 - 120; x < B.x1 + 120; x += m.step * rand(.75, 1.15)) { rand(240, 330); rand(m.hMin, m.hMax); rand(-20, 20); }
   T.mountains.forEach((m: any, i: number) => range(m, i, m.foot || (m.valley === 1 ? '#e2edf2' : '#a9bfa6')));
-  if (T.creek) creek(T.creek, w.trails);
+  if (T.creek) creek(T.creek, w.trails.map(t => curvePts(t)));   // גשרים מול העקומה המצוירת, לא מול הקווים הישרים שבין נקודות הנתונים
 }
