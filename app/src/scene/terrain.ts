@@ -113,7 +113,6 @@ export function buildTerrain(w: WorldData) {
     el('path', { d: d + fil, fill: 'none', stroke: '#efd6b4', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, tg);
     el('path', { d: flare(4, 6) + taper(4), fill: '#efd6b4' }, tg);
     el('path', { d: crumbs, fill: '#ead0ab', opacity: .85 }, tg);
-    el('path', { d, fill: 'none', stroke: '#d9b48c', 'stroke-width': 1.2, 'stroke-dasharray': '2 7', 'stroke-linecap': 'round', opacity: .8 }, tg);
   }
 
   /* חוף (למטה) */

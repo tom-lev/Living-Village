@@ -14,7 +14,7 @@ import { buildTerrain } from './terrain';
 import { GENERATORS } from './generators';
 import { addLabel } from '../world/labels';
 import { places, autoPlace } from '../world/places';
-import { initWalk, markRect, markEllipse, markLine, markPath, clearPathIn, placeOk, findPlace, WATER, SWIM, SOFT, SOLID, PATH, BRIDGE, LANE, PLAZA } from '../world/walk';
+import { initWalk, markRect, markEllipse, markLine, markPath, clearPathIn, placeOk, findPlace, flagsAt, WATER, SWIM, SOFT, SOLID, PATH, BRIDGE, LANE, PLAZA } from '../world/walk';
 import { geo, ROAD_W } from '../world/geometry';
 import { catmull } from '../world/nav';
 import { autoBridges } from './mountains';
@@ -75,6 +75,7 @@ const FOOT: Record<string, (o: any) => number[]> = {
   mailbox: o => [o.x - 8, o.y - 26, o.x + 8, o.y + 2],
   bike: o => [o.x - 11, o.y - 16, o.x + 11, o.y + 2],
   well: o => [o.x - 18, o.y - 38, o.x + 18, o.y + 7],
+  signpost: o => [o.x + 2, o.y - 12, o.x + 28, o.y + 12],   // 4. שלט לא עומד על הצומת: הוא מצויר מימין לנקודה שלו
   beehives: o => [o.x - 13, o.y - 32, o.x + (Math.min(o.count ?? 5, 3) - 1) * 32 + 13, o.y + (Math.ceil((o.count ?? 5) / 3) - 1) * 34 + 4],
 };
 /** חפצים שהוזזו בבנייה בגלל כלל המיקום (מי שקשור אליהם זז איתם: יושב על ספסל, יונים) */
@@ -84,10 +85,29 @@ function placeSmall(o: any) {
   if (fp && !placeOk(fp[0], fp[1], fp[2], fp[3])) {
     const d = findPlace(fp);
     if (d) { relocated.push({ type: o.type, from: [o.x, o.y], to: [o.x + d[0], o.y + d[1]] }); o.x += d[0]; o.y += d[1]; }
-    return;
   }
+  if (o.type === 'bench') faceSomething(o);
+  if (fp) return;
   // יונה ליד ספסל שזז: זזה איתו
   if (o.type === 'pigeon') { const m = relocated.find(r => r.type === 'bench' && Math.hypot(r.from[0] - o.x, r.from[1] - o.y) < 50); if (m) { o.x += m.to[0] - m.from[0]; o.y += m.to[1] - m.from[1]; } }
+}
+
+/* 10. ספסל פונה למשהו (בקשת הבעלים): היושבים מסתכלים קדימה (דרומה, אל הצופה), אז לפני הספסל צריך להיות
+   שביל, דרך, רחבה או מים – לא הגב אל השביל ומולו כלום. אחרת הספסל עובר למקום קרוב שיש מולו משהו */
+const VIEW = PATH | WATER | PLAZA;
+function frontOk(x: number, y: number) {
+  for (let yy = y + 10; yy <= y + 80; yy += 6) for (let xx = x - 20; xx <= x + 20; xx += 10) if (flagsAt(xx, yy) & VIEW) return true;
+  return false;
+}
+function faceSomething(o: any) {
+  if (frontOk(o.x, o.y)) return;
+  for (let r = 8; r <= 150; r += 6) for (let a = 0; a < 24; a++) {
+    const t = a / 24 * Math.PI * 2, x = Math.round(o.x + Math.cos(t) * r), y = Math.round(o.y + Math.sin(t) * r), f = FOOT.bench({ x, y });
+    if (!placeOk(f[0] - 4, f[1] - 4, f[2] + 4, f[3] + 4) || !frontOk(x, y)) continue;
+    const prev = relocated.find(m => m.type === 'bench' && m.to[0] === o.x && m.to[1] === o.y);
+    if (prev) prev.to = [x, y]; else relocated.push({ type: 'bench', from: [o.x, o.y], to: [x, y] });
+    o.x = x; o.y = y; return;
+  }
 }
 
 /* כלל לגשרים שבנתונים (גם עתידיים): הגשר זז לנקודה שבה הדרך או השביל באמת חוצים את הנהר או הפלג,

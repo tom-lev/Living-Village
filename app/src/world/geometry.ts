@@ -33,7 +33,8 @@ export const geo = {
   RIVER_SAMPLES: [] as number[][],
   TRAIL_FLARES: [] as { x: number; y: number; mx: number; my: number; tx: number; ty: number }[],   // שביל שנכנס לדרך: התרחבות רכה בשולי הדרך
   TRAIL_FREE: [] as { trail: number; start: boolean }[],
-  TRAIL_FILLETS: [] as number[][][],   // שביל שפוגש שביל: פינה מעוגלת בכל צד (עקומה ריבועית: נקודה על השביל המארח, הצומת, נקודה על השביל הנכנס)
+  TRAIL_FILLETS: [] as number[][][],
+  DOOR_TRAILS: new Set<number>(),      // שבילים שנוספו מדלת של מבנה אל הרשת (כלל 6): הקצה שבדלת לא נמוג   // שביל שפוגש שביל: פינה מעוגלת בכל צד (עקומה ריבועית: נקודה על השביל המארח, הצומת, נקודה על השביל הנכנס)
   ROAD_TAPERS: [] as { x: number; y: number; dx: number; dy: number }[],   // דרך ללא מוצא שממשיכה כשביל: הדרך הולכת ונהיית צרה
    // קצה שביל שלא מוביל לשום מקום: נמוג בהדרגה
   CREEK_SAMPLES: [] as number[][],   // הפלג שבעמק
@@ -73,12 +74,6 @@ export function buildGeometry(w: WorldData) {
   OGW = Math.ceil((B.x1 - B.x0) / OC); OGH = Math.ceil((B.y1 - B.y0) / OC); OCC = new Uint8Array(OGW * OGH);
   const roadSamples: number[][] = [];
   [...geo.EDGES, ...geo.OUTER].forEach(E => { for (let i = 0; i < E.pts.length; i += 5) roadSamples.push(E.pts[i]); });
-  joinTrails(w.trails);
-  const trailSamples: number[][] = [];
-  for (const t of w.trails) for (let i = 0; i < t.length - 1; i++) {
-    const n = Math.ceil(Math.hypot(t[i + 1][0] - t[i][0], t[i + 1][1] - t[i][1]) / 6);
-    for (let k = 0; k < n; k++) trailSamples.push([t[i][0] + (t[i + 1][0] - t[i][0]) * k / n, t[i][1] + (t[i + 1][1] - t[i][1]) * k / n]);
-  }
   // הנהר: דוגמים את העקומה החלקה שמצוירת (ולא קווים ישרים בין הנקודות), כדי שגשרים וחציות ייפלו בדיוק על המים.
   // אותו מספר דגימות כמו קודם, כדי שהגלים (שצורכים מספרים אקראיים לכל דגימה) לא יזיזו את שאר העולם
   const R = w.river; geo.RIVER_SAMPLES = [];
@@ -101,6 +96,13 @@ export function buildGeometry(w: WorldData) {
     }
   }
   if (C) geo.CREEK_SAMPLES.push(C[C.length - 1]);
+  trailRules(w);
+  joinTrails(w.trails);
+  const trailSamples: number[][] = [];
+  for (const t of w.trails) for (let i = 0; i < t.length - 1; i++) {
+    const n = Math.ceil(Math.hypot(t[i + 1][0] - t[i][0], t[i + 1][1] - t[i][1]) / 6);
+    for (let k = 0; k < n; k++) trailSamples.push([t[i][0] + (t[i + 1][0] - t[i][0]) * k / n, t[i][1] + (t[i + 1][1] - t[i][1]) * k / n]);
+  }
   stamp(roadSamples, ROAD_W / 2 + 12, O_ROAD); stamp(trailSamples, 15, O_TRAIL); stamp(geo.RIVER_SAMPLES, 44, O_RIVER); stamp(geo.CREEK_SAMPLES, 20, O_RIVER);
 }
 
@@ -227,8 +229,10 @@ function joinTrails(T: number[][][]) {
     }
   };
   const free: { i: number; start: boolean }[] = [], pending: { i: number; start: boolean }[] = [];
+  const JUNCTION_GAP = 40, roadJ: { c: number[]; tg: number[]; n: number }[] = [], trailJ: { h: ReturnType<typeof nearTrail>; n: number }[] = [];
   T.forEach((t, i) => {
     for (const start of [true, false]) {
+      if (start && geo.DOOR_TRAILS.has(i)) continue;   // הקצה שבדלת: מוסתר מתחת למבנה
       const k = start ? 0 : t.length - 1, p = t[k];
       let { d: best, c, tg, end } = nearRoad(p);
       if (best < hw + 40 && end) {
@@ -239,7 +243,12 @@ function joinTrails(T: number[][][]) {
         if (Math.hypot(q[0] - end[0], q[1] - end[1]) > hw + 30) t.splice(start ? 1 : t.length - 1, 0, a);
         continue;
       }
-      if (best < hw + 40) { roadJoin(t, start, c, tg); continue; }
+      if (best < hw + 40) {
+        // 3. צמתים לא צפופים: כניסה לדרך ליד כניסה קיימת (פחות מ-40) מצטרפת אליה
+        const near = roadJ.find(q => Math.hypot(q.c[0] - c[0], q.c[1] - c[1]) < JUNCTION_GAP && q.n < 2);
+        if (near) { near.n++; c = near.c; tg = near.tg; } else roadJ.push({ c, tg, n: 1 });
+        roadJoin(t, start, c, tg); continue;
+      }
       pending.push({ i, start });
     }
   });
@@ -250,8 +259,13 @@ function joinTrails(T: number[][][]) {
   const conts = pending.filter(e => cont(e.i, e.start));
   for (const { i, start } of pending) {
     if (conts.some(e => e.i === i && e.start === start)) continue;
-    const t = T[i], h = nearTrail(t[start ? 0 : t.length - 1], i, start);
-    if (h.d < 40) trailJoin(t, start, h); else free.push({ i, start });
+    const t = T[i];
+    let h = nearTrail(t[start ? 0 : t.length - 1], i, start);
+    if (h.d >= 40) { free.push({ i, start }); continue; }
+    // 3. צמתים לא צפופים: צומת חדש ליד צומת קיים (פחות מ-40) מצטרף אליו, עד 4 ענפים בצומת
+    const near = trailJ.find(q => Math.hypot(q.h.c[0] - h.c[0], q.h.c[1] - h.c[1]) < JUNCTION_GAP && q.n < 2);
+    if (near) { near.n++; h = near.h; } else trailJ.push({ h, n: 1 });
+    trailJoin(t, start, h);
   }
   // שני קצוות פנויים קרובים (למשל שביל שמגיע אל שביל המגדלור): ממשיכים אחד אל השני
   const used = new Set<number>();
@@ -308,4 +322,123 @@ function joinTrails(T: number[][][]) {
     lone.add(i * 2 + (best.start ? 0 : 1));
   });
   free.forEach((f, a) => { if (!used.has(a) && !lone.has(f.i * 2 + (f.start ? 0 : 1))) geo.TRAIL_FREE.push({ trail: f.i, start: f.start }); });
+}
+
+/* ───────── כללי שבילים (בקשת הבעלים), רצים על כל שביל לפני החיבורים, גם על שבילים עתידיים ─────────
+   6. כל מבנה מחובר: לדלת שאין לידה דרך או שביל נוסף שביל גינה קצר אל הרשת.
+   7. פניות רכות: פינה חדה בנתונים (יותר מ-70°) נחתכת לשתי נקודות, וכך העקומה מתעגלת.
+   1. שביל לא נצמד למים: מתרחק מהגדה, וחוצה נהר או פלג כמעט בניצב (הגשר מסתדר לבד לפי החצייה).
+   2. אין שני שבילים צמודים: קטע ארוך שבו שני שבילים רצים קרוב זה לזה – אחד מהם מתרחק. */
+const RIVER_CLEAR = 52, CREEK_CLEAR = 38, CROSS_MIN = 55;
+/** איפה הדלת של מבנה (ברוב המבנים במרכז; בבית המודרני – בצד ימין של החזית) */
+export const doorX = (o: any) => o.type === 'modernHouse' ? o.x + (o.w ?? 92) * .22 + 6.5 : o.x;
+function nearOn(P: number[][], p: number[]) {
+  let d = Infinity, c = P[0], j = 0;
+  for (let i = 0; i < P.length - 1; i++) {
+    const a = P[i], b = P[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1, t = clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2, 0, 1);
+    const m = [a[0] + dx * t, a[1] + dy * t], dd = Math.hypot(m[0] - p[0], m[1] - p[1]);
+    if (dd < d) { d = dd; c = m; j = i; }
+  }
+  const a = P[Math.max(0, j - 1)], b = P[Math.min(P.length - 1, j + 2)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  return { d, c, tx: (b[0] - a[0]) / l, ty: (b[1] - a[1]) / l };
+}
+function crossAt(a: number[], b: number[], P: number[][]) {
+  for (let j = 0; j < P.length - 1; j++) {
+    const c = P[j], e = P[j + 1], den = (b[0] - a[0]) * (e[1] - c[1]) - (b[1] - a[1]) * (e[0] - c[0]); if (!den) continue;
+    const t = ((c[0] - a[0]) * (e[1] - c[1]) - (c[1] - a[1]) * (e[0] - c[0])) / den, u = ((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) / den;
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) { const l = Math.hypot(e[0] - c[0], e[1] - c[1]) || 1; return { x: a[0] + t * (b[0] - a[0]), y: a[1] + t * (b[1] - a[1]), tx: (e[0] - c[0]) / l, ty: (e[1] - c[1]) / l }; }
+  }
+  return null;
+}
+function trailRules(w: WorldData) {
+  const T = w.trails as number[][][], waters = [{ P: geo.RIVER_SAMPLES, clear: RIVER_CLEAR }, { P: geo.CREEK_SAMPLES, clear: CREEK_CLEAR }].filter(x => x.P.length > 1);
+  const roads = [...geo.EDGES, ...geo.OUTER];
+  // 6. דלת בלי דרך או שביל לידה
+  geo.DOOR_TRAILS = new Set();
+  const DOOR_TYPES = new Set(['house', 'modernHouse', 'chalet', 'logCabin', 'chapel', 'barn', 'windmill', 'lighthouse', 'observatory', 'lookoutTower', 'greenhouse']);
+  const plots = w.objects.filter(o => o.type === 'plot');
+  for (const o of w.objects) {
+    if (!DOOR_TYPES.has(o.type) || o.x === undefined || o.noPath) continue;
+    if (plots.some(q => o.x >= q.x0 - 4 && o.x <= q.x1 + 4 && o.y >= q.y0 - 4 && o.y <= q.y1 + 4)) continue;   // מגרש: יש לו שביל מרוצף משלו
+    const dx = doorX(o), step = [dx, o.y + 22];
+    let best = { d: Infinity, c: [] as number[] };
+    for (const E of roads) { const r = nearOn(E.pts, step); if (r.d - ROAD_W / 2 < best.d) best = { d: r.d - ROAD_W / 2, c: r.c }; }
+    for (const t of T) { const r = nearOn(catmullPts(t), step); if (r.d - 6 < best.d) best = { d: r.d - 6, c: r.c }; }
+    if (best.d < 14 || best.d > 320) continue;   // כבר ליד הרשת, או רחוק מדי לשביל גינה
+    if (waters.some(W => crossAt(step, best.c, W.P))) continue;   // לא בונים גשר בשביל שביל גינה
+    T.push([[dx, o.y - 3], step, best.c]);
+    geo.DOOR_TRAILS.add(T.length - 1);
+  }
+  // 1. מים: חצייה כמעט בניצב, ואחר כך התרחקות מהגדה
+  for (const W of waters) for (const t of T) {
+    for (let k = 0; k < t.length - 1; k++) {
+      const X = crossAt(t[k], t[k + 1], W.P); if (!X) continue;
+      const ux = t[k + 1][0] - t[k][0], uy = t[k + 1][1] - t[k][1], ul = Math.hypot(ux, uy) || 1;
+      const sin = Math.abs((ux * X.ty - uy * X.tx) / ul);
+      if (sin > Math.sin(CROSS_MIN * Math.PI / 180)) continue;
+      // שתי נקודות משני צידי המים, על הניצב לזרם: השביל חוצה ישר
+      let nx = -X.ty, ny = X.tx; if (nx * ux + ny * uy < 0) { nx = -nx; ny = -ny; }
+      const D = W.clear + 4;
+      t.splice(k + 1, 0, [X.x - nx * D, X.y - ny * D], [X.x + nx * D, X.y + ny * D]); k += 2;
+    }
+    for (let it = 0; it < 3; it++) for (let k = 0; k < t.length; k++) {
+      const p = t[k], r = nearOn(W.P, p);
+      if (r.d >= W.clear || r.d < 1) continue;
+      // נקודה שקטע שלה חוצה את המים נשארת בצד שלה, רק רחוקה מספיק
+      let nx = -r.ty, ny = r.tx; if (nx * (p[0] - r.c[0]) + ny * (p[1] - r.c[1]) < 0) { nx = -nx; ny = -ny; }
+      t[k] = [r.c[0] + nx * W.clear, r.c[1] + ny * W.clear];
+    }
+    // העקומה בין הנקודות (לא רק הנקודות עצמן): קטע שלא חוצה ונכנס לאזור הגדה מקבל נקודת ביניים רחוקה
+    for (let k = 0; k < t.length - 1; k++) {
+      if (crossAt(t[k], t[k + 1], W.P)) continue;
+      const m = [(t[k][0] + t[k + 1][0]) / 2, (t[k][1] + t[k + 1][1]) / 2], r = nearOn(W.P, m);
+      if (r.d >= W.clear - 6 || Math.hypot(t[k + 1][0] - t[k][0], t[k + 1][1] - t[k][1]) < 40) continue;
+      let nx = -r.ty, ny = r.tx; if (nx * (m[0] - r.c[0]) + ny * (m[1] - r.c[1]) < 0) { nx = -nx; ny = -ny; }
+      t.splice(k + 1, 0, [r.c[0] + nx * W.clear, r.c[1] + ny * W.clear]); k++;
+    }
+  }
+  // 2. שבילים צמודים (לא ליד הקצוות, שם הם בדרך כלל מתחברים)
+  const SIDE = 30, FAR = 44;
+  for (let i = 0; i < T.length; i++) for (let j = 0; j < T.length; j++) {
+    if (i === j || geo.DOOR_TRAILS.has(i)) continue;
+    const Pi = catmullPts(T[i]), Pj = catmullPts(T[j]), ends = [T[i][0], T[i][T[i].length - 1], T[j][0], T[j][T[j].length - 1]];
+    const nearEnd = (p: number[]) => ends.some(e => Math.hypot(e[0] - p[0], e[1] - p[1]) < 90);
+    let run = 0;
+    for (let k = 1; k < Pi.length; k++) {
+      const p = Pi[k], r = nearOn(Pj, p);
+      run = r.d < SIDE && !nearEnd(p) ? run + Math.hypot(p[0] - Pi[k - 1][0], p[1] - Pi[k - 1][1]) : 0;
+      if (run < 60) continue;
+      // דוחפים הצידה את נקודות הנתונים של שביל i שבאזור הזה, עד מרחק FAR מהשביל השני
+      for (let q = 1; q < T[i].length - 1; q++) {
+        const v = T[i][q], rv = nearOn(Pj, v);
+        if (rv.d >= FAR || Math.hypot(v[0] - p[0], v[1] - p[1]) > 120) continue;
+        let nx = -rv.ty, ny = rv.tx; if (nx * (v[0] - rv.c[0]) + ny * (v[1] - rv.c[1]) < 0) { nx = -nx; ny = -ny; }
+        T[i][q] = [rv.c[0] + nx * FAR, rv.c[1] + ny * FAR];
+      }
+      break;
+    }
+  }
+  // 7. פינות חדות (אחרון: גם הפינות שנוצרו מהכללים הקודמים, למשל חצייה ישרה של מים)
+  for (const t of T) for (let k = t.length - 2; k >= 1; k--) {
+    const a = t[k - 1], v = t[k], b = t[k + 1], la = Math.hypot(a[0] - v[0], a[1] - v[1]), lb = Math.hypot(b[0] - v[0], b[1] - v[1]);
+    const turn = Math.abs(Math.atan2((v[0] - a[0]) * (b[1] - v[1]) - (v[1] - a[1]) * (b[0] - v[0]), (v[0] - a[0]) * (b[0] - v[0]) + (v[1] - a[1]) * (b[1] - v[1])));
+    if (turn < 70 * Math.PI / 180 || !la || !lb) continue;
+    const r = Math.min(40, la * .4, lb * .4);
+    t.splice(k, 1, [v[0] + (a[0] - v[0]) * r / la, v[1] + (a[1] - v[1]) * r / la], [v[0] + (b[0] - v[0]) * r / lb, v[1] + (b[1] - v[1]) * r / lb]);
+  }
+}
+/** אותה עקומה שמצוירת (Catmull-Rom), בצעדים של 4 יחידות */
+function catmullPts(o: number[][]) {
+  const out: number[][] = [];
+  for (let j = 0; j < o.length - 1; j++) {
+    const p0 = o[Math.max(0, j - 1)], p1 = o[j], p2 = o[j + 1], p3 = o[Math.min(o.length - 1, j + 2)];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    const n = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 4));
+    for (let k = 0; k < n; k++) {
+      const s = k / n, u = 1 - s;
+      out.push([u * u * u * p1[0] + 3 * u * u * s * c1[0] + 3 * u * s * s * c2[0] + s * s * s * p2[0], u * u * u * p1[1] + 3 * u * u * s * c1[1] + 3 * u * s * s * c2[1] + s * s * s * p2[1]]);
+    }
+  }
+  out.push(o[o.length - 1]);
+  return out;
 }

@@ -1,6 +1,7 @@
 /* מקומות שאפשר ללכת אליהם: כל אובייקט מצהיר בזמן הציור מה יש בו (בית, חנות, תחנה, אגם, שדה...).
    כך כל בית, חנות או ספסל שיתווספו בעתיד הופכים ליעד בלי עבודה נוספת.
    הדמויות בוחרות יעד לפי "סוג" המקום ולפי האופי שלהן (actors/agenda.ts). */
+import { doorX } from './geometry';
 export type Pt = number[];
 
 /** מה עושים בכל סוג מקום: נכנסים ונעלמים בפנים, או נשארים ומביטים (התנוחות יגיעו בשלב 2) */
@@ -51,7 +52,7 @@ export function autoPlace(o: any) {
   else if (o.cx !== undefined) { x = o.cx; y = o.cy + (o.ry ?? o.r ?? 0) + 12; }
   else if (o.x0 !== undefined) { x = (o.x0 + o.x1) / 2; y = o.y1 + 10; }
   else if (o.a && o.b) { x = o.a[0]; y = o.a[1] + 10; }
-  else if (o.x !== undefined) { x = o.x; y = o.y; }
+  else if (o.x !== undefined) { x = doorX(o); y = o.y; }
   else return;
   const enter = KINDS[kind].enter;
   // אובייקט שעומד על נקודה (x,y הוא קו הקרקע שלו): עומדים קצת לפניו, לא בתוכו

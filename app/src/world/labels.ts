@@ -15,9 +15,9 @@ const SHOW_FROM = 4.2, FULL_AT = 5;     // יחס לזום הבית: מתחיל�
 const TOP_LEFT = new Set(['vegGarden', 'field', 'footballPitch', 'pier']);
 const PENDING = 'village-names-pending';   // שינויים שנשמרו אבל עוד לא הגיעו לאתר שנפרס
 
-interface Label { o: any; key: string; original: string; x: number; y: number; inner: any; text: any }
+interface Label { o: any; key: string; original: string; x: number; y: number; x0: number; y0: number; g: any; inner: any; text: any }
 const labels: Label[] = [];
-let lastK = -1, alpha = 0;
+let lastK = -1, alpha = 0, laidFor = -1;
 
 let pending: Record<string, string> = {};
 try { pending = JSON.parse(localStorage.getItem(PENDING) || '{}'); } catch {}
@@ -44,7 +44,8 @@ export function addLabel(o: any, top?: number) {
   const text = el('text', { x: 0, y: 0, 'text-anchor': 'middle', 'font-size': FS, 'font-weight': 700, 'font-style': 'italic',
     'font-family': 'Georgia, "Times New Roman", serif', fill: '#5b4630', stroke: '#fffaf0', 'stroke-width': 3 }, inner);
   text.textContent = name;
-  labels.push({ o, key, original: o.name, x: p[0], y: p[1] - 2, inner, text });
+  labels.push({ o, key, original: o.name, x: p[0], y: p[1] - 2, x0: p[0], y0: p[1] - 2, g, inner, text });
+  laidFor = -1;
 }
 
 /** השם הנוכחי של מקום (אחרי שינויים מהדפדפן), לפי השם המקורי שלו */
@@ -60,14 +61,38 @@ export async function applySharedNames() {
   persist();
   for (const l of labels) {
     const n = l.key in pending ? pending[l.key] : remote[l.key];
-    if (n !== undefined) l.text.textContent = n || l.original;
+    if (n !== undefined) { l.text.textContent = n || l.original; laidFor = -1; }
   }
   requestStatic();
+}
+
+/* 8. תוויות לא חופפות (בקשת הבעלים). התווית שומרת על גודל קבוע על המסך, אז הכי צפוף בזום שבו הן מופיעות;
+   מסדרים אותן פעם אחת לזום הזה (ושוב אחרי שינוי שם או גודל מסך), ובזום קרוב יותר המרווחים רק גדלים.
+   מהתחתונה למעלה: תווית שנתקלת בתווית שכבר הונחה עולה מעט, או זזה קצת הצידה */
+function layoutLabels() {
+  const k = view.fitK * SHOW_FROM, H = PX * 1.45 / k, placed: number[][] = [];
+  const box = (l: Label, dx: number, dy: number) => {
+    const w = (l.text.textContent.length * .6 * PX + 12) / k;
+    return [l.x0 + dx - w / 2, l.y0 + dy - H * .8, l.x0 + dx + w / 2, l.y0 + dy + H * .2];
+  };
+  const hit = (b: number[]) => placed.some(q => b[0] < q[2] && b[2] > q[0] && b[1] < q[3] && b[3] > q[1]);
+  for (const l of [...labels].sort((a, b) => b.y0 - a.y0)) {
+    let pick = box(l, 0, 0), dy = 0, dx = 0;
+    search: for (let s = 0; s <= 6; s++) for (const side of [0, -1, 1]) {
+      const tx = side * (s ? H * 1.3 : 0), ty = -s * H * .5, b = box(l, tx, ty);
+      if (!hit(b)) { pick = b; dx = tx; dy = ty; break search; }
+    }
+    placed.push(pick);
+    l.x = l.x0 + dx; l.y = l.y0 + dy;
+    l.g.setAttribute('transform', `translate(${n2(l.x)},${n2(l.y)})`);
+  }
+  laidFor = view.fitK;
 }
 
 /** בכל פריים: שקיפות לפי הזום, וקנה מידה הפוך כדי שהתווית תישאר באותו גודל על המסך */
 export function updateLabels() {
   const k = view.cam.k;
+  if (laidFor !== view.fitK && labels.length) { layoutLabels(); lastK = -1; }
   if (k === lastK) return;
   lastK = k;
   const L = ctx.L.labels; alpha = clamp((k / view.fitK - SHOW_FROM) / (FULL_AT - SHOW_FROM), 0, 1);
@@ -132,7 +157,7 @@ export function openRename(l: Label) {
     try {
       await saveName(l.key, value);
       pending[l.key] = value; persist();
-      l.text.textContent = value || l.original; requestStatic();
+      l.text.textContent = value || l.original; laidFor = -1; requestStatic();
       note.textContent = 'Saved. Everyone will see it within a minute or two.';
       setTimeout(close, 1400);
     } catch (e: any) {

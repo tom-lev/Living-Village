@@ -139,6 +139,7 @@ async function boot() {
   (window as any).__places = places;   // לבדיקות: כל היעדים
   (window as any).__walk = walkMap;     // לבדיקות: מפת המעבר
   (window as any).__geo = geo;          // לבדיקות: חיבורי שבילים וגשרים
+  (window as any).__trails = ctx.world.trails;   // לבדיקות: השבילים אחרי כל הכללים
   (window as any).__routeTo = routeTo;
   (window as any).__navParts = components;
   (window as any).__compOf = compOf;

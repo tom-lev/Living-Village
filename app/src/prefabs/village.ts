@@ -21,32 +21,36 @@ function plot(o: any) {
     el('path', { d: rrect(x0, y0, x1 - x0, y1 - y0, 4), fill: 'none', stroke: '#f6eedf', 'stroke-width': 1.6 }, G);
     el('path', { d: rrect(x0, y0, x1 - x0, y1 - y0, 4), fill: 'none', stroke: '#f6eedf', 'stroke-width': 3.2, 'stroke-dasharray': '1.4 4' }, G);
   }
+  let walk: number[][] = [];
   if (door) {
-    // שביל מרוצף מהדלת לשער
+    // שביל מרוצף מהדלת לשער: קו אחד רציף עם פינות מעוגלות (לא מלבנים מחוברים)
     // השביל מגיע עד שפת הדרך הצרה (המגרשים תוכננו לדרך רחבה יותר)
     const reach = 3 + (25 - ROAD_W / 2), [dx, dy] = door, ey = street === 'bottom' ? y1 + reach : y0 - reach;
-    const seg = (ax: number, ay: number, bx: number, by: number) => {   // קטע שביל מרוצף (אופקי או אנכי)
-      const x = Math.min(ax, bx) - 5, y = Math.min(ay, by) - (ax === bx ? 0 : 5), w = Math.abs(bx - ax) + 10, h = ax === bx ? Math.abs(by - ay) : 10;
-      el('rect', { x, y, width: w, height: h, rx: 2, fill: '#ecd7b5' }, G);
-      let d = '';
-      if (ax === bx) for (let yy = y + 5; yy < y + h - 2; yy += 7) d += `M${ax - 4},${yy}h8`;
-      else for (let xx = x + 5; xx < x + w - 2; xx += 7) d += `M${xx},${ay - 4}v8`;
-      el('path', { d, stroke: '#dcc29b', 'stroke-width': .9 }, G);
-    };
-    gateX = dx;
-    if (street === 'bottom') seg(dx, dy, dx, ey);
+    if (street === 'bottom') walk = [[dx, dy], [dx, ey]];
     else {
-      // הרחוב מאחורי הבית: מהדלת קצת קדימה, לצד הרחב של המגרש לאורך הגדר, ומשם אל השער
-      const side = x1 - dx >= dx - x0 ? 1 : -1, sx = side > 0 ? x1 - 9 : x0 + 9;
-      seg(dx, dy, dx, dy + 8); seg(dx, dy + 8, sx, dy + 8); seg(sx, dy + 8, sx, ey);
+      // הרחוב מאחורי הבית: מהדלת קדימה (רחוק מספיק מהקיר ומהעציצים שליד הדלת), לצד הרחב של המגרש, ולאורך הגדר אל השער
+      const side = x1 - dx >= dx - x0 ? 1 : -1, sx = side > 0 ? x1 - 9 : x0 + 9, fy = dy + Math.min(17, Math.max(8, (y1 - dy) / 2));
+      walk = [[dx, dy], [dx, fy], [sx, fy], [sx, ey]];
       gateX = sx;
     }
+    if (street === 'bottom') gateX = dx;
+    // פינות מעוגלות ברדיוס 7
+    let d = `M${n2(walk[0][0])},${n2(walk[0][1])}`;
+    for (let i = 1; i < walk.length - 1; i++) {
+      const a = walk[i - 1], b = walk[i], c = walk[i + 1], la = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, lc = Math.hypot(c[0] - b[0], c[1] - b[1]) || 1, r = Math.min(7, la / 2, lc / 2);
+      d += `L${n2(b[0] + (a[0] - b[0]) * r / la)},${n2(b[1] + (a[1] - b[1]) * r / la)}Q${n2(b[0])},${n2(b[1])} ${n2(b[0] + (c[0] - b[0]) * r / lc)},${n2(b[1] + (c[1] - b[1]) * r / lc)}`;
+    }
+    d += `L${n2(walk[walk.length - 1][0])},${n2(walk[walk.length - 1][1])}`;
+    el('path', { d, fill: 'none', stroke: '#dcc29b', 'stroke-width': 11.5, 'stroke-linejoin': 'round' }, G);
+    el('path', { d, fill: 'none', stroke: '#ecd7b5', 'stroke-width': 10, 'stroke-linejoin': 'round' }, G);
+    // מרצפות: קווים קצרים לרוחב השביל, לאורך כל הקו (גם בפינות)
+    el('path', { d, fill: 'none', stroke: '#dcc29b', 'stroke-width': 8, 'stroke-dasharray': '.9 6.1', opacity: .9 }, G);
     if (fence === 'hedge') el('rect', { x: gateX - 7, y: (street === 'bottom' ? y1 : y0) - 3, width: 14, height: 6, fill: '#b3d98a' }, G);   // פתח בגדר
   }
   if (bed && door) {
     // הערוגה הישנה צרכה מספרים מהמחולל הכללי; צורכים אותם גם עכשיו, כדי שהיער ושאר העולם יישארו במקומם
     R(); rand(16, 24); for (let i = 0; i < 7; i++) { rand(-8, 8); rand(-2.5, 2.5); } R();
-    flowerBed(G, x0, y0, x1, y1, door, street);
+    flowerBed(G, x0, y0, x1, y1, door, street, walk);
   }
   block(x0, y0, x1, y1 + 30);
   // מפת מעבר: פנים המגרש פרטי (רק לדיירים), והגדר סביבו חסומה חוץ מהשער מול השביל
@@ -59,7 +63,7 @@ function plot(o: any) {
 }
 
 /** ערוגת פרחים: רק בחלק מהמגרשים, ובכל מגרש במקום אחר, בצורה אחרת ועם פרחים אחרים */
-function flowerBed(G: any, x0: number, y0: number, x1: number, y1: number, door: number[], street: string) {
+function flowerBed(G: any, x0: number, y0: number, x1: number, y1: number, door: number[], street: string, walk: number[][] = []) {
   const v = rngAt(door[0], door[1], 13);
   if (!v.chance(.55)) return;
   const [dx, dy] = door, front = street === 'bottom' ? 1 : -1, fy = street === 'bottom' ? y1 : y0;
@@ -74,8 +78,14 @@ function flowerBed(G: any, x0: number, y0: number, x1: number, y1: number, door:
     const s = v.chance(.5) ? -1 : 1;
     spots.push([dx + s * 22, dy + front * (gapF / 2 + 1), 26, Math.min(gapF, 9)]);            // ליד הדלת, באחד הצדדים
   }
-  if (!spots.length) return;
-  const [cx, cy, bw0, bh0] = v.pick(spots);
+  // ערוגה לא יושבת על השביל המרוצף
+  const onWalk = ([cx, cy, w, h]: number[]) => walk.some((a, i) => {
+    const b = walk[i + 1]; if (!b) return false;
+    return cx + w / 2 + 6 > Math.min(a[0], b[0]) && cx - w / 2 - 6 < Math.max(a[0], b[0]) && cy + h / 2 + 6 > Math.min(a[1], b[1]) && cy - h / 2 - 6 < Math.max(a[1], b[1]);
+  });
+  const ok = spots.filter(q => !onWalk(q));
+  if (!ok.length) return;
+  const [cx, cy, bw0, bh0] = v.pick(ok);
   const tall = bh0 > bw0 * 1.3, bw = Math.min(bw0, tall ? 14 : 30), bh = Math.min(bh0, tall ? 30 : 11);
   const soil = v.pick(['#9c7552', '#8e6a4a', '#a37b56']);
   // צורה

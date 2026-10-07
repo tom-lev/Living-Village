@@ -5,6 +5,7 @@ import { ctx, prop, NO_TREE, inWater } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
 import { pine, roundTree } from '../prefabs/nature';
 import { PREFABS } from '../prefabs/registry';
+import { placeOk } from '../world/walk';
 
 const inRects = (x: number, y: number, rects: number[][]) => rects.some(([x0, y0, x1, y1]) => x > x0 && x < x1 && y > y0 && y < y1);
 
@@ -18,13 +19,17 @@ export const GENERATORS: Record<string, (o: any) => void> = {
     }
   },
 
-  /** פנסי רחוב לאורך דרכי הכפר, לסירוגין משני הצדדים */
+  /** פנסי רחוב לאורך דרכי הכפר, לסירוגין משני הצדדים.
+   *  9. רק בכפר (בקשת הבעלים): לא ביער ולא בדרכים שיוצאות ממנו, לא על שביל, ולא צמוד לפנס אחר (צמתים) */
   streetLamps(o) {
-    const { spacing = 150, offset = 31 } = o;
+    const { spacing = 150, offset = 31 } = o, { home } = ctx, M = 40, lamps: number[][] = [];
     for (const E of geo.EDGES) {
       for (let s = 40; s < E.len - 30; s += spacing) {
         const p = edgeAt(E, s), side = (Math.round(s / spacing) % 2 ? 1 : -1), x = p.x - p.ty * offset * side, y = p.y + p.tx * offset * side;
         if (NO_TREE.some(([x0, y0, x1, y1]) => x > x0 && x < x1 && y > y0 - 10 && y < y1 + 30) || inWater(x, y, 10)) continue;
+        if (x < home.x0 - M || x > home.x1 + M || y < home.y0 - M || y > home.y1 + M) continue;
+        if (!placeOk(x - 3, y - 3, x + 3, y + 1) || lamps.some(q => Math.hypot(q[0] - x, q[1] - y) < spacing * .55)) continue;
+        lamps.push([x, y]);
         PREFABS.lamp({ type: 'lamp', x, y, flip: side * (p.ty > 0 ? -1 : 1) >= 0 ? 1 : -1 });
       }
     }
