@@ -31,6 +31,8 @@ export const geo = {
   OUTER: [] as Edge[],            // דרכים מחוץ לכפר (ציור בלבד)
   ADJ: {} as Record<string, { e: number; dir: number }[]>,
   RIVER_SAMPLES: [] as number[][],
+  TRAIL_FLARES: [] as { x: number; y: number; mx: number; my: number; tx: number; ty: number }[],   // שביל שנכנס לדרך: התרחבות רכה בשולי הדרך
+  TRAIL_FREE: [] as { trail: number; start: boolean }[],   // קצה שביל שלא מוביל לשום מקום: נמוג בהדרגה
   CREEK_SAMPLES: [] as number[][],   // הפלג שבעמק
 };
 
@@ -68,6 +70,7 @@ export function buildGeometry(w: WorldData) {
   OGW = Math.ceil((B.x1 - B.x0) / OC); OGH = Math.ceil((B.y1 - B.y0) / OC); OCC = new Uint8Array(OGW * OGH);
   const roadSamples: number[][] = [];
   [...geo.EDGES, ...geo.OUTER].forEach(E => { for (let i = 0; i < E.pts.length; i += 5) roadSamples.push(E.pts[i]); });
+  joinTrails(w.trails);
   const trailSamples: number[][] = [];
   for (const t of w.trails) for (let i = 0; i < t.length - 1; i++) {
     const n = Math.ceil(Math.hypot(t[i + 1][0] - t[i][0], t[i + 1][1] - t[i][1]) / 6);
@@ -98,4 +101,69 @@ export function treeOk(x: number, y: number, noBands: number[][]) {
   if (occ(x, y, O_RIVER | O_TRAIL) || inWater(x, y, 30)) return false;
   for (const [x0, y0, x1, y1] of NO_TREE) if (x > x0 - 8 && x < x1 + 8 && y > y0 && y - 34 < y1) return false;
   return !occ(x, y, O_ROAD) && !occ(x, y - 30, O_ROAD);
+}
+
+/* ───────── חיבורי שבילים: כלל כללי לכל שביל, גם לשבילים עתידיים ─────────
+   קצה שביל ליד דרך: נצמד לקו האמצע של הדרך (נעלם מתחתיה), נכנס בזווית טבעית ומתרחב מעט בשוליים.
+   קצה ליד שביל אחר: נצמד אליו. קצה ליד קצה פנוי של שביל אחר: ממשיך אליו. אחרת: נמוג בהדרגה בדשא. */
+function joinTrails(T: number[][][]) {
+  const hw = ROAD_W / 2, roads = [...geo.EDGES, ...geo.OUTER];
+  geo.TRAIL_FLARES = []; geo.TRAIL_FREE = [];
+  const nearSeg = (p: number[], a: number[], b: number[]) => {
+    const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1, t = clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2, 0, 1);
+    return [a[0] + dx * t, a[1] + dy * t];
+  };
+  const free: { i: number; start: boolean }[] = [];
+  T.forEach((t, i) => {
+    for (const start of [true, false]) {
+      const k = start ? 0 : t.length - 1, p = t[k], q = t[start ? 1 : t.length - 2];
+      // דרך קרובה
+      let best = Infinity, c: number[] = [], tg: number[] = [];
+      for (const E of roads) for (let j = 0; j < E.pts.length - 1; j += 2) {
+        const a = E.pts[j], b = E.pts[Math.min(j + 2, E.pts.length - 1)], m = nearSeg(p, a, b), d = Math.hypot(m[0] - p[0], m[1] - p[1]);
+        if (d < best) { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; best = d; c = m; tg = [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; }
+      }
+      if (best < hw + 40) {
+        let nx = -tg[1], ny = tg[0];
+        if (nx * (q[0] - c[0]) + ny * (q[1] - c[1]) < 0) { nx = -nx; ny = -ny; }
+        // כיוון הכניסה: חצי הדרך מהזווית המקורית אל הניצב, כך שהשביל פוגש את הדרך בזווית נעימה
+        const ux = q[0] - c[0], uy = q[1] - c[1], ul = Math.hypot(ux, uy) || 1, un = Math.max(.5, (ux * nx + uy * ny) / ul), ut = (ux * tg[0] + uy * tg[1]) / ul * .5;
+        let mx = nx * un + tg[0] * ut, my = ny * un + tg[1] * ut; const ml = Math.hypot(mx, my); mx /= ml; my /= ml;
+        const r = (hw + 14) / (mx * nx + my * ny), a = [c[0] + mx * r, c[1] + my * r];
+        t[k] = c;
+        if (ul > hw + 30) t.splice(start ? 1 : t.length - 1, 0, a);
+        const e = hw / (mx * nx + my * ny);
+        geo.TRAIL_FLARES.push({ x: c[0] + mx * e, y: c[1] + my * e, mx, my, tx: tg[0], ty: tg[1] });
+        continue;
+      }
+      // שביל אחר קרוב (או אותו שביל, רחוק מהקצה הזה)
+      best = Infinity;
+      T.forEach((o, oi) => {
+        for (let j = 0; j < o.length - 1; j++) {
+          if (oi === i && (start ? j < 2 : j > o.length - 4)) continue;
+          const m = nearSeg(p, o[j], o[j + 1]), d = Math.hypot(m[0] - p[0], m[1] - p[1]);
+          if (d < best) { best = d; c = m; }
+        }
+      });
+      if (best < 40) { t[k] = c; continue; }
+      free.push({ i, start });
+    }
+  });
+  // שני קצוות פנויים קרובים (למשל שביל שמגיע אל שביל המגדלור): ממשיכים אחד אל השני
+  const used = new Set<number>();
+  free.forEach((f, a) => {
+    if (used.has(a)) return;
+    const t = T[f.i], p = t[f.start ? 0 : t.length - 1];
+    let bi = -1, bd = 170;
+    free.forEach((g, b) => {
+      if (b === a || used.has(b) || g.i === f.i) return;
+      const o = T[g.i], q = o[g.start ? 0 : o.length - 1], d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (d < bd) { bd = d; bi = b; }
+    });
+    if (bi < 0) return;
+    const g = free[bi], o = T[g.i], q = o[g.start ? 0 : o.length - 1];
+    if (f.start) t.unshift([q[0], q[1]]); else t.push([q[0], q[1]]);
+    used.add(a); used.add(bi);
+  });
+  free.forEach((f, a) => { if (!used.has(a)) geo.TRAIL_FREE.push({ trail: f.i, start: f.start }); });
 }

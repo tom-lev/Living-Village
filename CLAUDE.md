@@ -179,6 +179,11 @@ Order:
       - `placeSmall` in `scene/build.ts` checks each prop's footprint (`FOOT`) with `placeOk` before drawing it. If the spot is not allowed, it moves the prop to the nearest allowed spot (`findPlace`).
       - Sitters on a moved bench and nearby pigeons move with it, and the moves are listed in `relocated` (`window.__relocated`).
       - **Add a footprint to `FOOT` for any new small prop type.**
+  15. **Trail junctions always look natural** (owner's request). `joinTrails` in `world/geometry.ts` adjusts every trail end in `world.json` automatically, before drawing, the walk map or nav see it, so new trails need no manual tuning:
+      - Within 56 units of a road: the end snaps to the road centerline, hidden under the road. It enters at an angle halfway between its own and perpendicular, and gets a soft flare at the road edge (`geo.TRAIL_FLARES`).
+      - Within 40 units of another trail: it snaps onto that trail.
+      - Two free ends within 170 units: they join (for example the beach trail to the lighthouse trail).
+      - Otherwise it is a free end (`geo.TRAIL_FREE`): drawn narrowing to a third of its width with uneven edges, then a few shrinking worn patches. Never a closed round cap.
 - Walk-map flags also include BRIDGE (crossing water), LANE (road or trail) and PLAZA (paved square). Roads and trails are marked before objects, so the placement checks see them. Lakes clear PATH inside them at the end, except on bridges.
 - **How the rules work:** a 6-unit grid with flags WATER, SWIM, DANGER, SOFT, SOLID and PATH, plus private plot ids.
   - Objects mark it while they are built, by type. This happens in `scene/build.ts` (`markObject`, `markTerrain`, and the base of every static prop), plus `plot`, `shop`, `house`, `stoneFarm` and mountains, which mark themselves.

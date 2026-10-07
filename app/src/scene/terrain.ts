@@ -52,9 +52,53 @@ export function buildTerrain(w: WorldData) {
   /* שבילים צרים להולכי רגל (מתחת לדרכים) */
   {
     const tg = el('g', null, L.roads); L.roads.insertBefore(tg, L.roads.firstChild);
-    const d = w.trails.map(t => smoothOpen(t)).join('');
+    // קצה שלא מוביל לשום מקום: השביל מצטמצם ונמוג בדשא (במקום קצה עגול וסגור)
+    const TAIL = 34, tails: number[][][] = [];
+    const draw = w.trails.map((t, i) => {
+      const ends = geo.TRAIL_FREE.filter(f => f.trail === i);
+      if (!ends.length) return smoothOpen(t);
+      // שביל עם קצה פנוי: מציירים מהעקומה הצפופה עצמה, כדי שהקצה הנמוג ימשיך אותה בדיוק
+      let pts = denseCurve(t);
+      for (const f of ends) {
+        const src = f.start ? pts.slice().reverse() : pts;
+        let acc = 0, j = src.length - 1;
+        while (j > 0 && acc < TAIL) { acc += Math.hypot(src[j][0] - src[j - 1][0], src[j][1] - src[j - 1][1]); j--; }
+        if (acc < TAIL || j < 2) continue;   // שביל קצר מדי
+        tails.push(src.slice(j));
+        const out = src.slice(0, j + 1);
+        pts = f.start ? out.reverse() : out;
+      }
+      return 'M' + pts.map(q => `${n2(q[0])},${n2(q[1])}`).join('L');
+    });
+    const d = draw.join('');
+    // התרחבות רכה במקום שבו שביל נכנס לדרך (מתחת לדרך, כך שרק החלק שבשוליים נראה)
+    const flare = (half: number, f: number) => geo.TRAIL_FLARES.map(({ x, y, mx, my, tx, ty }) => {
+      const p = (a: number, b: number) => `${n2(x + tx * a + mx * b)},${n2(y + ty * a + my * b)}`;
+      return `M${p(half + f, -6)}L${p(half + f, 0)}Q${p(half, 0)} ${p(half, f)}L${p(-half, f)}Q${p(-half, 0)} ${p(-half - f, 0)}L${p(-half - f, -6)}Z`;
+    }).join('');
+    // הקצה הנמוג: רצועה שמצטמצמת לאפס, ועוד כמה כתמי אדמה שחוקה קטנים בהמשך
+    const taper = (half: number) => tails.map(tl => {
+      const L: string[] = [], R: string[] = [];
+      tl.forEach((q, k) => {
+        const a = tl[Math.max(0, k - 1)], b = tl[Math.min(tl.length - 1, k + 1)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        // נמוג: מצטמצם רק עד שליש מהרוחב, עם שוליים לא אחידים (דשא שנכנס פנימה)
+        const u = k / (tl.length - 1), nx = -(b[1] - a[1]) / l, ny = (b[0] - a[0]) / l, wob = Math.sin(q[0] * .7 + q[1] * .3) * .9 * u;
+        const h = half * (1 - .65 * u) + wob - (half - 4) * .5 * u;
+        L.push(`${n2(q[0] + nx * h)},${n2(q[1] + ny * h)}`); R.unshift(`${n2(q[0] - nx * h)},${n2(q[1] - ny * h)}`);
+      });
+      return `M${L.join('L')}L${R.join('L')}Z` + blob(tl[tl.length - 1][0], tl[tl.length - 1][1], half * .45, half * .45, 7, .2, half);
+    }).join('');
+    let crumbs = '';
+    for (const tl of tails) {
+      const e = tl[tl.length - 1], a = tl[Math.max(0, tl.length - 4)], l = Math.hypot(e[0] - a[0], e[1] - a[1]) || 1, ux = (e[0] - a[0]) / l, uy = (e[1] - a[1]) / l, rg = rngAt(e[0], e[1], 63);
+      // כמה כתמי אדמה שחוקה בהמשך, קטנים והולכים: השביל לא נגמר בקו, הוא נבלע בדשא
+      for (let k = 0; k < 4; k++) { const s = 7 + k * 7 + rg.rand(-1.5, 1.5), o = rg.rand(-3.5, 3.5); crumbs += blob(e[0] + ux * s - uy * o, e[1] + uy * s + ux * o, 3.6 - k * .7, 2.6 - k * .45, 7, .25, rg.rand(0, 6)); }
+    }
     el('path', { d, fill: 'none', stroke: '#d9b48c', 'stroke-width': 12, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, tg);
+    el('path', { d: flare(6, 7) + taper(6), fill: '#d9b48c' }, tg);
     el('path', { d, fill: 'none', stroke: '#efd6b4', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, tg);
+    el('path', { d: flare(4, 6) + taper(4), fill: '#efd6b4' }, tg);
+    el('path', { d: crumbs, fill: '#ead0ab', opacity: .85 }, tg);
     el('path', { d, fill: 'none', stroke: '#d9b48c', 'stroke-width': 1.2, 'stroke-dasharray': '2 7', 'stroke-linecap': 'round', opacity: .8 }, tg);
   }
 
@@ -109,4 +153,20 @@ export function buildTerrain(w: WorldData) {
     el('path', { d: `M${x - 8},${top + 2}v${h - 6}M${x},${top}v${h - 2}M${x + 8},${top + 2}v${h - 6}`, stroke: '#ffffff', 'stroke-width': 2, 'stroke-linecap': 'round', opacity: .9 }, L.ground);
     el('ellipse', { cx: x, cy: bottom, rx: 28, ry: 9, fill: '#e8f8fd' }, L.ground);
   }
+}
+
+/** עקומת Catmull-Rom צפופה (נקודה כל ~3 יחידות), אותה עקומה ש-smoothOpen מצייר */
+function denseCurve(P: number[][]) {
+  const out: number[][] = [];
+  for (let i = 0; i < P.length - 1; i++) {
+    const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    const n = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 3));
+    for (let k = 0; k < n; k++) {
+      const t = k / n, u = 1 - t;
+      out.push([u * u * u * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p2[0], u * u * u * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p2[1]]);
+    }
+  }
+  out.push(P[P.length - 1]);
+  return out;
 }
