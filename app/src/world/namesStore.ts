@@ -2,7 +2,7 @@
    קריאה: כל מבקר טוען אותו בכניסה. כתיבה: רק במכשיר שהוזן בו מפתח GitHub (נשמר רק במכשיר, לא בקוד),
    וכל שינוי נשמר ישר לקובץ דרך GitHub API. הדחיפה מפעילה את בניית האתר, ותוך דקה-שתיים כולם רואים.
    המפתח: fine-grained token עם הרשאת Contents: Read and write לפרויקט הזה בלבד. */
-const REPO = 'tom-lev/Living-Village', BRANCH = 'ccr-7419da80-z53gxw', PATH = 'app/public/names.json';
+const REPO = 'tom-lev/Living-Village', BRANCH = 'main', PATH = 'app/public/names.json';
 const TOKEN_KEY = 'village-gh-token';
 
 export const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };

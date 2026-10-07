@@ -53,7 +53,7 @@ This file is the complete handoff. Work on this project so far happened in one l
     - **Renaming in the browser, shared with everyone (`world/namesStore.ts`).** Renames are stored in `app/public/names.json` in the repo, served as `names.json`. It maps the original name to the new name, and the original `world.json` name is the stable key.
       - Every visitor loads the file at boot (`applySharedNames`).
       - Only a device that has a GitHub fine-grained token can edit. The token is limited to this repo with Contents: read and write, and is stored only in `localStorage['village-gh-token']`. Open the site once with `?edit` to enter the token.
-      - On a device that can edit, tapping a label opens a dialog. Saving writes `names.json` through the GitHub contents API on branch `ccr-7419da80-z53gxw`, which triggers the Pages deploy, so everyone sees the new name in about 1–2 minutes. Pending local renames show immediately until the deployed file catches up.
+      - On a device that can edit, tapping a label opens a dialog. Saving writes `names.json` through the GitHub contents API on branch `main`, which triggers the Pages deploy, so everyone sees the new name in about 1–2 minutes. Pending local renames show immediately until the deployed file catches up.
       - From time to time you may fold `names.json` into `world.json` and empty the file.
     - Label position: the top of the largest prop group the prefab drew (via `getBBox` in `scene/build.ts`). If there is none, the top of its `block()` rects is used. Labels are 26 px on screen.
     - Use these names when talking with the owner about fixes.
@@ -67,11 +67,11 @@ This file is the complete handoff. Work on this project so far happened in one l
 ## 3. Getting started locally
 ```
 git clone https://github.com/tom-lev/Living-Village.git && cd Living-Village
-git checkout ccr-7419da80-z53gxw        # ALL work is on this branch (main is far behind)
+# all work is on main (the old ccr-7419da80-z53gxw branch was merged into it and deleted)
 cd app && npm install && npm run dev    # open the URL, add ?debug
 ```
 - Live site: https://tom-lev.github.io/Living-Village/
-- Deploy: `.github/workflows/pages.yml` runs on every push to `main` or `ccr-7419da80-z53gxw`. It does `npm ci && npm run build` in `app/` and copies `app/dist` (+ `.nojekyll`) to the `gh-pages` branch. GitHub Pages serves `gh-pages`. A push is live about 1–2 minutes later.
+- Deploy: `.github/workflows/pages.yml` runs on every push to `main`. It does `npm ci && npm run build` in `app/` and copies `app/dist` (+ `.nojekyll`) to the `gh-pages` branch. GitHub Pages serves `gh-pages`. A push is live about 1–2 minutes later.
 - The repo is public. (Pages was enabled by pushing an orphan `gh-pages` branch; `configure-pages` with `enablement` failed for lack of token permissions, so don't use it.)
 
 ### Commands (in `app/`)

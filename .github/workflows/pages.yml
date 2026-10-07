@@ -1,7 +1,7 @@
 name: Build app and publish to gh-pages
 on:
   push:
-    branches: [main, ccr-7419da80-z53gxw]
+    branches: [main]
     paths: ['app/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 permissions:

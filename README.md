@@ -1,18 +1,39 @@
 # Living Village · כפר חי
 
+כפר מצויר וחי בדפדפן: נהר, יער, הרים, ים וכפר עם בתים, חנויות, חיות ודמויות שחיות את היום שלהן.
+אפשר לזום, לגרור ולעקוב אחרי דמות.
+
+**האתר החי:** https://tom-lev.github.io/Living-Village/
+
+## הפרויקט
+
+- **ענפים:** כל העבודה נעשית ב־`main`. הענף `gh-pages` נוצר אוטומטית ומכיל את האתר הבנוי, ולא עורכים אותו ידנית.
+- **פריסה:** כל דחיפה ל־`main` שמשנה את `app/` בונה את האתר (`.github/workflows/pages.yml`) ומעדכנת את האתר החי תוך דקה–שתיים.
+- **הרצה מקומית:**
+  ```
+  git clone https://github.com/tom-lev/Living-Village.git
+  cd Living-Village/app && npm install && npm run dev    # להוסיף ?debug לכתובת כדי לראות fps
+  ```
+  לפני כל commit מריצים `npm run build` (בדיקת TypeScript ובנייה).
+- **תוכן העולם:** הכול מוגדר ב־[`app/src/world/world.json`](app/src/world/world.json): בתים, דרכים, שבילים, גשרים, הנהר, חיות ודמויות.
+- **קוד** ([`app/src/`](app/src/), Vite + TypeScript + PixiJS):
+  `prefabs/` (אובייקטים), `scene/` (פני שטח ומחוללים), `render/` (מנוע אריחים ב־Worker),
+  `actors/` (דמויות ואנימציה), `camera/` (זום וגרירה), `world/` (נתונים, ניווט, תוויות ושמות).
+- **שמות:** לכל אובייקט יכול להיות שם באנגלית, שמוצג מעליו בזום קרוב. במכשיר עם טוקן של GitHub (נכנסים פעם אחת עם `?edit`)
+  אפשר ללחוץ על שם ולשנות אותו. השינוי נשמר ב־[`app/public/names.json`](app/public/names.json) ב־`main`, וכולם רואים אותו אחרי הפריסה.
+- **לעבודה עם Claude:** כל ההקשר, הכללים והטעם של הבעלים נמצאים ב־[`CLAUDE.md`](CLAUDE.md).
+- [`demo/index.html`](demo/index.html) הוא הגרסה הישנה בקובץ יחיד, נשמרת לעיון בלבד.
+
+---
+
+# מדריך: החייאת מפה מצוירת
+
 **מדריך מעשי להחייאת מפה מצוירת: דמויות שהולכות, רצות, יושבות, ישנות ומשחקות.**
 
 הלקחים כאן נאספו בזמן העבודה על מפת הקמפינג באפליקציית אינדינגב 2026
 ([tom-lev/indienegev-2026](https://github.com/tom-lev/indienegev-2026), הקבצים `app/build.py` ו־`app/src/map.js`).
 בכל נושא יש שלושה חלקים: מה עובד, מה לא עובד ולמה, והמספרים שנבחרו בסוף.
 עותק מלא של הקוד נמצא בתיקייה [`code/`](code/) (ראו סעיף 11).
-
-> **האתר החי:** https://tom-lev.github.io/Living-Village/ – נבנה מהתיקייה [`app/`](app/) (Vite + TypeScript).
-> כל תוכן העולם (בתים, דרכים, שבילים, חיות, דמויות) מוגדר ב־[`app/src/world/world.json`](app/src/world/world.json),
-> והקוד מחולק למודולים: `prefabs/` (אובייקטים), `scene/` (פני שטח ומחוללים), `render/` (מנוע אריחים ב־Worker),
-> `actors/` (דמויות ואנימציה), `camera/` (זום וגרירה). פיתוח: `cd app && npm install && npm run dev`.
-> הפריסה ל־GitHub Pages אוטומטית דרך `.github/workflows/pages.yml`.
-> [`demo/index.html`](demo/index.html) הוא הגרסה הישנה בקובץ יחיד, נשמרת לעיון בלבד.
 
 ---
 
