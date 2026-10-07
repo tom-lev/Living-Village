@@ -274,7 +274,8 @@ export function house(o: any) {
   }
 
   // דלת: תמיד במרכז (השביל במגרש מגיע אליה)
-  const dw = Math.min(14, w * .22) * rg.rand(.92, 1.08), dh = Math.min(22, o.h * .6) * rg.rand(.95, 1.05);
+  // דלת בגובה אדם (אנשים: 31-37 יחידות), כמו שהבעלים ביקש
+  const dh = Math.min(h - 4, 34) * rg.rand(.96, 1.02), dw = Math.max(13, dh * .47) * rg.rand(.94, 1.06);
   if (rg.chance(.3)) {   // מדרגה
     el('rect', { x: x - dw / 2 - 2.5, y: y - 1.5, width: dw + 5, height: 3, rx: 1, fill: '#cfc6b8', stroke: '#b3a999', 'stroke-width': .6 }, g);
   }

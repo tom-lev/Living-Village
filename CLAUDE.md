@@ -58,7 +58,8 @@ This file is the complete handoff. Work on this project so far happened in one l
     - Label position: the top of the largest prop group the prefab drew (via `getBBox` in `scene/build.ts`). If there is none, the top of its `block()` rects is used. Labels are 26 px on screen.
     - Use these names when talking with the owner about fixes.
   - **Text inside the world is English only:** shop signs, the station and character names. A character's full name is the first name from the data plus the surname of their home: "Noa Fisher" lives in Fisher House. A home without a surname gives "Noa of Old Stone Farm". The surname follows renames (`surnameOf` in `actors/agenda.ts`). Children live with an adult, so they share the family name.
-  - Bottom-left: + − (hidden on touch), ⤢ (home view), ❚❚/▶ (pause), 🎨 (palette menu). Bottom-right: the zoom label.
+  - Bottom-left: ⤢ (home view), ❚❚/▶ (pause), # (block grid toggle), 🎨 (palette menu). There are no +/− buttons, at the owner's request; the keyboard + and − still zoom. Bottom-right: the zoom label.
+  - **Block grid (`ui/grid.ts`):** 1 block = 100 world units. Columns are numbered from 1 at the left and rows from 1 at the top. The owner uses it to say sizes and places, for example "a forest of 6×4 blocks at columns 20–26". The world is 34×64 blocks, and the village sits at about columns 14–21, rows 32–48.
   - The follow pill appears when you tap a character.
   - There is no title card (removed at their request).
 

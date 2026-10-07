@@ -52,12 +52,21 @@ export function routeTo(from: Pt, fromPlace: Place | null, to: Place): Route {
   };
   add(from, 0);
   const a = fromPlace?.door ? frontNode(from[0], from[1]) : nearestNode(from[0], from[1]), na = nodeAt(a);
-  if (fromPlace?.vertical) add([from[0], na.y], 0);   // שביל ישר מהדלת אל הרחוב
+  if (fromPlace?.door) for (const p of doorPath(from, na, fromPlace).reverse()) add(p, 0);   // מהדלת אל הרחוב
   const target = spotOf(to), b = to.door ? frontNode(target[0], target[1]) : nearestNode(target[0], target[1]), nb = nodeAt(b);
   for (const i of routeNodes(a, b)) add([nodeAt(i).x, nodeAt(i).y], laneScale(i));
-  if (to.vertical) add([target[0], nb.y], 0);         // מול הדלת, ואז ישר פנימה
+  if (to.door) for (const p of doorPath(target, nb, to)) add(p, 0);                     // מהרחוב אל הדלת
   add(target, 0);
   return mk(pts, lane);
+}
+
+/** הדרך מהרחוב אל הדלת (בלי הדלת עצמה). הדלתות בחזית (למטה); אם הרחוב מאחורי המבנה, עוקפים אותו מהצד */
+function doorPath(door: Pt, n: { x: number; y: number }, p: Place): Pt[] {
+  if (n.y < door[1] - 6) {
+    const side = n.x >= door[0] ? 1 : -1, sx = door[0] + side * 38;
+    return [[sx, n.y], [sx, door[1] + 6], [door[0], door[1] + 6]];
+  }
+  return p.vertical ? [[door[0], n.y]] : [];
 }
 
 /* ───────── יעדים לטיול ביער: קצוות של שבילים רחוק מהכפר ───────── */

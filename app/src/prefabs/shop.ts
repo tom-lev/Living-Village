@@ -209,7 +209,7 @@ export function shop(o: any) {
   const roofC = rg.pick(['#b5654a', '#8e5a3c', '#5f6b78', '#7a8c6a', shade(c, -.25)]);
   const g = prop(y);
   const w = form === 'townhouse' ? rg.rand(62, 72) : form === 'pavilion' ? rg.rand(66, 76) : rg.rand(78, 92);
-  const gh = rg.rand(40, 46);                         // גובה קומת החנות
+  const gh = rg.rand(48, 54);                         // גובה קומת החנות: דלת בגובה אדם ומעליה רצועה לשלט
   const H = form === 'townhouse' ? gh + rg.rand(26, 32) : gh + (form === 'glassfront' ? 4 : 0);
   const x0 = x - w / 2, x1 = x + w / 2, top = y - H;
   el('ellipse', { cx: x + 4, cy: y + 1, rx: w * .64, ry: 5, fill: 'rgba(40,70,20,.2)' }, g);
@@ -268,7 +268,7 @@ export function shop(o: any) {
   }
 
   // חזית החנות: דלת בצד אחד וחלון ראווה בשאר
-  const side = o.door === 'left' ? -1 : o.door === 'right' ? 1 : (rg.chance(.5) ? -1 : 1), dw = 14, dh = Math.min(rg.rand(25, 28), gh - 19);
+  const side = o.door === 'left' ? -1 : o.door === 'right' ? 1 : (rg.chance(.5) ? -1 : 1), dw = 16, dh = Math.min(rg.rand(32, 35), gh - 17);
   const dx = x + side * (w / 2 - dw / 2 - (form === 'pavilion' ? 10 : 7));
   const fx0 = side > 0 ? x0 + 6 : dx + dw / 2 + 5, fx1 = side > 0 ? dx - dw / 2 - 5 : x1 - 6;
   // רצועה שמורה לשלט בראש קומת החנות (מתחת לגג או לקומה העליונה); החלון, הדלת והגגון מתחתיה

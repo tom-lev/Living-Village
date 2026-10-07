@@ -11,6 +11,7 @@ import { buildActors, followables } from './actors';
 import { initCamera, cameraTick, loopState, zoomAt, animateTo } from './camera/camera';
 import { view } from './camera/view';
 import { applySharedNames } from './world/labels';
+import { initGrid, drawGrid } from './ui/grid';
 
 const world = worldJson as unknown as WorldData;
 const stage = document.getElementById('stage');
@@ -40,6 +41,7 @@ async function boot() {
     actors.update(dt, T);
     cameraTick(now, dt);
     if (view.gpu) renderNow();   // פריים אחד משותף: אריחים ודמויות
+    drawGrid();
     requestAnimationFrame(tick);
   }
   function setRunning(on: boolean) {
@@ -51,7 +53,8 @@ async function boot() {
   }
   playBtn.onclick = () => setRunning(!loopState.running);
   // בהשהיה: גרירה מציירת בלי לקדם זמן, אבל מה שנכנס למסך צריך להופיע (מחוץ למסך הוא מוסתר)
-  onStaticFrame(() => { if (!loopState.running) actors.update(0, T); });
+  onStaticFrame(() => { if (!loopState.running) actors.update(0, T); drawGrid(); });
+  initGrid();
 
   /* ───────── בחירת סכימת צבעים ───────── */
   const palBtn = document.getElementById('pal'), palMenu = document.getElementById('palMenu'), grainEl = document.getElementById('grain');

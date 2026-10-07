@@ -179,12 +179,13 @@ export function initCamera(followables: any[]) {
     animateTo(Math.min(cam.k * 2, view.fitK * 24), (e.clientX - r.left - cam.x) / cam.k, (e.clientY - r.top - cam.y) / cam.k);
   });
   document.getElementById('unfollow').onclick = stopFollow;
-  document.getElementById('zin').onclick = () => { const c = center(); animateTo(Math.min(cam.k * 1.8, view.fitK * 24), c[0], c[1], 300); };
-  document.getElementById('zout').onclick = () => { const c = center(); animateTo(Math.max(cam.k / 1.8, view.minK), c[0], c[1], 300); };
+  // אין כפתורי פלוס/מינוס (העכבר והאצבעות מספיקים); במקלדת + ו- עדיין עובדים
+  const zoomIn = () => { const c = center(); animateTo(Math.min(cam.k * 1.8, view.fitK * 24), c[0], c[1], 300); };
+  const zoomOut = () => { const c = center(); animateTo(Math.max(cam.k / 1.8, view.minK), c[0], c[1], 300); };
   document.getElementById('zfit').onclick = () => { stopFollow(); goHome(); };
   addEventListener('keydown', e => {
-    if (e.key === '+' || e.key === '=') document.getElementById('zin').click();
-    if (e.key === '-') document.getElementById('zout').click();
+    if (e.key === '+' || e.key === '=') zoomIn();
+    if (e.key === '-') zoomOut();
     if (e.key === '0') document.getElementById('zfit').click();
   });
   addEventListener('resize', () => {
