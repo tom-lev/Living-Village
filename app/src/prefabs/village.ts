@@ -3,7 +3,8 @@ import { el, circ, rrect, n2, blob } from '../core/util';
 import { rand, R, rngAt } from '../core/rng';
 import { ctx, block } from '../world/context';
 import { register } from './registry';
-import { ROAD_W } from '../world/geometry';
+import { ROAD_W, geo } from '../world/geometry';
+import { catmull } from '../world/nav';
 import { markPrivate, markLine, SOLID } from '../world/walk';
 
 /** המגרש של כל דלת (כדי לדעת מי מורשה להיכנס) */
@@ -18,17 +19,21 @@ function plot(o: any) {
   el('path', { d: rrect(x0, y0, x1 - x0, y1 - y0, 7), fill: '#b3d98a' }, G);
   let walk: number[][] = [];
   if (door) {
-    // שביל מרוצף מהדלת לשער: קו אחד רציף עם פינות מעוגלות (לא מלבנים מחוברים)
-    // השביל מגיע עד שפת הדרך הצרה (המגרשים תוכננו לדרך רחבה יותר)
-    const reach = 3 + (25 - ROAD_W / 2), [dx, dy] = door, ey = street === 'bottom' ? y1 + reach : y0 - reach;
-    if (street === 'bottom') walk = [[dx, dy], [dx, ey]];
-    else {
-      // הרחוב מאחורי הבית: מהדלת קדימה (רחוק מספיק מהקיר ומהעציצים שליד הדלת), לצד הרחב של המגרש, ולאורך הגדר אל השער
+    /* 30. שביל מהדלת (בקשת הבעלים): הדלת פונה קדימה (דרומה). אם לפניה, עד 60 מקצה המגרש, יש דרך או שביל –
+       השביל המרוצף יורד אליהם ישר מהדלת, ולא מסתובב אחורה סביב הבית. רק כשאין כלום לפני הבית הוא הולך מסביב
+       אל הרחוב שמאחור. בכל מקרה הוא מגיע ממש עד שפת הדרך (או אל תוך השביל), גם כשהרחוב מתעקל */
+    const [dx, dy] = door, reach = 3 + (25 - ROAD_W / 2);
+    const front = pathAcross(dx, y1, 1, 60);
+    if (front || street === 'bottom') {
+      walk = [[dx, dy], [dx, front ? front.y - front.hw : y1 + reach]];
+      gateX = dx;
+    } else {
+      // הרחוב מאחורי הבית: מהדלת קדימה (רחוק מספיק מהקיר ומהעציצים שליד הדלת), לצד הרחב של המגרש, ובאמצע הדשא שבצד אל הרחוב
       const side = x1 - dx >= dx - x0 ? 1 : -1, sx = side > 0 ? x1 - 17 : x0 + 17, fy = dy + Math.min(17, Math.max(8, (y1 - dy) / 2));
-      walk = [[dx, dy], [dx, fy], [sx, fy], [sx, ey]];
+      const back = pathAcross(sx, y0, -1, 60);
+      walk = [[dx, dy], [dx, fy], [sx, fy], [sx, back ? back.y + back.hw : y0 - reach]];
       gateX = sx;
     }
-    if (street === 'bottom') gateX = dx;
     // פינות מעוגלות ברדיוס 7
     let d = `M${n2(walk[0][0])},${n2(walk[0][1])}`;
     for (let i = 1; i < walk.length - 1; i++) {
@@ -52,6 +57,23 @@ function plot(o: any) {
   const id = plotDoors.length + 1;
   markPrivate(x0, y0, x1, y1, id);
   if (door) plotDoors.push({ x: door[0], y: door[1], id });
+}
+
+/** הדרך או השביל הקרובים שחוצים את הקו האנכי x, מ-y0 בכיוון dir (1 למטה, -1 למעלה), עד max יחידות.
+ *  מחזיר את ה-y של קו האמצע ואת חצי הרוחב (השביל המרוצף נגמר בשפה: הדרכים מצוירות מתחת לו) */
+function pathAcross(x: number, y0: number, dir: number, max: number) {
+  let best: { y: number; hw: number } | null = null;
+  const test = (P: number[][], hw: number) => {
+    for (let i = 0; i < P.length - 1; i++) {
+      const a = P[i], b = P[i + 1];
+      if ((a[0] - x) * (b[0] - x) > 0 || a[0] === b[0]) continue;
+      const y = a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]), d = (y - y0) * dir;
+      if (d > 0 && d < max && (!best || d < (best.y - y0) * dir)) best = { y, hw };
+    }
+  };
+  for (const E of [...geo.EDGES, ...geo.OUTER]) test(E.pts, ROAD_W / 2 - .5);
+  for (const t of ctx.world.trails) test(catmull(t), 3);
+  return best as { y: number; hw: number } | null;
 }
 
 /** ערוגת פרחים: רק בחלק מהמגרשים, ובכל מגרש במקום אחר, בצורה אחרת ועם פרחים אחרים */
