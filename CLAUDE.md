@@ -175,7 +175,7 @@ Order:
   11. People never enter the paddock (they feed animals from outside), and the dog never enters shops.
   12. Everyone stays on the ground and fades in or out.
   13. Calm movement: people keep personal space, step right when meeting someone, and slow down behind a slower walker.
-  14. **Placement rule for small props** (owner's request). A bench, picnic table, blanket, haybale, mailbox, bike, well or beehives never stands on a road or trail, on water, a building, a mountain or a private plot, and never straddles the edge of a paved plaza: it is fully on the paving or fully off it.
+  14. **Placement rule for small props** (owner's request). The check covers the prop's whole drawn area, including its height (hive bodies, bench backs), plus a 4-unit margin. A bench, picnic table, blanket, haybale, mailbox, bike, well or beehives never stands on a road or trail, on water, a building, a mountain or a private plot, and never straddles the edge of a paved plaza: it is fully on the paving or fully off it.
       - `placeSmall` in `scene/build.ts` checks each prop's footprint (`FOOT`) with `placeOk` before drawing it. If the spot is not allowed, it moves the prop to the nearest allowed spot (`findPlace`).
       - Sitters on a moved bench and nearby pigeons move with it, and the moves are listed in `relocated` (`window.__relocated`).
       - **Add a footprint to `FOOT` for any new small prop type.**

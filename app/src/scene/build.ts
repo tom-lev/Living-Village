@@ -64,21 +64,22 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   for (const W of WATERS) clearPathIn(W.cx, W.cy, W.rx, W.ry);   // אגם: הדרך או השביל לא חוצים אותו (חוץ מגשר)
 }
 
-/* כלל המיקום של חפצים קטנים: השטח שכל אחד תופס (לבדיקה) */
+/* כלל המיקום של חפצים קטנים: כל השטח המצויר של החפץ, כולל הגובה שלו (גוף הכוורת, משענת הספסל),
+   כי חלק גבוה שעומד מול שביל מסתיר אותו ונראה כאילו השביל נכנס לתוכו */
 const FOOT: Record<string, (o: any) => number[]> = {
-  bench: o => [o.x - 22, o.y - 12, o.x + 22, o.y + 4],
-  picnicTable: o => [o.x - 20, o.y - 14, o.x + 20, o.y + 4],
+  bench: o => [o.x - 22, o.y - 24, o.x + 22, o.y + 4],
+  picnicTable: o => [o.x - 20, o.y - 18, o.x + 20, o.y + 4],
   picnicBlanket: o => [o.x - 22, o.y - 16, o.x + 22, o.y + 16],
-  haybale: o => [o.x - 9, o.y - 8, o.x + 9, o.y + 8],
-  mailbox: o => [o.x - 6, o.y - 4, o.x + 6, o.y + 2],
-  bike: o => [o.x - 11, o.y - 6, o.x + 11, o.y + 2],
-  well: o => [o.x - 15, o.y - 6, o.x + 15, o.y + 6],
-  beehives: o => [o.x - 10, o.y - 20, o.x + (Math.min(o.count ?? 5, 3) - 1) * 32 + 10, o.y + (Math.ceil((o.count ?? 5) / 3) - 1) * 34 + 4],
+  haybale: o => [o.x - 9, o.y - 9, o.x + 9, o.y + 9],
+  mailbox: o => [o.x - 8, o.y - 26, o.x + 8, o.y + 2],
+  bike: o => [o.x - 11, o.y - 16, o.x + 11, o.y + 2],
+  well: o => [o.x - 18, o.y - 38, o.x + 18, o.y + 7],
+  beehives: o => [o.x - 13, o.y - 32, o.x + (Math.min(o.count ?? 5, 3) - 1) * 32 + 13, o.y + (Math.ceil((o.count ?? 5) / 3) - 1) * 34 + 4],
 };
 /** חפצים שהוזזו בבנייה בגלל כלל המיקום (מי שקשור אליהם זז איתם: יושב על ספסל, יונים) */
 export const relocated: { type: string; from: number[]; to: number[] }[] = [];
 function placeSmall(o: any) {
-  const fp = FOOT[o.type]?.(o);
+  const f0 = FOOT[o.type]?.(o), fp = f0 && [f0[0] - 4, f0[1] - 4, f0[2] + 4, f0[3] + 4];   // מרווח קטן: לא נוגע בשביל ממש בקצה
   if (fp && !placeOk(fp[0], fp[1], fp[2], fp[3])) {
     const d = findPlace(fp);
     if (d) { relocated.push({ type: o.type, from: [o.x, o.y], to: [o.x + d[0], o.y + d[1]] }); o.x += d[0]; o.y += d[1]; }
