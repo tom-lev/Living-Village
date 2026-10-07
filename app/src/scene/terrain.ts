@@ -83,6 +83,8 @@ export function buildTerrain(w: WorldData) {
       return 'M' + pts.map(q => `${n2(q[0])},${n2(q[1])}`).join('L');
     });
     const d = draw.join('');
+    // שביל שפוגש שביל: הפינות המעוגלות מצוירות באותו קו בדיוק (מסגרת ומילוי), כך שהשבילים מתמזגים בלי מדרגות
+    const fil = geo.TRAIL_FILLETS.map(([h, c, b]) => `M${n2(h[0])},${n2(h[1])}Q${n2(c[0])},${n2(c[1])} ${n2(b[0])},${n2(b[1])}`).join('');
     // התרחבות רכה במקום שבו שביל נכנס לדרך (מתחת לדרך, כך שרק החלק שבשוליים נראה)
     const flare = (half: number, f: number) => geo.TRAIL_FLARES.map(({ x, y, mx, my, tx, ty }) => {
       const p = (a: number, b: number) => `${n2(x + tx * a + mx * b)},${n2(y + ty * a + my * b)}`;
@@ -106,9 +108,9 @@ export function buildTerrain(w: WorldData) {
       // כמה כתמי אדמה שחוקה בהמשך, קטנים והולכים: השביל לא נגמר בקו, הוא נבלע בדשא
       for (let k = 0; k < 4; k++) { const s = 7 + k * 7 + rg.rand(-1.5, 1.5), o = rg.rand(-3.5, 3.5); crumbs += blob(e[0] + ux * s - uy * o, e[1] + uy * s + ux * o, 3.6 - k * .7, 2.6 - k * .45, 7, .25, rg.rand(0, 6)); }
     }
-    el('path', { d, fill: 'none', stroke: '#d9b48c', 'stroke-width': 12, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, tg);
+    el('path', { d: d + fil, fill: 'none', stroke: '#d9b48c', 'stroke-width': 12, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, tg);
     el('path', { d: flare(6, 7) + taper(6), fill: '#d9b48c' }, tg);
-    el('path', { d, fill: 'none', stroke: '#efd6b4', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, tg);
+    el('path', { d: d + fil, fill: 'none', stroke: '#efd6b4', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, tg);
     el('path', { d: flare(4, 6) + taper(4), fill: '#efd6b4' }, tg);
     el('path', { d: crumbs, fill: '#ead0ab', opacity: .85 }, tg);
     el('path', { d, fill: 'none', stroke: '#d9b48c', 'stroke-width': 1.2, 'stroke-dasharray': '2 7', 'stroke-linecap': 'round', opacity: .8 }, tg);

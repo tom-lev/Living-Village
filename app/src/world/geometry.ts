@@ -33,6 +33,7 @@ export const geo = {
   RIVER_SAMPLES: [] as number[][],
   TRAIL_FLARES: [] as { x: number; y: number; mx: number; my: number; tx: number; ty: number }[],   // שביל שנכנס לדרך: התרחבות רכה בשולי הדרך
   TRAIL_FREE: [] as { trail: number; start: boolean }[],
+  TRAIL_FILLETS: [] as number[][][],   // שביל שפוגש שביל: פינה מעוגלת בכל צד (עקומה ריבועית: נקודה על השביל המארח, הצומת, נקודה על השביל הנכנס)
   ROAD_TAPERS: [] as { x: number; y: number; dx: number; dy: number }[],   // דרך ללא מוצא שממשיכה כשביל: הדרך הולכת ונהיית צרה
    // קצה שביל שלא מוביל לשום מקום: נמוג בהדרגה
   CREEK_SAMPLES: [] as number[][],   // הפלג שבעמק
@@ -118,7 +119,7 @@ export function treeOk(x: number, y: number, noBands: number[][]) {
    קצה ליד שביל אחר: נצמד אליו. קצה ליד קצה פנוי של שביל אחר: ממשיך אליו. אחרת: נמוג בהדרגה בדשא. */
 function joinTrails(T: number[][][]) {
   const hw = ROAD_W / 2, roads = [...geo.EDGES, ...geo.OUTER];
-  geo.TRAIL_FLARES = []; geo.TRAIL_FREE = []; geo.ROAD_TAPERS = [];
+  geo.TRAIL_FLARES = []; geo.TRAIL_FREE = []; geo.ROAD_TAPERS = []; geo.TRAIL_FILLETS = [];
   const nearSeg = (p: number[], a: number[], b: number[]) => {
     const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1, t = clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2, 0, 1);
     return [a[0] + dx * t, a[1] + dy * t];
@@ -141,21 +142,78 @@ function joinTrails(T: number[][][]) {
     }
     return { d, c, tg, end };
   };
-  // הקצה נכנס לדרך: נצמד לקו האמצע, בזווית נעימה, עם התרחבות בשוליים
-  const roadJoin = (t: number[][], start: boolean, c: number[], tg: number[]) => {
+  // הקצה נכנס לדרך (או לשביל אחר): נצמד לקו האמצע, בזווית נעימה, עם התרחבות בשוליים.
+  // hw = חצי הרוחב של מה שנכנסים אליו, gap = כמה רחוק מהשוליים נמצאת נקודת הגישה
+  const roadJoin = (t: number[][], start: boolean, c: number[], tg: number[], hw = ROAD_W / 2, gap = 14, flare = true) => {
     const k = start ? 0 : t.length - 1, q = t[start ? 1 : t.length - 2];
     let nx = -tg[1], ny = tg[0];
     if (nx * (q[0] - c[0]) + ny * (q[1] - c[1]) < 0) { nx = -nx; ny = -ny; }
     // כיוון הכניסה: חצי הדרך מהזווית המקורית אל הניצב, כך שהשביל פוגש את הדרך בזווית נעימה
     const ux = q[0] - c[0], uy = q[1] - c[1], ul = Math.hypot(ux, uy) || 1, un = Math.max(.5, (ux * nx + uy * ny) / ul), ut = (ux * tg[0] + uy * tg[1]) / ul * .5;
     let mx = nx * un + tg[0] * ut, my = ny * un + tg[1] * ut; const ml = Math.hypot(mx, my); mx /= ml; my /= ml;
-    const r = (hw + 14) / (mx * nx + my * ny), a = [c[0] + mx * r, c[1] + my * r];
+    const r = (hw + gap) / (mx * nx + my * ny), a = [c[0] + mx * r, c[1] + my * r];
     t[k] = c;
-    if (ul > hw + 30) t.splice(start ? 1 : t.length - 1, 0, a);
+    if (ul > r + 16) t.splice(start ? 1 : t.length - 1, 0, a);
     const e = hw / (mx * nx + my * ny);
-    geo.TRAIL_FLARES.push({ x: c[0] + mx * e, y: c[1] + my * e, mx, my, tx: tg[0], ty: tg[1] });
+    if (flare) geo.TRAIL_FLARES.push({ x: c[0] + mx * e, y: c[1] + my * e, mx, my, tx: tg[0], ty: tg[1] });
+    return [mx, my];
   };
-  const free: { i: number; start: boolean }[] = [];
+  /* ───── כלל: שביל שפוגש שביל משתלב בו בצורה חלקה (בקשת הבעלים) ─────
+     הקצה נצמד לקו האמצע של העקומה שמצוירת בפועל (Catmull-Rom), ולא לקווים הישרים בין נקודות הנתונים –
+     אחרת הקצה נוחת לידה, בולט ממנה עם כיפה עגולה, ונראה כמו איקס. הוא נכנס בזווית נעימה (כמו לדרך),
+     והפינות בין השבילים מתעגלות בהתרחבות רכה */
+  const TRAIL_HW = 6;
+  const curve = (o: number[][]) => {
+    const out: number[][] = [], seg: number[] = [];
+    for (let j = 0; j < o.length - 1; j++) {
+      const p0 = o[Math.max(0, j - 1)], p1 = o[j], p2 = o[j + 1], p3 = o[Math.min(o.length - 1, j + 2)];
+      const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+      const n = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 3));
+      for (let k = 0; k < n; k++) {
+        const s = k / n, u = 1 - s;
+        out.push([u * u * u * p1[0] + 3 * u * u * s * c1[0] + 3 * u * s * s * c2[0] + s * s * s * p2[0], u * u * u * p1[1] + 3 * u * u * s * c1[1] + 3 * u * s * s * c2[1] + s * s * s * p2[1]]);
+        seg.push(j);
+      }
+    }
+    out.push(o[o.length - 1]); seg.push(o.length - 2);
+    return { out, seg };
+  };
+  // הנקודה הקרובה על העקומה המצוירת של שביל אחר (או של אותו שביל, רחוק מהקצה הזה), והכיוון שם
+  const nearTrail = (p: number[], i: number, start: boolean) => {
+    let d = Infinity, c: number[] = [], tg: number[] = [1, 0], host: number[][] = [], hj = 0;
+    T.forEach((o, oi) => {
+      if (o.length < 2) return;
+      const { out, seg } = curve(o);
+      for (let j = 0; j < out.length - 1; j++) {
+        if (oi === i && (start ? seg[j] < 2 : seg[j] > o.length - 4)) continue;
+        const a = out[j], b = out[j + 1], m = nearSeg(p, a, b), dd = Math.hypot(m[0] - p[0], m[1] - p[1]);
+        if (dd >= d) continue;
+        const a2 = out[Math.max(0, j - 2)], b2 = out[Math.min(out.length - 1, j + 3)], l = Math.hypot(b2[0] - a2[0], b2[1] - a2[1]) || 1;
+        d = dd; c = m; tg = [(b2[0] - a2[0]) / l, (b2[1] - a2[1]) / l]; host = out; hj = j;
+      }
+    });
+    return { d, c, tg, host, hj };
+  };
+  // נקודה על העקומה המארחת במרחק L מהצומת, לכל כיוון (נעצרת בקצה השביל)
+  const along = (P: number[][], j: number, c: number[], dir: 1 | -1, L: number) => {
+    let acc = 0, prev = c, k = dir > 0 ? j + 1 : j;
+    for (; k >= 0 && k < P.length; k += dir) {
+      const l = Math.hypot(P[k][0] - prev[0], P[k][1] - prev[1]);
+      if (acc + l >= L) { const f = (L - acc) / (l || 1); return [prev[0] + (P[k][0] - prev[0]) * f, prev[1] + (P[k][1] - prev[1]) * f]; }
+      acc += l; prev = P[k];
+    }
+    return prev;
+  };
+  const FILLET = 15;
+  const trailJoin = (t: number[][], start: boolean, h: { c: number[]; tg: number[]; host: number[][]; hj: number }) => {
+    const [mx, my] = roadJoin(t, start, h.c, h.tg, TRAIL_HW, 26, false), c = h.c;
+    // שתי פינות מעוגלות: מהשביל המארח (משני צידי הצומת) אל השביל הנכנס. הפינה החדה (הצד שאליו השביל נוטה) מתעגלת פחות
+    for (const dir of [1, -1] as const) {
+      const cos = (h.tg[0] * mx + h.tg[1] * my) * dir, L = FILLET * (1 - .45 * Math.max(0, cos));
+      geo.TRAIL_FILLETS.push([along(h.host, h.hj, c, dir, L), c, [c[0] + mx * L, c[1] + my * L]]);
+    }
+  };
+  const free: { i: number; start: boolean }[] = [], pending: { i: number; start: boolean }[] = [];
   T.forEach((t, i) => {
     for (const start of [true, false]) {
       const k = start ? 0 : t.length - 1, p = t[k];
@@ -169,19 +227,19 @@ function joinTrails(T: number[][][]) {
         continue;
       }
       if (best < hw + 40) { roadJoin(t, start, c, tg); continue; }
-      // שביל אחר קרוב (או אותו שביל, רחוק מהקצה הזה)
-      best = Infinity;
-      T.forEach((o, oi) => {
-        for (let j = 0; j < o.length - 1; j++) {
-          if (oi === i && (start ? j < 2 : j > o.length - 4)) continue;
-          const m = nearSeg(p, o[j], o[j + 1]), d = Math.hypot(m[0] - p[0], m[1] - p[1]);
-          if (d < best) { best = d; c = m; }
-        }
-      });
-      if (best < 40) { t[k] = c; continue; }
-      free.push({ i, start });
+      pending.push({ i, start });
     }
   });
+  // שביל אחר קרוב (או אותו שביל, רחוק מהקצה הזה): אחרי שכל הקצוות שליד דרכים כבר סודרו
+  // קצה שיושב בדיוק על קצה של שביל אחר: זה המשך של אותו שביל, לא צומת – משאירים כמו שהוא
+  const tip = (i: number, start: boolean) => T[i][start ? 0 : T[i].length - 1];
+  const cont = (i: number, start: boolean) => pending.some(o => o.i !== i && Math.hypot(tip(o.i, o.start)[0] - tip(i, start)[0], tip(o.i, o.start)[1] - tip(i, start)[1]) < 12);
+  const conts = pending.filter(e => cont(e.i, e.start));
+  for (const { i, start } of pending) {
+    if (conts.some(e => e.i === i && e.start === start)) continue;
+    const t = T[i], h = nearTrail(t[start ? 0 : t.length - 1], i, start);
+    if (h.d < 40) trailJoin(t, start, h); else free.push({ i, start });
+  }
   // שני קצוות פנויים קרובים (למשל שביל שמגיע אל שביל המגדלור): ממשיכים אחד אל השני
   const used = new Set<number>();
   free.forEach((f, a) => {
@@ -222,16 +280,18 @@ function joinTrails(T: number[][][]) {
   T.forEach((t, i) => {
     if (touches(i)) return;
     // הקצה הקרוב לרשת (דרך או שביל אחר)
-    let best = { d: Infinity, start: true, c: [] as number[], tg: null as number[] | null };
+    let best = { d: Infinity, start: true, c: [] as number[], tg: null as number[] | null, trail: null as ReturnType<typeof nearTrail> | null };
     for (const start of [true, false]) {
       const p = t[start ? 0 : t.length - 1], r = nearRoad(p);
-      if (r.d - hw < best.d) best = { d: r.d - hw, start, c: r.c, tg: r.tg };
-      T.forEach((o, oi) => { if (oi === i) return; for (let j = 0; j < o.length - 1; j++) { const m = nearSeg(p, o[j], o[j + 1]), d = Math.hypot(m[0] - p[0], m[1] - p[1]); if (d < best.d) best = { d, start, c: m, tg: null }; } });
+      if (r.d - hw < best.d) best = { d: r.d - hw, start, c: r.c, tg: r.tg, trail: null };
+      const h = nearTrail(p, i, start);
+      if (h.d < best.d) best = { d: h.d, start, c: h.c, tg: h.tg, trail: h };
     }
     // הקצה הזה יושב ליד מקום עם שם (אגם, חווה...): השביל מתחיל שם, ולא ממשיכים אותו דרך המקום
     if (best.d > 400 || (best.d > 80 && atPlace(t[best.start ? 0 : t.length - 1]))) return;
     if (best.start) t.unshift([best.c[0], best.c[1]]); else t.push([best.c[0], best.c[1]]);
-    if (best.tg) roadJoin(t, best.start, best.c, best.tg);
+    if (best.trail) trailJoin(t, best.start, best.trail);
+    else if (best.tg) roadJoin(t, best.start, best.c, best.tg);
     lone.add(i * 2 + (best.start ? 0 : 1));
   });
   free.forEach((f, a) => { if (!used.has(a) && !lone.has(f.i * 2 + (f.start ? 0 : 1))) geo.TRAIL_FREE.push({ trail: f.i, start: f.start }); });
