@@ -31,6 +31,11 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   initWalk();   // מפת מעבר: מסמנים תוך כדי בנייה מה מותר לדרוך עליו
   buildTerrain(w);
   markTerrain(w);
+  // אגמים ובריכות מסומנים כמים כבר עכשיו, לפני שחפצים קטנים מחפשים מקום (אחרת ספסל יכול "לזוז" לתוך אגם)
+  for (const o of w.objects) {
+    if (['lake', 'mountainLake', 'fishingPond', 'frozenLake'].includes(o.type)) markEllipse(o.cx, o.cy, o.rx, o.ry, WATER);
+    if (o.type === 'hotSpring') markEllipse(o.x, o.y, 60, 30, WATER);
+  }
   alignBridges(w);   // גשר מהנתונים: בדיוק איפה שהדרך או השביל חוצים את המים, בכיוון שלהם
   for (const o of w.objects) {
     const f = PREFABS[o.type];
@@ -92,18 +97,24 @@ function placeSmall(o: any) {
   if (o.type === 'pigeon') { const m = relocated.find(r => r.type === 'bench' && Math.hypot(r.from[0] - o.x, r.from[1] - o.y) < 50); if (m) { o.x += m.to[0] - m.from[0]; o.y += m.to[1] - m.from[1]; } }
 }
 
-/* 10. ספסל פונה למשהו (בקשת הבעלים): היושבים מסתכלים קדימה (דרומה, אל הצופה), אז לפני הספסל צריך להיות
-   שביל, דרך, רחבה או מים – לא הגב אל השביל ומולו כלום. אחרת הספסל עובר למקום קרוב שיש מולו משהו */
+/* 10. ספסל לא יושב עם הגב לשביל (בקשת הבעלים). היושבים מסתכלים קדימה (דרומה, אל הצופה).
+   רק ספסל ששביל עובר ממש מאחוריו ומולו אין כלום זז – למרחק קצר (עד 60), על יבשה, למקום שמולו שביל, רחבה או מים.
+   ספסל שעומד בדשא בלי שביל מאחוריו נשאר במקומו */
 const VIEW = PATH | WATER | PLAZA;
 function frontOk(x: number, y: number) {
   for (let yy = y + 10; yy <= y + 80; yy += 6) for (let xx = x - 20; xx <= x + 20; xx += 10) if (flagsAt(xx, yy) & VIEW) return true;
   return false;
 }
+function backToPath(x: number, y: number) {
+  for (let yy = y - 60; yy <= y - 28; yy += 6) for (let xx = x - 16; xx <= x + 16; xx += 8) if (flagsAt(xx, yy) & PATH) return true;
+  return false;
+}
+const dry = (f: number[]) => { for (let y = f[1] - 10; y <= f[3] + 10; y += 6) for (let x = f[0] - 10; x <= f[2] + 10; x += 6) if (flagsAt(x, y) & WATER) return false; return true; };
 function faceSomething(o: any) {
-  if (frontOk(o.x, o.y)) return;
-  for (let r = 8; r <= 150; r += 6) for (let a = 0; a < 24; a++) {
+  if (frontOk(o.x, o.y) || !backToPath(o.x, o.y)) return;
+  for (let r = 8; r <= 60; r += 4) for (let a = 0; a < 24; a++) {
     const t = a / 24 * Math.PI * 2, x = Math.round(o.x + Math.cos(t) * r), y = Math.round(o.y + Math.sin(t) * r), f = FOOT.bench({ x, y });
-    if (!placeOk(f[0] - 4, f[1] - 4, f[2] + 4, f[3] + 4) || !frontOk(x, y)) continue;
+    if (!placeOk(f[0] - 4, f[1] - 4, f[2] + 4, f[3] + 4) || !dry(f) || !frontOk(x, y)) continue;
     const prev = relocated.find(m => m.type === 'bench' && m.to[0] === o.x && m.to[1] === o.y);
     if (prev) prev.to = [x, y]; else relocated.push({ type: 'bench', from: [o.x, o.y], to: [x, y] });
     o.x = x; o.y = y; return;

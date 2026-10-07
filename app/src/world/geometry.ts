@@ -360,17 +360,29 @@ function trailRules(w: WorldData) {
   for (const o of w.objects) {
     if (!DOOR_TYPES.has(o.type) || o.x === undefined || o.noPath) continue;
     if (plots.some(q => o.x >= q.x0 - 4 && o.x <= q.x1 + 4 && o.y >= q.y0 - 4 && o.y <= q.y1 + 4)) continue;   // מגרש: יש לו שביל מרוצף משלו
-    const dx = doorX(o), step = [dx, o.y + 22];
-    let best = { d: Infinity, c: [] as number[] };
-    for (const E of roads) { const r = nearOn(E.pts, step); if (r.d - ROAD_W / 2 < best.d) best = { d: r.d - ROAD_W / 2, c: r.c }; }
-    for (const t of T) { const r = nearOn(catmullPts(t), step); if (r.d - 6 < best.d) best = { d: r.d - 6, c: r.c }; }
+    const dx = doorX(o), door = [dx, o.y - 3], step = [dx, o.y + 22];
+    let best = { d: Infinity, c: [] as number[], tx: 1, ty: 0, hw: 0 };
+    for (const E of roads) { const r = nearOn(E.pts, step); if (r.d - ROAD_W / 2 < best.d) best = { d: r.d - ROAD_W / 2, c: r.c, tx: r.tx, ty: r.ty, hw: ROAD_W / 2 }; }
+    for (const t of T) { const r = nearOn(catmullPts(t), step); if (r.d - 6 < best.d) best = { d: r.d - 6, c: r.c, tx: r.tx, ty: r.ty, hw: 6 }; }
     if (best.d < 14 || best.d > 320) continue;   // כבר ליד הרשת, או רחוק מדי לשביל גינה
     if (waters.some(W => crossAt(step, best.c, W.P))) continue;   // לא בונים גשר בשביל שביל גינה
-    T.push([[dx, o.y - 3], step, best.c]);
+    /* שביל גינה: עקומה אחת חלקה. יוצא מהדלת ישר קדימה (דרומה), ומגיע לשביל או לדרך בזווית נעימה (בערך 60°),
+       מהצד שבו נמצא הבית. נקודות צפופות על העקומה, כך שהציור (Catmull-Rom) עובר בדיוק עליה */
+    const c = best.c, L = Math.hypot(c[0] - door[0], c[1] - door[1]);
+    let nx = -best.ty, ny = best.tx; if (nx * (door[0] - c[0]) + ny * (door[1] - c[1]) < 0) { nx = -nx; ny = -ny; }
+    const along = Math.sign(best.tx * (door[0] - c[0]) + best.ty * (door[1] - c[1])) || 1;
+    let mx = nx * .87 + best.tx * along * .5, my = ny * .87 + best.ty * along * .5; const ml = Math.hypot(mx, my); mx /= ml; my /= ml;
+    const P1 = [door[0], door[1] + L * .45], P2 = [c[0] + mx * L * .4, c[1] + my * L * .4], pts: number[][] = [];
+    const n = Math.max(3, Math.ceil(L / 18));
+    for (let k = 0; k <= n; k++) {
+      const s = k / n, u = 1 - s;
+      pts.push([u * u * u * door[0] + 3 * u * u * s * P1[0] + 3 * u * s * s * P2[0] + s * s * s * c[0], u * u * u * door[1] + 3 * u * u * s * P1[1] + 3 * u * s * s * P2[1] + s * s * s * c[1]]);
+    }
+    T.push(pts);
     geo.DOOR_TRAILS.add(T.length - 1);
   }
   // 1. מים: חצייה כמעט בניצב, ואחר כך התרחקות מהגדה
-  for (const W of waters) for (const t of T) {
+  for (const W of waters) for (const t of T.filter((_, i) => !geo.DOOR_TRAILS.has(i))) {
     for (let k = 0; k < t.length - 1; k++) {
       const X = crossAt(t[k], t[k + 1], W.P); if (!X) continue;
       const ux = t[k + 1][0] - t[k][0], uy = t[k + 1][1] - t[k][1], ul = Math.hypot(ux, uy) || 1;
@@ -419,7 +431,7 @@ function trailRules(w: WorldData) {
     }
   }
   // 7. פינות חדות (אחרון: גם הפינות שנוצרו מהכללים הקודמים, למשל חצייה ישרה של מים)
-  for (const t of T) for (let k = t.length - 2; k >= 1; k--) {
+  for (const t of T.filter((_, i) => !geo.DOOR_TRAILS.has(i))) for (let k = t.length - 2; k >= 1; k--) {
     const a = t[k - 1], v = t[k], b = t[k + 1], la = Math.hypot(a[0] - v[0], a[1] - v[1]), lb = Math.hypot(b[0] - v[0], b[1] - v[1]);
     const turn = Math.abs(Math.atan2((v[0] - a[0]) * (b[1] - v[1]) - (v[1] - a[1]) * (b[0] - v[0]), (v[0] - a[0]) * (b[0] - v[0]) + (v[1] - a[1]) * (b[1] - v[1])));
     if (turn < 70 * Math.PI / 180 || !la || !lb) continue;
