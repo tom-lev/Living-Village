@@ -5,7 +5,6 @@ import { ctx, block } from '../world/context';
 import { register } from './registry';
 import { ROAD_W } from '../world/geometry';
 import { markPrivate, markLine, SOLID } from '../world/walk';
-import { drawFence, pickFence } from './fences';
 
 /** המגרש של כל דלת (כדי לדעת מי מורשה להיכנס) */
 export const plotDoors: { x: number; y: number; id: number }[] = [];
@@ -14,7 +13,7 @@ export const plotOfDoor = (d: number[] | undefined) => d ? plotDoors.find(p => M
 /** מגרש של בית: מדשאה, גדר חיה או גדר כלונסאות, שביל מהדלת לרחוב וערוגה ליד הבית.
  *  door: [x, y] של דלת הבית; street: 'top' | 'bottom' – לאיזה צד של המגרש פונה הרחוב */
 function plot(o: any) {
-  const { x0, y0, x1, y1, fence, door, street = 'bottom', bed = true } = o, G = ctx.L.groundProps;
+  const { x0, y0, x1, y1, door, street = 'bottom', bed = true } = o, G = ctx.L.groundProps;
   let gateX = door ? door[0] : (x0 + x1) / 2;
   el('path', { d: rrect(x0, y0, x1 - x0, y1 - y0, 7), fill: '#b3d98a' }, G);
   let walk: number[][] = [];
@@ -25,7 +24,7 @@ function plot(o: any) {
     if (street === 'bottom') walk = [[dx, dy], [dx, ey]];
     else {
       // הרחוב מאחורי הבית: מהדלת קדימה (רחוק מספיק מהקיר ומהעציצים שליד הדלת), לצד הרחב של המגרש, ולאורך הגדר אל השער
-      const side = x1 - dx >= dx - x0 ? 1 : -1, sx = side > 0 ? x1 - 9 : x0 + 9, fy = dy + Math.min(17, Math.max(8, (y1 - dy) / 2));
+      const side = x1 - dx >= dx - x0 ? 1 : -1, sx = side > 0 ? x1 - 17 : x0 + 17, fy = dy + Math.min(17, Math.max(8, (y1 - dy) / 2));
       walk = [[dx, dy], [dx, fy], [sx, fy], [sx, ey]];
       gateX = sx;
     }
@@ -47,16 +46,12 @@ function plot(o: any) {
     R(); rand(16, 24); for (let i = 0; i < 7; i++) { rand(-8, 8); rand(-2.5, 2.5); } R();
     flowerBed(G, x0, y0, x1, y1, door, street, walk);
   }
-  // הגדר: סגנון משלו לכל בית (fences.ts), עם פתח בשער מול השביל. מצוירת אחרי השביל והערוגה, כדי שתעמוד מעליהם
-  drawFence(G, pickFence((x0 + x1) / 2, (y0 + y1) / 2, fence), x0, y0, x1, y1, street === 'bottom' ? y1 : y0, gateX);
   block(x0, y0, x1, y1 + 30);
   // מפת מעבר: פנים המגרש פרטי (רק לדיירים), והגדר סביבו חסומה חוץ מהשער מול השביל
-  const id = plotDoors.length + 1, gy = street === 'bottom' ? y1 : y0, gx = gateX;
+  // בלי גדר (בקשת הבעלים): המגרש פרטי לדיירים בלבד, אבל אין קירות בלתי נראים סביבו
+  const id = plotDoors.length + 1;
   markPrivate(x0, y0, x1, y1, id);
   if (door) plotDoors.push({ x: door[0], y: door[1], id });
-  const other = street === 'bottom' ? y0 : y1;
-  markLine([[x0, other], [x1, other]], 3, SOLID); markLine([[x0, y0], [x0, y1]], 3, SOLID); markLine([[x1, y0], [x1, y1]], 3, SOLID);
-  markLine([[x0, gy], [gx - 9, gy]], 3, SOLID); markLine([[gx + 9, gy], [x1, gy]], 3, SOLID);
 }
 
 /** ערוגת פרחים: רק בחלק מהמגרשים, ובכל מגרש במקום אחר, בצורה אחרת ועם פרחים אחרים */

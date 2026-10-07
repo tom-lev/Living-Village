@@ -5,9 +5,35 @@ import { ctx, prop, block, fxAt } from '../world/context';
 import { register } from './registry';
 import { ROAD_W } from '../world/geometry';
 
+/** ספסל. facing: לאן היושבים מסתכלים – 's' אל הצופה (חזית), 'n' הלאה מהצופה (רואים את הגב), 'e' / 'w' ימינה / שמאלה (פרופיל).
+ *  הכיוון נקבע אוטומטית בבנייה (orientBench ב-scene/build.ts), אלא אם הוגדר בנתונים */
 export function bench(o: any) {
-  const { x, y } = o, g = prop(y), c = '#b07a48', d = shade(c, -.25);
+  const { x, y, facing = 's' } = o, g = prop(y), c = '#b07a48', d = shade(c, -.25);
+  if (facing === 'e' || facing === 'w') {
+    // פרופיל: שני קצוות בצורת "h" (אחורי וקדמי), ביניהם קרשי המושב והמשענת. מצויר כפונה ימינה ומשוקף לשמאל
+    const f = facing === 'e' ? 1 : -1, b = el('g', { transform: `translate(${n2(x)},${n2(y)}) scale(${f},1)` }, g), D = 20;
+    el('ellipse', { cx: 1, cy: -D / 2 + 1, rx: 11, ry: D / 2 + 3, fill: 'rgba(40,70,20,.2)' }, b);
+    const end = (dy: number, col: string) => el('path', { d: `M6,${dy}v-9M-6,${dy}v-9M-7,${dy - 9}l-2.2,-13`, stroke: col, 'stroke-width': 2.2, 'stroke-linecap': 'round', fill: 'none' }, b);
+    end(-D, shade(d, -.12));
+    el('path', { d: `M-7.5,-9H7.5V${-9 - D}H-7.5Z`, fill: c, stroke: d, 'stroke-width': .5 }, b);
+    el('path', { d: `M-7,-9L-9.2,-22L-9.2,${-22 - D}L-7,${-9 - D}Z`, fill: shade(c, -.08), stroke: d, 'stroke-width': .5 }, b);
+    let sl = ''; for (let k = 1; k < 4; k++) sl += `M-7.5,${n2(-9 - D * k / 4)}H7.5`;
+    el('path', { d: sl, stroke: d, 'stroke-width': .45 }, b);
+    end(0, d);
+    block(x - 14, y - 26 - D, x + 14, y + 8);
+    return;
+  }
   el('ellipse', { cx: x + 2, cy: y + 1, rx: 22, ry: 3, fill: 'rgba(40,70,20,.2)' }, g);
+  if (facing === 'n') {
+    // מאחור: המושב ורגליו, ומולנו המשענת – העמודים האחוריים ממשיכים עד הקרקע
+    el('path', { d: `M${x - 16},${y - 3}v-6M${x + 16},${y - 3}v-6`, stroke: shade(d, -.1), 'stroke-width': 2.2, 'stroke-linecap': 'round' }, g);
+    el('rect', { x: x - 20, y: y - 13, width: 40, height: 4, rx: 1.5, fill: shade(c, -.06) }, g);
+    el('path', { d: `M${x - 14},${y}v-24M${x + 14},${y}v-24`, stroke: d, 'stroke-width': 2.4, 'stroke-linecap': 'round' }, g);
+    el('rect', { x: x - 20, y: y - 23, width: 40, height: 3.5, rx: 1.5, fill: c }, g);
+    el('rect', { x: x - 20, y: y - 17.5, width: 40, height: 3.5, rx: 1.5, fill: c }, g);
+    block(x - 26, y - 26, x + 26, y + 10);
+    return;
+  }
   el('path', { d: `M${x - 16},${y}v-9M${x + 16},${y}v-9M${x - 14},${y - 9}v-12M${x + 14},${y - 9}v-12`, stroke: d, 'stroke-width': 2.4, 'stroke-linecap': 'round' }, g);
   el('rect', { x: x - 20, y: y - 11, width: 40, height: 4, rx: 1.5, fill: c }, g);
   el('rect', { x: x - 20, y: y - 22, width: 40, height: 3.5, rx: 1.5, fill: c }, g);

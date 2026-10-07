@@ -175,7 +175,7 @@ export class Walker {
       : settled && this.act ? actPose(this.look, this.act, t, this.actPh)
       : walkPose(this.look, this.view, this.phase, this.amp, t);
     // תנוחות פעילות מצוירות מהצד: הכיוון מתייצב על שמאל או ימין (אחרי הליכה ישר למטה הוא יכול להישאר באמצע ולמעוך את הדמות)
-    if (pose.view === 'side' && !(this.state === 'walk' && this.view === 'side')) { const sgn = this.flip >= 0 ? 1 : -1; this.flip += (sgn - this.flip) * Math.min(1, dt * 8 + .02); }
+    if (pose.view === 'side' && !(this.state === 'walk' && this.view === 'side')) { const sgn = settled && this.act === 'sit' && this.place?.face ? this.place.face : this.flip >= 0 ? 1 : -1; this.flip += (sgn - this.flip) * Math.min(1, dt * 8 + .02); }
     this.fig.render(pose, this.x, this.y, this.flip, this.alpha);
   }
   /** נקודה על המסלול שעבר, back יחידות אחורה (לכלב) */

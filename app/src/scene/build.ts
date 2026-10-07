@@ -73,7 +73,7 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
 /* כלל המיקום של חפצים קטנים: כל השטח המצויר של החפץ, כולל הגובה שלו (גוף הכוורת, משענת הספסל),
    כי חלק גבוה שעומד מול שביל מסתיר אותו ונראה כאילו השביל נכנס לתוכו */
 const FOOT: Record<string, (o: any) => number[]> = {
-  bench: o => [o.x - 22, o.y - 24, o.x + 22, o.y + 4],
+  bench: o => o.facing === 'e' || o.facing === 'w' ? [o.x - 12, o.y - 43, o.x + 12, o.y + 4] : [o.x - 22, o.y - 24, o.x + 22, o.y + 4],
   picnicTable: o => [o.x - 20, o.y - 18, o.x + 20, o.y + 4],
   picnicBlanket: o => [o.x - 22, o.y - 16, o.x + 22, o.y + 16],
   haybale: o => [o.x - 9, o.y - 9, o.x + 9, o.y + 9],
@@ -86,39 +86,57 @@ const FOOT: Record<string, (o: any) => number[]> = {
 /** חפצים שהוזזו בבנייה בגלל כלל המיקום (מי שקשור אליהם זז איתם: יושב על ספסל, יונים) */
 export const relocated: { type: string; from: number[]; to: number[] }[] = [];
 function placeSmall(o: any) {
+  if (o.type === 'bench') orientBench(o);   // קודם הכיוון (ממנו נגזר השטח שהספסל תופס), ואחרי הזזה – שוב
   const f0 = FOOT[o.type]?.(o), fp = f0 && [f0[0] - 4, f0[1] - 4, f0[2] + 4, f0[3] + 4];   // מרווח קטן: לא נוגע בשביל ממש בקצה
   if (fp && !placeOk(fp[0], fp[1], fp[2], fp[3])) {
     const d = findPlace(fp);
     if (d) { relocated.push({ type: o.type, from: [o.x, o.y], to: [o.x + d[0], o.y + d[1]] }); o.x += d[0]; o.y += d[1]; }
   }
-  if (o.type === 'bench') faceSomething(o);
+  if (o.type === 'bench' && relocated.some(m => m.to[0] === o.x && m.to[1] === o.y)) { o.facingSet = false; delete o.facing; orientBench(o); }
   if (fp) return;
   // יונה ליד ספסל שזז: זזה איתו
   if (o.type === 'pigeon') { const m = relocated.find(r => r.type === 'bench' && Math.hypot(r.from[0] - o.x, r.from[1] - o.y) < 50); if (m) { o.x += m.to[0] - m.from[0]; o.y += m.to[1] - m.from[1]; } }
 }
 
-/* 10. ספסל לא יושב עם הגב לשביל (בקשת הבעלים). היושבים מסתכלים קדימה (דרומה, אל הצופה).
-   רק ספסל ששביל עובר ממש מאחוריו ומולו אין כלום זז – למרחק קצר (עד 60), על יבשה, למקום שמולו שביל, רחבה או מים.
-   ספסל שעומד בדשא בלי שביל מאחוריו נשאר במקומו */
-const VIEW = PATH | WATER | PLAZA;
-function frontOk(x: number, y: number) {
-  for (let yy = y + 10; yy <= y + 80; yy += 6) for (let xx = x - 20; xx <= x + 20; xx += 10) if (flagsAt(xx, yy) & VIEW) return true;
-  return false;
-}
-function backToPath(x: number, y: number) {
-  for (let yy = y - 60; yy <= y - 28; yy += 6) for (let xx = x - 16; xx <= x + 16; xx += 8) if (flagsAt(xx, yy) & PATH) return true;
-  return false;
-}
-const dry = (f: number[]) => { for (let y = f[1] - 10; y <= f[3] + 10; y += 6) for (let x = f[0] - 10; x <= f[2] + 10; x += 6) if (flagsAt(x, y) & WATER) return false; return true; };
-function faceSomething(o: any) {
-  if (frontOk(o.x, o.y) || !backToPath(o.x, o.y)) return;
-  for (let r = 8; r <= 60; r += 4) for (let a = 0; a < 24; a++) {
-    const t = a / 24 * Math.PI * 2, x = Math.round(o.x + Math.cos(t) * r), y = Math.round(o.y + Math.sin(t) * r), f = FOOT.bench({ x, y });
-    if (!placeOk(f[0] - 4, f[1] - 4, f[2] + 4, f[3] + 4) || !dry(f) || !frontOk(x, y)) continue;
-    const prev = relocated.find(m => m.type === 'bench' && m.to[0] === o.x && m.to[1] === o.y);
-    if (prev) prev.to = [x, y]; else relocated.push({ type: 'bench', from: [o.x, o.y], to: [x, y] });
-    o.x = x; o.y = y; return;
+/* 27. ספסל פונה אל מה שיש לראות (בקשת הבעלים): ספסל לא זז – הוא מסתובב.
+   המטרה: הדבר המעניין הקרוב ביותר עד 180 יחידות – מים (אגם, בריכה, נהר, פלג, ים) או רחבה (כיכר, רחבה מרוצפת, מזרקה).
+   אם אין כזה – השביל או הדרך הקרובים (עד 90). הכיוון נקבע לפי הציר הדומיננטי: ימינה/שמאלה ('e'/'w', פרופיל),
+   אל הצופה ('s') או הלאה ממנו ('n', רואים את הגב). facing בנתונים גובר. היושבים על הספסל מסתכלים לאותו כיוון */
+type Target = { x: number; y: number; r: (dx: number, dy: number) => number };
+function benchTargets() {
+  const T: Target[] = [];
+  const ell = (cx: number, cy: number, rx: number, ry: number) => T.push({ x: cx, y: cy, r: (dx, dy) => { const a = Math.atan2(dy, dx); return rx * ry / Math.hypot(ry * Math.cos(a), rx * Math.sin(a)); } });
+  for (const o of ctx.world.objects as any[]) {
+    if (['lake', 'mountainLake', 'fishingPond', 'frozenLake'].includes(o.type)) ell(o.cx, o.cy, o.rx, o.ry);
+    else if (o.type === 'hotSpring') ell(o.x, o.y, 60, 30);
+    else if (o.type === 'roundabout') ell(o.x, o.y, (o.r ?? 40) + 42, (o.r ?? 40) + 42);
+    else if (o.type === 'plaza') ell(o.x, o.y, o.rx, o.ry);
+    else if (o.type === 'fountain') ell(o.x, o.y, 36, 16);
   }
+  for (const [P, half] of [[geo.RIVER_SAMPLES, 24], [geo.CREEK_SAMPLES, 10]] as [number[][], number][])
+    for (let i = 0; i < P.length; i += 2) T.push({ x: P[i][0], y: P[i][1], r: () => half });
+  return T;
+}
+let TARGETS: Target[] | null = null;
+function orientBench(o: any) {
+  if (o.facingSet ?? (o.facingSet = o.facing !== undefined)) return;
+  TARGETS ??= benchTargets();
+  let best = 180, dx = 0, dy = 0;
+  for (const t of TARGETS) {
+    const ex = t.x - o.x, ey = t.y - (o.y - 6), d = Math.hypot(ex, ey) - t.r(-ex, -ey);
+    if (d < best) { best = d; dx = ex; dy = ey; }
+  }
+  const sea = ctx.world.terrain.sea?.y;
+  if (sea !== undefined && sea > o.y && sea - o.y < best) { best = sea - o.y; dx = 0; dy = 1; }
+  if (best >= 180) {
+    // אין מים או רחבה: פונים אל השביל או הדרך הקרובים
+    best = 90;
+    for (let a = 0; a < 16; a++) {
+      const t = a / 16 * Math.PI * 2;
+      for (let r = 12; r < best; r += 6) if (flagsAt(o.x + Math.cos(t) * r, o.y - 6 + Math.sin(t) * r) & PATH) { best = r; dx = Math.cos(t); dy = Math.sin(t); break; }
+    }
+  }
+  o.facing = !dx && !dy ? 's' : Math.abs(dx) > Math.abs(dy) * .8 ? (dx > 0 ? 'e' : 'w') : dy > 0 ? 's' : 'n';
 }
 
 /* כלל לגשרים שבנתונים (גם עתידיים): הגשר זז לנקודה שבה הדרך או השביל באמת חוצים את הנהר או הפלג,

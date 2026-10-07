@@ -29,7 +29,10 @@ export function buildActors(A: Record<string, any>) {
   for (const s of A.sitters || []) {
     const m = relocated.find(r => r.type === 'bench' && Math.hypot(r.from[0] - s.x, r.from[1] - s.y) < 25);   // הספסל זז? היושב זז איתו
     const sx = m ? s.x + m.to[0] - m.from[0] : s.x, sy = m ? s.y + m.to[1] - m.from[1] : s.y;
-    const st = new Sitter(s.look, sx, sy, s.seat, s.flip, s.behavior); sitters.push(st); updates.push((dt, T) => st.update(dt, T)); }
+    // יושב על ספסל בפרופיל: יושב לכיוון של הספסל ובמרכז המושב
+    const bench = (ctx.world.objects as any[]).find(o => o.type === 'bench' && Math.hypot(o.x - sx, o.y - sy) < 30);
+    const side = bench && (bench.facing === 'e' || bench.facing === 'w');
+    const st = new Sitter(s.look, side ? bench.x : sx, side ? bench.y - 6 : sy, s.seat, side ? (bench.facing === 'e' ? 1 : -1) : s.flip, s.behavior); sitters.push(st); updates.push((dt, T) => st.update(dt, T)); }
   assignHomes(sitters, rngAt(2, 2, 91), walkers);   // ליושבים: בתים שעוד אין בהם דיירים (בלי לשנות את הבתים של ההולכים)
   for (const st of sitters) { const b = places.find(p => p.kind === 'sit' && p.seat && Math.hypot(p.seat[0] - st.x, p.seat[1] - st.y) < 25); if (b) b.busy = st; }   // הספסל של משה תפוס
   const horses = (A.horses || []).map((h: any) => new Horse(h));

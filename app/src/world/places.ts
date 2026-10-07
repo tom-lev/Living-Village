@@ -57,7 +57,7 @@ export function autoPlace(o: any) {
   const enter = KINDS[kind].enter;
   // אובייקט שעומד על נקודה (x,y הוא קו הקרקע שלו): עומדים קצת לפניו, לא בתוכו
   const standOff = o.x !== undefined && o.cx === undefined && !TOP_LEFT.has(o.type) ? 14 : 0;
-  addPlace({ kind, name: o.name, door: enter ? [x, y] : undefined, at: enter ? undefined : [x, y + standOff], vertical: o.type === 'house', seat: o.type === 'bench' ? [x, y] : undefined, ...(o.type === 'bench' && !o.name ? { name: 'a bench' } : {}) });
+  addPlace({ kind, name: o.name, door: enter ? [x, y] : undefined, at: enter ? undefined : [x, y + standOff], vertical: o.type === 'house', seat: o.type === 'bench' ? [x, y - (o.facing === 'e' || o.facing === 'w' ? 6 : 0)] : undefined, face: o.type === 'bench' ? (o.facing === 'e' ? 1 : o.facing === 'w' ? -1 : 0) : undefined, ...(o.type === 'bench' && !o.name ? { name: 'a bench' } : {}) });
 }
 
 export interface Place {
@@ -67,6 +67,7 @@ export interface Place {
   at?: Pt;            // נקודת עמידה במקום פתוח
   vertical?: boolean; // מגיעים לדלת בשביל ישר מהרחוב (מגרש של בית)
   trade?: string;     // לחנות: מה מוכרים בה
+  face?: number;      // ספסל בפרופיל: לאן היושבים מסתכלים (1 ימינה, -1 שמאלה)
   seat?: Pt;          // לספסל: איפה יושבים (את נקודת ההגעה at מגיעים מלפנים)
   busy?: any;         // מי שתופס את המקום עכשיו (ספסל: אדם אחד)
   id: number;
