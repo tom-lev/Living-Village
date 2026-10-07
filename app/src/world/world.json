@@ -1758,30 +1758,35 @@
    "type": "stoneBridge",
    "x": 376,
    "y": 427,
+   "name": "Old Stone Bridge",
    "angle": 40
   },
   {
    "type": "stoneBridge",
    "x": 368,
    "y": 1000,
+   "name": "Market Bridge",
    "angle": -174
   },
   {
    "type": "footbridge",
    "x": 948,
    "y": -201,
+   "name": "Pinewood Footbridge",
    "angle": 44
   },
   {
    "type": "footbridge",
    "x": 775,
    "y": 20,
+   "name": "Heron Footbridge",
    "angle": -163
   },
   {
    "type": "footbridge",
    "x": 707,
    "y": 102,
+   "name": "Willow Footbridge",
    "angle": -128
   },
   {

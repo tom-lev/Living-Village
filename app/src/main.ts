@@ -1,4 +1,5 @@
 /* נקודת הכניסה: בונה את העולם מ-world.json, מפעיל את מנוע האריחים, את הדמויות ואת המצלמה */
+import { geo } from './world/geometry';
 import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
@@ -137,6 +138,7 @@ async function boot() {
   // לבדיקות אוטומטיות
   (window as any).__places = places;   // לבדיקות: כל היעדים
   (window as any).__walk = walkMap;     // לבדיקות: מפת המעבר
+  (window as any).__geo = geo;          // לבדיקות: חיבורי שבילים וגשרים
   (window as any).__routeTo = routeTo;
   (window as any).__navParts = components;
   (window as any).__compOf = compOf;

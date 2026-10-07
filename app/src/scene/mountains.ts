@@ -10,6 +10,7 @@ import { ctx } from '../world/context';
 import { geo, ROAD_W } from '../world/geometry';
 import { markPolygon, markLine, DANGER, PATH, BRIDGE, LANE } from '../world/walk';
 import type { WorldData } from '../world/types';
+import { addLabel } from '../world/labels';
 
 type Pt = number[];
 const poly = (P: Pt[]) => 'M' + P.map(p => `${n2(p[0])},${n2(p[1])}`).join('L') + 'Z';
@@ -113,12 +114,27 @@ function creek(pts: Pt[], trails: Pt[][]) {
   let ice = '';
   for (const p of geo.CREEK_SAMPLES) if (rg.chance(.06)) ice += blob(p[0] + rg.rand(-3, 3), p[1] + rg.rand(-2, 2), rg.rand(3, 6), rg.rand(1.5, 2.5), 6, .2, rg.rand(0, 6));
   el('path', { d: ice, fill: '#ffffff', opacity: .9 }, L.ground);
-  autoBridges(geo.CREEK_SAMPLES, trails, 22, []);
+  autoBridges(geo.CREEK_SAMPLES, trails, 22, [], true);
 }
 
 /** גשרים אוטומטיים: בכל מקום שדרך או שביל חוצים מים (פלג, נהר) ואין שם כבר גשר, מציירים גשר ומסמנים אותו כמעבר.
  *  כך הכלל "חוצים מים רק בגשר" לא מנתק את העולם, וגם דרך או שביל עתידיים יקבלו גשר מעצמם */
-export function autoBridges(C: Pt[], trails: Pt[][], half: number, existing: Pt[]) {
+/* שמות לגשרים האוטומטיים: לכל גשר שם משלו (גם לגשרים עתידיים), לפי סוג הגשר והמקום */
+const BRIDGE_NAMES = {
+  road: ['Kingfisher Bridge', 'Ferry Bridge', 'Alder Bridge', "Miller's Bridge", 'Otter Bridge', 'Rowan Bridge', 'Weir Bridge', 'Elm Bridge', 'Swallow Bridge', 'Copper Bridge'],
+  trail: ['Dipper Footbridge', 'Reed Footbridge', 'Mossy Footbridge', 'Fern Footbridge', 'Trout Footbridge', 'Plank Footbridge', 'Hazel Footbridge', 'Bramble Footbridge', 'Wren Footbridge', 'Pebble Footbridge'],
+  snow: ['Frost Bridge', 'Icicle Bridge', 'Snowberry Bridge', 'Hoarfrost Bridge', 'Glacier Footbridge', 'Ermine Bridge', 'Lantern Bridge', 'Sleigh Bridge', 'Pine Marten Bridge', 'Snowdrop Bridge'],
+};
+const usedNames = new Set<string>();
+function bridgeName(x: number, y: number, pool: string[]) {
+  if (!usedNames.size) for (const o of ctx.world.objects as any[]) if (o.name) usedNames.add(o.name);
+  const i0 = Math.floor(rngAt(x, y, 97).rand(0, pool.length));
+  for (let k = 0; k < pool.length; k++) { const n = pool[(i0 + k) % pool.length]; if (!usedNames.has(n)) { usedNames.add(n); return n; } }
+  let n = 2; while (usedNames.has(`${pool[i0]} ${n}`)) n++;
+  usedNames.add(`${pool[i0]} ${n}`); return `${pool[i0]} ${n}`;
+}
+
+export function autoBridges(C: Pt[], trails: Pt[][], half: number, existing: Pt[], snow = false) {
   const L = ctx.L, hits: { x: number; y: number; a: number; road: boolean }[] = [];
   const cross = (P: Pt[], road: boolean) => {
     for (let i = 0; i < P.length - 1; i++) for (let j = 0; j < C.length - 1; j++) {
@@ -145,6 +161,8 @@ export function autoBridges(C: Pt[], trails: Pt[][], half: number, existing: Pt[
       let pl = ''; for (let k = -len + 7; k <= len - 7; k += 5) pl += `M${n2(k)},-7v14`;
       el('path', { d: pl + `M${-len + 4},-8h${2 * len - 8}M${-len + 4},8h${2 * len - 8}`, stroke: '#6b4a2f', 'stroke-width': .9 }, g);
     }
+    // שם לגשר, עם תווית מעליו (אפשר לשנות אותו מהדפדפן כמו כל שם)
+    addLabel({ type: 'bridge', x: h.x, y: h.y, name: bridgeName(h.x, h.y, snow ? BRIDGE_NAMES.snow : h.road ? BRIDGE_NAMES.road : BRIDGE_NAMES.trail) }, h.y - (h.road ? ROAD_W / 2 + 8 : 12));
   }
 }
 

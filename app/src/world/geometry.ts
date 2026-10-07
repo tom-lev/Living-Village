@@ -113,29 +113,35 @@ function joinTrails(T: number[][][]) {
     const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1, t = clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2, 0, 1);
     return [a[0] + dx * t, a[1] + dy * t];
   };
+  // הנקודה הקרובה ביותר על קו האמצע של דרך כלשהי, והכיוון של הדרך שם
+  const nearRoad = (p: number[]) => {
+    let d = Infinity, c: number[] = [], tg: number[] = [];
+    for (const E of roads) for (let j = 0; j < E.pts.length - 1; j += 2) {
+      const a = E.pts[j], b = E.pts[Math.min(j + 2, E.pts.length - 1)], m = nearSeg(p, a, b), dd = Math.hypot(m[0] - p[0], m[1] - p[1]);
+      if (dd < d) { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; d = dd; c = m; tg = [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; }
+    }
+    return { d, c, tg };
+  };
+  // הקצה נכנס לדרך: נצמד לקו האמצע, בזווית נעימה, עם התרחבות בשוליים
+  const roadJoin = (t: number[][], start: boolean, c: number[], tg: number[]) => {
+    const k = start ? 0 : t.length - 1, q = t[start ? 1 : t.length - 2];
+    let nx = -tg[1], ny = tg[0];
+    if (nx * (q[0] - c[0]) + ny * (q[1] - c[1]) < 0) { nx = -nx; ny = -ny; }
+    // כיוון הכניסה: חצי הדרך מהזווית המקורית אל הניצב, כך שהשביל פוגש את הדרך בזווית נעימה
+    const ux = q[0] - c[0], uy = q[1] - c[1], ul = Math.hypot(ux, uy) || 1, un = Math.max(.5, (ux * nx + uy * ny) / ul), ut = (ux * tg[0] + uy * tg[1]) / ul * .5;
+    let mx = nx * un + tg[0] * ut, my = ny * un + tg[1] * ut; const ml = Math.hypot(mx, my); mx /= ml; my /= ml;
+    const r = (hw + 14) / (mx * nx + my * ny), a = [c[0] + mx * r, c[1] + my * r];
+    t[k] = c;
+    if (ul > hw + 30) t.splice(start ? 1 : t.length - 1, 0, a);
+    const e = hw / (mx * nx + my * ny);
+    geo.TRAIL_FLARES.push({ x: c[0] + mx * e, y: c[1] + my * e, mx, my, tx: tg[0], ty: tg[1] });
+  };
   const free: { i: number; start: boolean }[] = [];
   T.forEach((t, i) => {
     for (const start of [true, false]) {
-      const k = start ? 0 : t.length - 1, p = t[k], q = t[start ? 1 : t.length - 2];
-      // דרך קרובה
-      let best = Infinity, c: number[] = [], tg: number[] = [];
-      for (const E of roads) for (let j = 0; j < E.pts.length - 1; j += 2) {
-        const a = E.pts[j], b = E.pts[Math.min(j + 2, E.pts.length - 1)], m = nearSeg(p, a, b), d = Math.hypot(m[0] - p[0], m[1] - p[1]);
-        if (d < best) { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; best = d; c = m; tg = [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; }
-      }
-      if (best < hw + 40) {
-        let nx = -tg[1], ny = tg[0];
-        if (nx * (q[0] - c[0]) + ny * (q[1] - c[1]) < 0) { nx = -nx; ny = -ny; }
-        // כיוון הכניסה: חצי הדרך מהזווית המקורית אל הניצב, כך שהשביל פוגש את הדרך בזווית נעימה
-        const ux = q[0] - c[0], uy = q[1] - c[1], ul = Math.hypot(ux, uy) || 1, un = Math.max(.5, (ux * nx + uy * ny) / ul), ut = (ux * tg[0] + uy * tg[1]) / ul * .5;
-        let mx = nx * un + tg[0] * ut, my = ny * un + tg[1] * ut; const ml = Math.hypot(mx, my); mx /= ml; my /= ml;
-        const r = (hw + 14) / (mx * nx + my * ny), a = [c[0] + mx * r, c[1] + my * r];
-        t[k] = c;
-        if (ul > hw + 30) t.splice(start ? 1 : t.length - 1, 0, a);
-        const e = hw / (mx * nx + my * ny);
-        geo.TRAIL_FLARES.push({ x: c[0] + mx * e, y: c[1] + my * e, mx, my, tx: tg[0], ty: tg[1] });
-        continue;
-      }
+      const k = start ? 0 : t.length - 1, p = t[k];
+      let { d: best, c, tg } = nearRoad(p);
+      if (best < hw + 40) { roadJoin(t, start, c, tg); continue; }
       // שביל אחר קרוב (או אותו שביל, רחוק מהקצה הזה)
       best = Infinity;
       T.forEach((o, oi) => {
@@ -165,5 +171,41 @@ function joinTrails(T: number[][][]) {
     if (f.start) t.unshift([q[0], q[1]]); else t.push([q[0], q[1]]);
     used.add(a); used.add(bi);
   });
-  free.forEach((f, a) => { if (!used.has(a)) geo.TRAIL_FREE.push({ trail: f.i, start: f.start }); });
+  // שביל יכול להיגמר בשום מקום, אבל לא להתחיל משום מקום: שביל שלא נוגע בשום דרך או שביל אחר
+  // ממשיך מהקצה הקרוב ביותר לרשת עד הדרך או השביל הקרובים
+  const dense = (t: number[][]) => { const o: number[][] = []; for (let j = 0; j < t.length - 1; j++) { const n = Math.ceil(Math.hypot(t[j + 1][0] - t[j][0], t[j + 1][1] - t[j][1]) / 8); for (let k = 0; k < n; k++) o.push([t[j][0] + (t[j + 1][0] - t[j][0]) * k / n, t[j][1] + (t[j + 1][1] - t[j][1]) * k / n]); } o.push(t[t.length - 1]); return o;
+  };
+  const D = T.map(dense);
+  // רשת חיפוש מהירה (תא 20): אילו שבילים (מספר) או דרכים (-1) עוברים בכל תא
+  const H = new Map<number, Set<number>>(), key = (x: number, y: number) => Math.floor(x / 20) * 100003 + Math.floor(y / 20);
+  const put = (x: number, y: number, id: number) => { const k = key(x, y); (H.get(k) || H.set(k, new Set()).get(k)!).add(id); };
+  D.forEach((o, i) => o.forEach(q => put(q[0], q[1], i)));
+  for (const E of roads) for (const q of E.pts) for (const [dx, dy] of [[0, 0], [hw, 0], [-hw, 0], [0, hw], [0, -hw]]) put(q[0] + dx, q[1] + dy, -1);
+  const touches = (i: number) => D[i].some(p => {
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const S = H.get(key(p[0] + a * 20, p[1] + b * 20)); if (S) for (const id of S) if (id !== i) return true; }
+    return false;
+  });
+  // קצה שנמצא ליד מקום עם שם (אגם, חווה, מגדלור...) כבר מתחיל ממשהו
+  const named = (ctx.world.objects as any[]).filter(o => o.name);
+  const atPlace = (p: number[]) => named.some(o =>
+    o.cx !== undefined ? ((p[0] - o.cx) / ((o.rx ?? o.r ?? 0) + 60)) ** 2 + ((p[1] - o.cy) / ((o.ry ?? o.r ?? 0) + 60)) ** 2 <= 1
+    : o.x0 !== undefined ? p[0] > Math.min(o.x0, o.x1) - 60 && p[0] < Math.max(o.x0, o.x1) + 60 && p[1] > Math.min(o.y0, o.y1) - 60 && p[1] < Math.max(o.y0, o.y1) + 60
+    : o.x !== undefined && Math.hypot(p[0] - o.x - (o.w ?? 0) / 2, p[1] - o.y) < 100);
+  const lone = new Set<number>();
+  T.forEach((t, i) => {
+    if (touches(i)) return;
+    // הקצה הקרוב לרשת (דרך או שביל אחר)
+    let best = { d: Infinity, start: true, c: [] as number[], tg: null as number[] | null };
+    for (const start of [true, false]) {
+      const p = t[start ? 0 : t.length - 1], r = nearRoad(p);
+      if (r.d - hw < best.d) best = { d: r.d - hw, start, c: r.c, tg: r.tg };
+      T.forEach((o, oi) => { if (oi === i) return; for (let j = 0; j < o.length - 1; j++) { const m = nearSeg(p, o[j], o[j + 1]), d = Math.hypot(m[0] - p[0], m[1] - p[1]); if (d < best.d) best = { d, start, c: m, tg: null }; } });
+    }
+    // הקצה הזה יושב ליד מקום עם שם (אגם, חווה...): השביל מתחיל שם, ולא ממשיכים אותו דרך המקום
+    if (best.d > 400 || (best.d > 80 && atPlace(t[best.start ? 0 : t.length - 1]))) return;
+    if (best.start) t.unshift([best.c[0], best.c[1]]); else t.push([best.c[0], best.c[1]]);
+    if (best.tg) roadJoin(t, best.start, best.c, best.tg);
+    lone.add(i * 2 + (best.start ? 0 : 1));
+  });
+  free.forEach((f, a) => { if (!used.has(a) && !lone.has(f.i * 2 + (f.start ? 0 : 1))) geo.TRAIL_FREE.push({ trail: f.i, start: f.start }); });
 }

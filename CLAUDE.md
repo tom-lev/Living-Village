@@ -184,6 +184,8 @@ Order:
       - Within 40 units of another trail: it snaps onto that trail.
       - Two free ends within 170 units: they join (for example the beach trail to the lighthouse trail).
       - Otherwise it is a free end (`geo.TRAIL_FREE`): drawn narrowing to a third of its width with uneven edges, then a few shrinking worn patches. Never a closed round cap.
+      - **A trail may end in nothing, but never starts from nowhere** (owner's request). A trail that touches no road or other trail anywhere is extended, from its end nearest the network, to the closest road or trail, up to 400 units away. The exception: if that end sits at a named place (within 60 of a lake, farm and so on) and the network is more than 80 away, the trail starts at that place and is not extended through it.
+  16. **Every bridge has a name** (owner's request). The bridges in `world.json` have a `name`. Automatic bridges (`autoBridges` in `scene/mountains.ts`) get a unique name from `BRIDGE_NAMES` (road, trail or snow pool, chosen by position with `rngAt`) and a label. They can be renamed in the browser like any name.
 - Walk-map flags also include BRIDGE (crossing water), LANE (road or trail) and PLAZA (paved square). Roads and trails are marked before objects, so the placement checks see them. Lakes clear PATH inside them at the end, except on bridges.
 - **How the rules work:** a 6-unit grid with flags WATER, SWIM, DANGER, SOFT, SOLID and PATH, plus private plot ids.
   - Objects mark it while they are built, by type. This happens in `scene/build.ts` (`markObject`, `markTerrain`, and the base of every static prop), plus `plot`, `shop`, `house`, `stoneFarm` and mountains, which mark themselves.
