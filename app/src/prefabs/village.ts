@@ -5,6 +5,7 @@ import { ctx, block } from '../world/context';
 import { register } from './registry';
 import { ROAD_W } from '../world/geometry';
 import { markPrivate, markLine, SOLID } from '../world/walk';
+import { drawFence, pickFence } from './fences';
 
 /** המגרש של כל דלת (כדי לדעת מי מורשה להיכנס) */
 export const plotDoors: { x: number; y: number; id: number }[] = [];
@@ -13,14 +14,9 @@ export const plotOfDoor = (d: number[] | undefined) => d ? plotDoors.find(p => M
 /** מגרש של בית: מדשאה, גדר חיה או גדר כלונסאות, שביל מהדלת לרחוב וערוגה ליד הבית.
  *  door: [x, y] של דלת הבית; street: 'top' | 'bottom' – לאיזה צד של המגרש פונה הרחוב */
 function plot(o: any) {
-  const { x0, y0, x1, y1, fence = 'hedge', door, street = 'bottom', bed = true } = o, G = ctx.L.groundProps;
+  const { x0, y0, x1, y1, fence, door, street = 'bottom', bed = true } = o, G = ctx.L.groundProps;
   let gateX = door ? door[0] : (x0 + x1) / 2;
   el('path', { d: rrect(x0, y0, x1 - x0, y1 - y0, 7), fill: '#b3d98a' }, G);
-  if (fence === 'hedge') el('path', { d: rrect(x0, y0, x1 - x0, y1 - y0, 7), fill: 'none', stroke: '#6f9f52', 'stroke-width': 4.5, 'stroke-linejoin': 'round' }, G);
-  else {
-    el('path', { d: rrect(x0, y0, x1 - x0, y1 - y0, 4), fill: 'none', stroke: '#f6eedf', 'stroke-width': 1.6 }, G);
-    el('path', { d: rrect(x0, y0, x1 - x0, y1 - y0, 4), fill: 'none', stroke: '#f6eedf', 'stroke-width': 3.2, 'stroke-dasharray': '1.4 4' }, G);
-  }
   let walk: number[][] = [];
   if (door) {
     // שביל מרוצף מהדלת לשער: קו אחד רציף עם פינות מעוגלות (לא מלבנים מחוברים)
@@ -45,13 +41,14 @@ function plot(o: any) {
     el('path', { d, fill: 'none', stroke: '#ecd7b5', 'stroke-width': 10, 'stroke-linejoin': 'round' }, G);
     // מרצפות: קווים קצרים לרוחב השביל, לאורך כל הקו (גם בפינות)
     el('path', { d, fill: 'none', stroke: '#dcc29b', 'stroke-width': 8, 'stroke-dasharray': '.9 6.1', opacity: .9 }, G);
-    if (fence === 'hedge') el('rect', { x: gateX - 7, y: (street === 'bottom' ? y1 : y0) - 3, width: 14, height: 6, fill: '#b3d98a' }, G);   // פתח בגדר
   }
   if (bed && door) {
     // הערוגה הישנה צרכה מספרים מהמחולל הכללי; צורכים אותם גם עכשיו, כדי שהיער ושאר העולם יישארו במקומם
     R(); rand(16, 24); for (let i = 0; i < 7; i++) { rand(-8, 8); rand(-2.5, 2.5); } R();
     flowerBed(G, x0, y0, x1, y1, door, street, walk);
   }
+  // הגדר: סגנון משלו לכל בית (fences.ts), עם פתח בשער מול השביל. מצוירת אחרי השביל והערוגה, כדי שתעמוד מעליהם
+  drawFence(G, pickFence((x0 + x1) / 2, (y0 + y1) / 2, fence), x0, y0, x1, y1, street === 'bottom' ? y1 : y0, gateX);
   block(x0, y0, x1, y1 + 30);
   // מפת מעבר: פנים המגרש פרטי (רק לדיירים), והגדר סביבו חסומה חוץ מהשער מול השביל
   const id = plotDoors.length + 1, gy = street === 'bottom' ? y1 : y0, gx = gateX;
