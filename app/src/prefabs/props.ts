@@ -193,11 +193,11 @@ function scarecrow(o: any) {
 
 /** גשר עץ להולכי רגל */
 function footbridge(o: any) {
-  const { x, y, angle = 0 } = o, g = el('g', { transform: `translate(${x},${y}) rotate(${angle})` }, ctx.L.groundProps);
-  el('rect', { x: -40, y: -8, width: 80, height: 16, rx: 3, fill: '#b98552', stroke: '#8a5f39', 'stroke-width': 1.2 }, g);
-  let d = ''; for (let k = -36; k <= 36; k += 6) d += `M${k},-8v16`;
+  const { x, y, angle = 0, len: L = 40 } = o, g = el('g', { transform: `translate(${x},${y}) rotate(${angle})` }, ctx.L.groundProps);   // len: חצי האורך
+  el('rect', { x: -L, y: -8, width: 2 * L, height: 16, rx: 3, fill: '#b98552', stroke: '#8a5f39', 'stroke-width': 1.2 }, g);
+  let d = ''; for (let k = -L + 4; k <= L - 4; k += 6) d += `M${k},-8v16`;
   el('path', { d, stroke: '#8a5f39', 'stroke-width': .8 }, g);
-  el('path', { d: 'M-40,-9h80M-40,9h80', stroke: '#6b4a2f', 'stroke-width': 2 }, g);
+  el('path', { d: `M${-L},-9h${2 * L}M${-L},9h${2 * L}`, stroke: '#6b4a2f', 'stroke-width': 2 }, g);
 }
 
 /** מעקות אבן של גשר דרך מעל הנהר */

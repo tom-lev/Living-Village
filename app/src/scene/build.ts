@@ -31,6 +31,7 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   initWalk();   // מפת מעבר: מסמנים תוך כדי בנייה מה מותר לדרוך עליו
   buildTerrain(w);
   markTerrain(w);
+  alignBridges(w);   // גשר מהנתונים: בדיוק איפה שהדרך או השביל חוצים את המים, בכיוון שלהם
   for (const o of w.objects) {
     const f = PREFABS[o.type];
     if (!f) { console.warn('אין prefab בשם', o.type, o); continue; }
@@ -89,6 +90,33 @@ function placeSmall(o: any) {
   if (o.type === 'pigeon') { const m = relocated.find(r => r.type === 'bench' && Math.hypot(r.from[0] - o.x, r.from[1] - o.y) < 50); if (m) { o.x += m.to[0] - m.from[0]; o.y += m.to[1] - m.from[1]; } }
 }
 
+/* כלל לגשרים שבנתונים (גם עתידיים): הגשר זז לנקודה שבה הדרך או השביל באמת חוצים את הנהר או הפלג,
+   מסתובב בכיוון של הדרך, ואורכו מספיק כדי לעבור את כל רוחב המים גם כשהחצייה באלכסון */
+function alignBridges(w: WorldData) {
+  const waters = [{ C: geo.RIVER_SAMPLES, half: 22 }, { C: geo.CREEK_SAMPLES, half: 10 }];
+  const lines = [...[...geo.EDGES, ...geo.OUTER].map(E => ({ P: E.pts, road: true })), ...w.trails.map(t => ({ P: catmull(t), road: false }))];
+  for (const o of w.objects) {
+    if (o.type !== 'footbridge' && o.type !== 'stoneBridge') continue;
+    let best: any = null, bd = 90;
+    for (const { C, half } of waters) for (const { P, road } of lines) {
+      if (road !== (o.type === 'stoneBridge')) continue;
+      for (let i = 0; i < P.length - 1; i++) for (let j = 0; j < C.length - 1; j++) {
+        const [ax, ay] = P[i], [bx, by] = P[i + 1], [cx, cy] = C[j], [dx, dy] = C[j + 1];
+        const den = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx); if (!den) continue;
+        const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / den, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / den;
+        if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+        const x = ax + t * (bx - ax), y = ay + t * (by - ay), d = Math.hypot(x - o.x, y - o.y);
+        if (d >= bd) continue;
+        // הכיוון של הדרך (ממוצע על קטע קצר, כדי שלא יקפוץ), והזווית בינה לבין המים
+        const p0 = P[Math.max(0, i - 2)], p1 = P[Math.min(P.length - 1, i + 3)], pa = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+        const wa = Math.atan2(dy - cy, dx - cx), sin = Math.max(.45, Math.abs(Math.sin(pa - wa)));
+        bd = d; best = { x, y, angle: pa * 180 / Math.PI, len: Math.max(40, (half + 9) / sin + 6) };
+      }
+    }
+    if (best) { o.x = Math.round(best.x); o.y = Math.round(best.y); o.angle = Math.round(best.angle); if (o.type === 'footbridge') o.len = Math.round(best.len); }
+  }
+}
+
 /** מים, ים (עם אזור שחייה רדוד ליד החוף), דרכים ושבילים */
 function markTerrain(w: WorldData) {
   const { B } = ctx, T = w.terrain;
@@ -127,7 +155,7 @@ function markObject(o: any, s0: number) {
     case 'plaza': markEllipse(o.x, o.y, o.rx, o.ry, PATH | PLAZA); break;
     case 'pier': markRect(o.x, o.y, o.x + (o.w ?? 44), o.y + (o.h ?? 200), PATH); break;
     case 'footbridge': case 'stoneBridge': {   // משטח הגשר: עוברים עליו מעל המים
-      const a = (o.angle ?? 0) * Math.PI / 180, c = Math.cos(a) * 42, s = Math.sin(a) * 42;
+      const a = (o.angle ?? 0) * Math.PI / 180, L = (o.len ?? 40) + 2, c = Math.cos(a) * L, s = Math.sin(a) * L;
       markLine([[o.x - c, o.y - s], [o.x + c, o.y + s]], o.type === 'footbridge' ? 9 : ROAD_W / 2 + 2, PATH | BRIDGE | LANE); break;
     }
   }

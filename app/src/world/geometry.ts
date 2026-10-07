@@ -32,7 +32,9 @@ export const geo = {
   ADJ: {} as Record<string, { e: number; dir: number }[]>,
   RIVER_SAMPLES: [] as number[][],
   TRAIL_FLARES: [] as { x: number; y: number; mx: number; my: number; tx: number; ty: number }[],   // שביל שנכנס לדרך: התרחבות רכה בשולי הדרך
-  TRAIL_FREE: [] as { trail: number; start: boolean }[],   // קצה שביל שלא מוביל לשום מקום: נמוג בהדרגה
+  TRAIL_FREE: [] as { trail: number; start: boolean }[],
+  ROAD_TAPERS: [] as { x: number; y: number; dx: number; dy: number }[],   // דרך ללא מוצא שממשיכה כשביל: הדרך הולכת ונהיית צרה
+   // קצה שביל שלא מוביל לשום מקום: נמוג בהדרגה
   CREEK_SAMPLES: [] as number[][],   // הפלג שבעמק
 };
 
@@ -76,9 +78,17 @@ export function buildGeometry(w: WorldData) {
     const n = Math.ceil(Math.hypot(t[i + 1][0] - t[i][0], t[i + 1][1] - t[i][1]) / 6);
     for (let k = 0; k < n; k++) trailSamples.push([t[i][0] + (t[i + 1][0] - t[i][0]) * k / n, t[i][1] + (t[i + 1][1] - t[i][1]) * k / n]);
   }
+  // הנהר: דוגמים את העקומה החלקה שמצוירת (ולא קווים ישרים בין הנקודות), כדי שגשרים וחציות ייפלו בדיוק על המים.
+  // אותו מספר דגימות כמו קודם, כדי שהגלים (שצורכים מספרים אקראיים לכל דגימה) לא יזיזו את שאר העולם
   const R = w.river; geo.RIVER_SAMPLES = [];
-  for (let i = 0; i < R.length - 1; i++)
-    for (let t = 0; t < 1; t += .05) geo.RIVER_SAMPLES.push([R[i][0] + (R[i + 1][0] - R[i][0]) * t, R[i][1] + (R[i + 1][1] - R[i][1]) * t]);
+  for (let i = 0; i < R.length - 1; i++) {
+    const p0 = R[Math.max(0, i - 1)], p1 = R[i], p2 = R[i + 1], p3 = R[Math.min(R.length - 1, i + 2)];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6], c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    for (let t = 0; t < 1; t += .05) {
+      const u = 1 - t;
+      geo.RIVER_SAMPLES.push([u * u * u * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p2[0], u * u * u * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p2[1]]);
+    }
+  }
   // הפלג בעמק: דוגמים את אותה עקומה חלקה שמצוירת (Catmull-Rom), כדי שגם הגשרים ייפלו במקום
   const C = w.terrain.creek as number[][] | undefined; geo.CREEK_SAMPLES = [];
   if (C) for (let i = 0; i < C.length - 1; i++) {
@@ -108,19 +118,28 @@ export function treeOk(x: number, y: number, noBands: number[][]) {
    קצה ליד שביל אחר: נצמד אליו. קצה ליד קצה פנוי של שביל אחר: ממשיך אליו. אחרת: נמוג בהדרגה בדשא. */
 function joinTrails(T: number[][][]) {
   const hw = ROAD_W / 2, roads = [...geo.EDGES, ...geo.OUTER];
-  geo.TRAIL_FLARES = []; geo.TRAIL_FREE = [];
+  geo.TRAIL_FLARES = []; geo.TRAIL_FREE = []; geo.ROAD_TAPERS = [];
   const nearSeg = (p: number[], a: number[], b: number[]) => {
     const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1, t = clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2, 0, 1);
     return [a[0] + dx * t, a[1] + dy * t];
   };
   // הנקודה הקרובה ביותר על קו האמצע של דרך כלשהי, והכיוון של הדרך שם
+  // קצה של דרך שלא ממשיכה משם לשום דרך אחרת (דרך ללא מוצא)
+  const ends = roads.flatMap(E => [E.pts[0], E.pts[E.pts.length - 1]]);
+  const deadEnd = (q: number[]) => ends.filter(e => Math.hypot(e[0] - q[0], e[1] - q[1]) < 4).length === 1;
   const nearRoad = (p: number[]) => {
-    let d = Infinity, c: number[] = [], tg: number[] = [];
+    let d = Infinity, c: number[] = [], tg: number[] = [], end: number[] | null = null;
     for (const E of roads) for (let j = 0; j < E.pts.length - 1; j += 2) {
       const a = E.pts[j], b = E.pts[Math.min(j + 2, E.pts.length - 1)], m = nearSeg(p, a, b), dd = Math.hypot(m[0] - p[0], m[1] - p[1]);
-      if (dd < d) { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; d = dd; c = m; tg = [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; }
+      if (dd < d) {
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; d = dd; c = m; tg = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+        // הנקודה הקרובה היא קצה הדרך עצמו: הכיוון החוצה מהקצה
+        const last = Math.min(j + 2, E.pts.length - 1) === E.pts.length - 1;
+        end = j === 0 && Math.hypot(m[0] - a[0], m[1] - a[1]) < 1 && deadEnd(a) ? [a[0], a[1], -tg[0], -tg[1]]
+          : last && Math.hypot(m[0] - b[0], m[1] - b[1]) < 1 && deadEnd(b) ? [b[0], b[1], tg[0], tg[1]] : null;
+      }
     }
-    return { d, c, tg };
+    return { d, c, tg, end };
   };
   // הקצה נכנס לדרך: נצמד לקו האמצע, בזווית נעימה, עם התרחבות בשוליים
   const roadJoin = (t: number[][], start: boolean, c: number[], tg: number[]) => {
@@ -140,7 +159,15 @@ function joinTrails(T: number[][][]) {
   T.forEach((t, i) => {
     for (const start of [true, false]) {
       const k = start ? 0 : t.length - 1, p = t[k];
-      let { d: best, c, tg } = nearRoad(p);
+      let { d: best, c, tg, end } = nearRoad(p);
+      if (best < hw + 40 && end) {
+        // שביל שמגיע לקצה של דרך ללא מוצא: ממשיך את הדרך באותו כיוון, בלי התרחבות (הדרך פשוט נהיית שביל)
+        t[k] = [end[0] - end[2] * hw, end[1] - end[3] * hw];
+        if (!geo.ROAD_TAPERS.some(r => Math.hypot(r.x - end[0], r.y - end[1]) < 4)) geo.ROAD_TAPERS.push({ x: end[0], y: end[1], dx: end[2], dy: end[3] });
+        const q = t[start ? 1 : t.length - 2], a = [end[0] + end[2] * (hw + 20), end[1] + end[3] * (hw + 20)];
+        if (Math.hypot(q[0] - end[0], q[1] - end[1]) > hw + 30) t.splice(start ? 1 : t.length - 1, 0, a);
+        continue;
+      }
       if (best < hw + 40) { roadJoin(t, start, c, tg); continue; }
       // שביל אחר קרוב (או אותו שביל, רחוק מהקצה הזה)
       best = Infinity;

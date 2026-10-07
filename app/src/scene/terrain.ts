@@ -31,6 +31,18 @@ export function buildTerrain(w: WorldData) {
   const roads = [...geo.EDGES, ...geo.OUTER], all = roads.map(E => E.d).join(''), rv = rngAt(1, 2, 81), hw = ROAD_W / 2;
   el('path', { d: all, fill: 'none', stroke: '#e2b087', 'stroke-width': ROAD_W + 5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.roads);
   el('path', { d: all, fill: 'none', stroke: '#f6d4b2', 'stroke-width': ROAD_W, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.roads);
+  // דרך ללא מוצא שממשיכה כשביל: במקום קצה עגול, הדרך הולכת ונהיית צרה עד רוחב השביל
+  const neck = (h0: number, h1: number) => geo.ROAD_TAPERS.map(({ x, y, dx, dy }) => {
+    // צוואר: רוחב שיורד בעקומה רכה (כמו קוסינוס) לאורך 34 יחידות, מתחיל קצת בתוך הדרך כדי לכסות את הקצה העגול
+    const Lp: string[] = [], Rp: string[] = [];
+    for (let s = -4; s <= 34; s += 2) {
+      const f = Math.max(0, s) / 34, h = h1 + (h0 - h1) * (.5 + .5 * Math.cos(f * Math.PI)), px = x + dx * s, py = y + dy * s;
+      Lp.push(`${n2(px - dy * h)},${n2(py + dx * h)}`); Rp.unshift(`${n2(px + dy * h)},${n2(py - dx * h)}`);
+    }
+    return `M${Lp.join('L')}L${Rp.join('L')}Z`;
+  }).join('');
+  el('path', { d: neck(ROAD_W / 2 + 2.5, 6), fill: '#e2b087' }, L.roads);
+  el('path', { d: neck(ROAD_W / 2, 4), fill: '#f6d4b2' }, L.roads);
   // האבנים הישנות צרכו מספרים מהמחולל הכללי; צורכים אותם גם עכשיו, כדי שהיער ושאר העולם יישארו במקומם
   for (let i = 0; i < 520; i++) { pick(roads); rand(0, 1); rand(-20, 20); rand(.7, 1.5); }
   let worn = '', pebbles = '';
