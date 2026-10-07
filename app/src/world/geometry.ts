@@ -206,7 +206,20 @@ function joinTrails(T: number[][][]) {
   };
   const FILLET = 15;
   const trailJoin = (t: number[][], start: boolean, h: { c: number[]; tg: number[]; host: number[][]; hj: number }) => {
-    const [mx, my] = roadJoin(t, start, h.c, h.tg, TRAIL_HW, 26, false), c = h.c;
+    // השביל שומר על הכיוון שלו (בלי "וו" לפני הצומת). רק אם הוא נכנס כמעט במקביל, הזווית נפתחת ל-35° לפחות,
+    // דרך נקודת גישה רחוקה מספיק כדי שהפנייה תהיה רכה
+    const k = start ? 0 : t.length - 1, q = t[start ? 1 : t.length - 2], c = h.c, tg = h.tg;
+    const ql = Math.hypot(q[0] - c[0], q[1] - c[1]) || 1, ux = (q[0] - c[0]) / ql, uy = (q[1] - c[1]) / ql;
+    let nx = -tg[1], ny = tg[0]; if (nx * ux + ny * uy < 0) { nx = -nx; ny = -ny; }
+    const sn = nx * ux + ny * uy, ct = ux * tg[0] + uy * tg[1], MIN = Math.sin(35 * Math.PI / 180);
+    let mx = ux, my = uy;
+    t[k] = c;
+    if (sn < MIN) {
+      const cs = Math.cos(35 * Math.PI / 180) * Math.sign(ct || 1);
+      mx = nx * MIN + tg[0] * cs; my = ny * MIN + tg[1] * cs;
+      const A = Math.min(48, ql * .45);
+      if (ql > A + 20) t.splice(start ? 1 : t.length - 1, 0, [c[0] + mx * A, c[1] + my * A]);
+    }
     // שתי פינות מעוגלות: מהשביל המארח (משני צידי הצומת) אל השביל הנכנס. הפינה החדה (הצד שאליו השביל נוטה) מתעגלת פחות
     for (const dir of [1, -1] as const) {
       const cos = (h.tg[0] * mx + h.tg[1] * my) * dir, L = FILLET * (1 - .45 * Math.max(0, cos));
