@@ -175,6 +175,11 @@ Order:
   11. People never enter the paddock (they feed animals from outside), and the dog never enters shops.
   12. Everyone stays on the ground and fades in or out.
   13. Calm movement: people keep personal space, step right when meeting someone, and slow down behind a slower walker.
+  14. **Placement rule for small props** (owner's request). A bench, picnic table, blanket, haybale, mailbox, bike, well or beehives never stands on a road or trail, on water, a building, a mountain or a private plot, and never straddles the edge of a paved plaza: it is fully on the paving or fully off it.
+      - `placeSmall` in `scene/build.ts` checks each prop's footprint (`FOOT`) with `placeOk` before drawing it. If the spot is not allowed, it moves the prop to the nearest allowed spot (`findPlace`).
+      - Sitters on a moved bench and nearby pigeons move with it, and the moves are listed in `relocated` (`window.__relocated`).
+      - **Add a footprint to `FOOT` for any new small prop type.**
+- Walk-map flags also include BRIDGE (crossing water), LANE (road or trail) and PLAZA (paved square). Roads and trails are marked before objects, so the placement checks see them. Lakes clear PATH inside them at the end, except on bridges.
 - **How the rules work:** a 6-unit grid with flags WATER, SWIM, DANGER, SOFT, SOLID and PATH, plus private plot ids.
   - Objects mark it while they are built, by type. This happens in `scene/build.ts` (`markObject`, `markTerrain`, and the base of every static prop), plus `plot`, `shop`, `house`, `stoneFarm` and mountains, which mark themselves.
   - Roads and trails are PATH except over water. Only bridges allow crossing water: `stoneBridge` and `footbridge` decks, plus **automatic bridges** that are drawn and marked wherever a road or trail crosses the river or the creek (`autoBridges`).

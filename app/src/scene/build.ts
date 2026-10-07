@@ -14,7 +14,7 @@ import { buildTerrain } from './terrain';
 import { GENERATORS } from './generators';
 import { addLabel } from '../world/labels';
 import { places, autoPlace } from '../world/places';
-import { initWalk, markRect, markEllipse, markLine, markPath, WATER, SWIM, SOFT, SOLID, PATH } from '../world/walk';
+import { initWalk, markRect, markEllipse, markLine, markPath, clearPathIn, placeOk, findPlace, WATER, SWIM, SOFT, SOLID, PATH, BRIDGE, LANE, PLAZA } from '../world/walk';
 import { geo, ROAD_W } from '../world/geometry';
 import { catmull } from '../world/nav';
 import { autoBridges } from './mountains';
@@ -35,6 +35,7 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
     const f = PREFABS[o.type];
     if (!f) { console.warn('אין prefab בשם', o.type, o); continue; }
     if (o.id) ctx.named[o.id] = o;
+    placeSmall(o);                             // כלל המיקום: חפץ לא עומד על שביל, על מים או על שפת רחבה
     const n0 = NO_TREE.length, s0 = statics.length, p0 = places.length;
     f(o);
     if (places.length === p0) autoPlace(o);   // כל אובייקט (גם עתידי) הוא יעד, אלא אם הוא נוף בלבד
@@ -60,9 +61,31 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   for (const W of WATERS) markEllipse(W.cx, W.cy, W.rx, W.ry, WATER);   // אגמים
   // גשרים אוטומטיים מעל הנהר, איפה שדרך או שביל חוצים אותו ואין שם גשר מהנתונים
   autoBridges(geo.RIVER_SAMPLES, w.trails.map(t => catmull(t)), 34, w.objects.filter(o => o.type === 'stoneBridge' || o.type === 'footbridge').map(o => [o.x, o.y]));
-  // דרכים ושבילים: מותרים, אבל לא מעל מים (שם רק גשר, שכבר סומן)
-  for (const E of [...geo.EDGES, ...geo.OUTER]) markPath(E.pts, ROAD_W / 2);
-  for (const t of w.trails) markPath(catmull(t), 6);
+  for (const W of WATERS) clearPathIn(W.cx, W.cy, W.rx, W.ry);   // אגם: הדרך או השביל לא חוצים אותו (חוץ מגשר)
+}
+
+/* כלל המיקום של חפצים קטנים: השטח שכל אחד תופס (לבדיקה) */
+const FOOT: Record<string, (o: any) => number[]> = {
+  bench: o => [o.x - 22, o.y - 12, o.x + 22, o.y + 4],
+  picnicTable: o => [o.x - 20, o.y - 14, o.x + 20, o.y + 4],
+  picnicBlanket: o => [o.x - 22, o.y - 16, o.x + 22, o.y + 16],
+  haybale: o => [o.x - 9, o.y - 8, o.x + 9, o.y + 8],
+  mailbox: o => [o.x - 6, o.y - 4, o.x + 6, o.y + 2],
+  bike: o => [o.x - 11, o.y - 6, o.x + 11, o.y + 2],
+  well: o => [o.x - 15, o.y - 6, o.x + 15, o.y + 6],
+  beehives: o => [o.x - 10, o.y - 20, o.x + (Math.min(o.count ?? 5, 3) - 1) * 32 + 10, o.y + (Math.ceil((o.count ?? 5) / 3) - 1) * 34 + 4],
+};
+/** חפצים שהוזזו בבנייה בגלל כלל המיקום (מי שקשור אליהם זז איתם: יושב על ספסל, יונים) */
+export const relocated: { type: string; from: number[]; to: number[] }[] = [];
+function placeSmall(o: any) {
+  const fp = FOOT[o.type]?.(o);
+  if (fp && !placeOk(fp[0], fp[1], fp[2], fp[3])) {
+    const d = findPlace(fp);
+    if (d) { relocated.push({ type: o.type, from: [o.x, o.y], to: [o.x + d[0], o.y + d[1]] }); o.x += d[0]; o.y += d[1]; }
+    return;
+  }
+  // יונה ליד ספסל שזז: זזה איתו
+  if (o.type === 'pigeon') { const m = relocated.find(r => r.type === 'bench' && Math.hypot(r.from[0] - o.x, r.from[1] - o.y) < 50); if (m) { o.x += m.to[0] - m.from[0]; o.y += m.to[1] - m.from[1]; } }
 }
 
 /** מים, ים (עם אזור שחייה רדוד ליד החוף), דרכים ושבילים */
@@ -72,6 +95,9 @@ function markTerrain(w: WorldData) {
   markLine(geo.CREEK_SAMPLES, 9, WATER);
   markRect(B.x0, T.sea.y + 2, B.x1, B.y1, WATER);
   markRect(B.x0, T.sea.y, B.x1, T.sea.y + 70, SWIM);
+  // דרכים ושבילים: מותרים, אבל לא מעל מים (שם רק גשר)
+  for (const E of [...geo.EDGES, ...geo.OUTER]) markPath(E.pts, ROAD_W / 2);
+  for (const t of w.trails) markPath(catmull(t), 6);
 }
 
 /* מבנים: חוסמים את הבסיס (כמה יחידות מעל קו הקרקע, בכל הרוחב). שטחים: שדות וערוגות לא דורכים; מבוך, מכלאה, מזרקה: חסומים לגמרי */
@@ -94,14 +120,14 @@ function markObject(o: any, s0: number) {
     case 'maze': markRect(o.x, o.y, o.x + (o.n ?? 9) * (o.cell ?? 18), o.y + (o.n ?? 9) * (o.cell ?? 18), SOLID); break;
     case 'paddock': markRect(o.x0 - 4, o.y0 - 4, o.x1 + 4, o.y1 + 4, SOLID); break;   // רק מעבר לגדר (מאכילים מבחוץ)
     case 'fountain': markEllipse(o.x, o.y, 36, 16, SOLID); break;
-    case 'roundabout': markEllipse(o.x, o.y, (o.r ?? 40) + 42, (o.r ?? 40) + 42, PATH); markEllipse(o.x, o.y + 5, 46, 22, SOLID); break;   // כיכר מרוצפת להליכה; רק המזרקה והפרחים במרכז חסומים
+    case 'roundabout': markEllipse(o.x, o.y, (o.r ?? 40) + 42, (o.r ?? 40) + 42, PATH | PLAZA); markEllipse(o.x, o.y + 5, 46, 22, SOLID); break;   // כיכר מרוצפת להליכה; רק המזרקה והפרחים במרכז חסומים
     case 'campfire': markEllipse(o.x, o.y, 16, 8, SOLID); break;
     case 'railway': markRect(ctx.B.x0, o.y - 12, ctx.B.x1, o.y + 12, SOFT); break;   // חוצים רק במעבר (שביל או דרך)
-    case 'plaza': markEllipse(o.x, o.y, o.rx, o.ry, PATH); break;
+    case 'plaza': markEllipse(o.x, o.y, o.rx, o.ry, PATH | PLAZA); break;
     case 'pier': markRect(o.x, o.y, o.x + (o.w ?? 44), o.y + (o.h ?? 200), PATH); break;
     case 'footbridge': case 'stoneBridge': {   // משטח הגשר: עוברים עליו מעל המים
       const a = (o.angle ?? 0) * Math.PI / 180, c = Math.cos(a) * 42, s = Math.sin(a) * 42;
-      markLine([[o.x - c, o.y - s], [o.x + c, o.y + s]], o.type === 'footbridge' ? 9 : ROAD_W / 2 + 2, PATH); break;
+      markLine([[o.x - c, o.y - s], [o.x + c, o.y + s]], o.type === 'footbridge' ? 9 : ROAD_W / 2 + 2, PATH | BRIDGE | LANE); break;
     }
   }
 }

@@ -8,13 +8,15 @@
 import { ctx } from './context';
 
 export const WATER = 1, SWIM = 2, DANGER = 4, SOFT = 8, SOLID = 16, PATH = 32;
+/** גשר (מעבר מעל מים), דרך או שביל (LANE), רחבה מרוצפת (PLAZA) */
+export const BRIDGE = 64, LANE = 128, PLAZA = 256;
 const C = 6;
-let W = 0, H = 0, X0 = 0, Y0 = 0, F: Uint8Array, PRIV: Uint16Array;
+let W = 0, H = 0, X0 = 0, Y0 = 0, F: Uint16Array, PRIV: Uint16Array;
 
 export function initWalk() {
   const { B } = ctx;
   X0 = B.x0; Y0 = B.y0; W = Math.ceil((B.x1 - B.x0) / C); H = Math.ceil((B.y1 - B.y0) / C);
-  F = new Uint8Array(W * H); PRIV = new Uint16Array(W * H);
+  F = new Uint16Array(W * H); PRIV = new Uint16Array(W * H);
 }
 const ix = (x: number) => Math.floor((x - X0) / C), iy = (y: number) => Math.floor((y - Y0) / C);
 const inside = (i: number, j: number) => i >= 0 && j >= 0 && i < W && j < H;
@@ -37,7 +39,7 @@ export function markPath(pts: number[][], r: number) {
       const cx = ax + (bx - ax) * s / n, cy = ay + (by - ay) * s / n;
       for (let j = Math.max(0, iy(cy - r)); j <= Math.min(H - 1, iy(cy + r)); j++) for (let i = Math.max(0, ix(cx - r)); i <= Math.min(W - 1, ix(cx + r)); i++) {
         const x = X0 + (i + .5) * C, y = Y0 + (j + .5) * C, k2 = j * W + i;
-        if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r && !(F[k2] & WATER)) F[k2] |= PATH;
+        if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r && !(F[k2] & WATER)) F[k2] |= PATH | LANE;
       }
     }
   }
@@ -59,6 +61,32 @@ export function markPolygon(P: number[][], flag: number) {
     for (let a = 0, b = P.length - 1; a < P.length; b = a++) if ((P[a][1] > y) !== (P[b][1] > y) && x < (P[b][0] - P[a][0]) * (y - P[a][1]) / (P[b][1] - P[a][1]) + P[a][0]) inP = !inP;
     if (inP) F[j * W + i] |= flag;
   }
+}
+/** אגם שסומן אחרי הדרכים: בתוכו הדרך או השביל לא מתירים מעבר (חוץ מגשר) */
+export function clearPathIn(cx: number, cy: number, rx: number, ry: number) {
+  for (let j = Math.max(0, iy(cy - ry)); j <= Math.min(H - 1, iy(cy + ry)); j++) for (let i = Math.max(0, ix(cx - rx)); i <= Math.min(W - 1, ix(cx + rx)); i++) {
+    const x = X0 + (i + .5) * C, y = Y0 + (j + .5) * C, k = j * W + i;
+    if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1 && !(F[k] & BRIDGE)) F[k] &= ~(PATH | LANE);
+  }
+}
+/** כלל המיקום של חפצים (ספסל, שולחן, שמיכה...): לא על דרך או שביל, לא על מים, מבנה, הר או מגרש פרטי,
+ *  ולא "חוצה" שפה של רחבה מרוצפת: או כולו על הריצוף או כולו מחוצה לו */
+export function placeOk(x0: number, y0: number, x1: number, y1: number) {
+  let plaza = 0, total = 0;
+  for (let j = Math.max(0, iy(y0)); j <= Math.min(H - 1, iy(y1)); j++) for (let i = Math.max(0, ix(x0)); i <= Math.min(W - 1, ix(x1)); i++) {
+    const k = j * W + i, f = F[k];
+    if ((f & WATER && !(f & BRIDGE)) || f & (SOLID | LANE | DANGER) || PRIV[k]) return false;
+    total++; if (f & PLAZA) plaza++;
+  }
+  return plaza === 0 || plaza === total;
+}
+/** המקום המותר הקרוב לחפץ (חיפוש בספירלה עד 100 יחידות). מחזיר את ההזזה, או null */
+export function findPlace(fp: number[]): number[] | null {
+  for (let r = 4; r <= 100; r += 4) for (let a = 0; a < 16; a++) {
+    const t = a / 16 * Math.PI * 2, dx = Math.round(Math.cos(t) * r), dy = Math.round(Math.sin(t) * r);
+    if (placeOk(fp[0] + dx, fp[1] + dy, fp[2] + dx, fp[3] + dy)) return [dx, dy];
+  }
+  return null;
 }
 /** מגרש פרטי: רק מי שגר בבית של המגרש נכנס */
 export function markPrivate(x0: number, y0: number, x1: number, y1: number, id: number) {

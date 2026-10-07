@@ -7,6 +7,7 @@ import { updateSeen } from '../camera/view';
 import { updateLabels } from '../world/labels';
 import { assignHomes } from './agenda';
 import { places } from '../world/places';
+import { relocated } from '../scene/build';
 import { rngAt } from '../core/rng';
 
 export { followables } from './people';
@@ -25,7 +26,10 @@ export function buildActors(A: Record<string, any>) {
   // הבלון והרצועה מתעדכנים אחרי שהבעלים זזו
   const walkerUpdate = (dt: number, T: number) => { for (const w of walkers) w.update(dt, T); };
   updates.unshift(walkerUpdate);
-  for (const s of A.sitters || []) { const st = new Sitter(s.look, s.x, s.y, s.seat, s.flip, s.behavior); sitters.push(st); updates.push((dt, T) => st.update(dt, T)); }
+  for (const s of A.sitters || []) {
+    const m = relocated.find(r => r.type === 'bench' && Math.hypot(r.from[0] - s.x, r.from[1] - s.y) < 25);   // הספסל זז? היושב זז איתו
+    const sx = m ? s.x + m.to[0] - m.from[0] : s.x, sy = m ? s.y + m.to[1] - m.from[1] : s.y;
+    const st = new Sitter(s.look, sx, sy, s.seat, s.flip, s.behavior); sitters.push(st); updates.push((dt, T) => st.update(dt, T)); }
   assignHomes(sitters, rngAt(2, 2, 91), walkers);   // ליושבים: בתים שעוד אין בהם דיירים (בלי לשנות את הבתים של ההולכים)
   for (const st of sitters) { const b = places.find(p => p.kind === 'sit' && p.seat && Math.hypot(p.seat[0] - st.x, p.seat[1] - st.y) < 25); if (b) b.busy = st; }   // הספסל של משה תפוס
   const horses = (A.horses || []).map((h: any) => new Horse(h));

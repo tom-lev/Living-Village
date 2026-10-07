@@ -16,6 +16,7 @@ import { places } from './world/places';
 import * as walkMap from './world/walk';
 import { routeTo } from './actors/agenda';
 import { components, compOf } from './world/nav';
+import { relocated } from './scene/build';
 
 const world = worldJson as unknown as WorldData;
 const stage = document.getElementById('stage');
@@ -139,6 +140,7 @@ async function boot() {
   (window as any).__routeTo = routeTo;
   (window as any).__navParts = components;
   (window as any).__compOf = compOf;
+  (window as any).__relocated = relocated;   // לבדיקות: חפצים שהוזזו בגלל כלל המיקום
   (window as any).__village = { cam: view.cam, walkers: actors.walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => view.fitK, items, tileStats, applyPalette, vstats };
 }
 boot();

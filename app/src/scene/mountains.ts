@@ -8,7 +8,7 @@ import { el, n2, blob, shade, smoothOpen } from '../core/util';
 import { rand, rngAt, type LocalRng } from '../core/rng';
 import { ctx } from '../world/context';
 import { geo, ROAD_W } from '../world/geometry';
-import { markPolygon, markLine, DANGER, PATH } from '../world/walk';
+import { markPolygon, markLine, DANGER, PATH, BRIDGE, LANE } from '../world/walk';
 import type { WorldData } from '../world/types';
 
 type Pt = number[];
@@ -135,7 +135,7 @@ export function autoBridges(C: Pt[], trails: Pt[][], half: number, existing: Pt[
   for (const t of trails) cross(t, false);
   for (const h of hits) {
     const g = el('g', { transform: `translate(${n2(h.x)},${n2(h.y)}) rotate(${n2(h.a)})` }, L.groundProps), len = half;
-    { const a = h.a * Math.PI / 180, c = Math.cos(a) * (len + 4), s = Math.sin(a) * (len + 4); markLine([[h.x - c, h.y - s], [h.x + c, h.y + s]], h.road ? ROAD_W / 2 : 7, PATH); }   // הגשר: עוברים עליו מעל המים
+    { const a = h.a * Math.PI / 180, c = Math.cos(a) * (len + 4), s = Math.sin(a) * (len + 4); markLine([[h.x - c, h.y - s], [h.x + c, h.y + s]], h.road ? ROAD_W / 2 : 7, PATH | BRIDGE | LANE); }   // הגשר: עוברים עליו מעל המים
     if (h.road) {
       const w = ROAD_W / 2 + 3;
       el('rect', { x: -len, y: -w - 3, width: 2 * len, height: 6, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, g);
