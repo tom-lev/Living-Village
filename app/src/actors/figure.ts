@@ -130,7 +130,9 @@ export class Figure {
     this.legB1 = S(dk(look.pants), .074); this.legB2 = S(dk(look.pants), .074); this.shoeB = S('#3b2f2a', .052);
     this.legA1 = S(look.pants, .074); this.legA2 = S(look.pants, .074); this.shoeA = S('#4a3b33', .052);
     this.skirt = look.skirt ? el('path', { fill: look.skirt, stroke: look.skirt, 'stroke-width': n2(.035 * h), 'stroke-linejoin': 'round' }, this.body) : null;
-    this.torso = S(look.shirt, .165);
+    // פלג גוף: צורה מלאה (לא קפסולה), כדי שלא ייראה ככדור במותניים. מתחתיה מותניים בצבע המכנסיים שמחברות לרגליים
+    this.hips = el('path', { fill: look.skirt || look.pants }, this.body);
+    this.torso = el('path', { fill: look.shirt }, this.body);
     this.armAu = S(look.shirt, .062); this.armAf1 = S(look.skin, .052); this.armAf2 = S(look.skin, .052);
     this.hairB = el('path', { fill: look.hair }, this.body);
     this.head = el('circle', { r: n2(look.headR * h), fill: look.skin }, this.body);
@@ -139,19 +141,29 @@ export class Figure {
     el('rect', { x: n2(-h * .4), y: n2(-h * 1.2), width: n2(h * .8), height: n2(h * 1.32), fill: 'transparent' }, this.g);   // אזור לחיצה
     this.view = null;
   }
+  /** צורת פלג הגוף והמותניים, לאורך ציר x מהירך (0) לכתף (T0). מבט מהצד צר יותר ממבט מלפנים/מאחור */
+  private bodyShape(view: View) {
+    const h = this.look.h, T = PR.torso * h, w = (view === 'side' ? .15 : .19) * h, ws = w * 1.05, r = w * .45;
+    // חולצה: מתחילה קצת מעל הירך, כתפיים מעוגלות למעלה, תחתית ישרה כמעט
+    const b = T * .16;
+    this.torso.setAttribute('d', `M${n2(b)},${n2(-w / 2)}L${n2(T - r)},${n2(-ws / 2)}Q${n2(T + r * .25)},${n2(-ws / 2)} ${n2(T + r * .25)},0Q${n2(T + r * .25)},${n2(ws / 2)} ${n2(T - r)},${n2(ws / 2)}L${n2(b)},${n2(w / 2)}Q${n2(b - 1)},0 ${n2(b)},${n2(-w / 2)}Z`);
+    // מותניים: מעט מתחת לירך (מכסות את ראש הרגליים) עד מתחת לחולצה
+    const hw = w * .96;
+    this.hips.setAttribute('d', `M${n2(-T * .07)},${n2(-hw / 2)}L${n2(b + 2)},${n2(-hw / 2)}L${n2(b + 2)},${n2(hw / 2)}L${n2(-T * .07)},${n2(hw / 2)}Q${n2(-T * .12)},0 ${n2(-T * .07)},${n2(-hw / 2)}Z`);
+  }
   /** שיער, כובע ופנים סביב מרכז הראש (0,0), לפי כיוון המבט. נבנה רק כשהכיוון משתנה */
   private headShapes(view: View) {
     const { look } = this, r = look.headR * look.h, hs = look.hairStyle, cx = 0, cy = 0;
     let hb = '', hf = '', face = '';
     if (view === 'side') {
-      hb = circ(cx - .14 * r, cy - .14 * r, 1.07 * r);
+      hb = look.hat ? circ(cx - .62 * r, cy + .12 * r, .48 * r) : circ(cx - .14 * r, cy - .14 * r, 1.07 * r);
       if (hs === 'long') hb += rrect(cx - 1.08 * r, cy - .3 * r, .95 * r, 1.65 * r, .45 * r);
       if (hs === 'bun') hb += circ(cx - .95 * r, cy - .6 * r, .42 * r);
       if (hs === 'pony') hb += rrect(cx - 1.55 * r, cy - .55 * r, .7 * r, 1.2 * r, .35 * r);
       face = circ(cx + .5 * r, cy - .02 * r, .1 * r);
       if (look.hat) hf = `M${n2(cx - 1.06 * r)},${n2(cy - .12 * r)}A${n2(1.06 * r)},${n2(1.06 * r)} 0 0 1 ${n2(cx + 1.06 * r)},${n2(cy - .12 * r)}Z` + rrect(cx + .2 * r, cy - .3 * r, 1.25 * r, .26 * r, .12 * r);
     } else if (view === 'front') {
-      hb = circ(cx, cy - .16 * r, 1.07 * r);
+      hb = look.hat ? circ(cx - .78 * r, cy + .05 * r, .32 * r) + circ(cx + .78 * r, cy + .05 * r, .32 * r) : circ(cx, cy - .16 * r, 1.07 * r);
       if (hs === 'long') hb += rrect(cx - 1.12 * r, cy - .3 * r, 2.24 * r, 1.65 * r, .5 * r);
       if (hs === 'bun') hb += circ(cx, cy - 1.15 * r, .42 * r);
       if (hs === 'pony') hb += circ(cx + 1.05 * r, cy - .3 * r, .38 * r);
@@ -175,7 +187,7 @@ export class Figure {
     if (opacity !== undefined) this.g.setAttribute('opacity', opacity.toFixed(2));
     if (p.view !== this.view) {
       this.view = p.view;
-      this.torso.setAttribute('stroke-width', n2((p.view === 'side' ? .165 : .205) * h));
+      this.bodyShape(p.view);
       const hc = p.view === 'back' && !look.hat ? look.hair : look.skin;
       rememberColor(this.head, 'fill', hc); this.head.setAttribute('fill', grade(hc));
       this.headShapes(p.view);
@@ -189,7 +201,9 @@ export class Figure {
       bone(u, A.sh, mid); bone(f1, mid, A.elb); bone(f2, A.elb, A.hand);
     };
     arm(this.armAu, this.armAf1, this.armAf2, p.arms[iA]); arm(this.armBu, this.armBf1, this.armBf2, p.arms[iB]);
-    bone(this.torso, p.torso[0], p.torso[1]);
+    // פלג הגוף והמותניים נמתחים יחד לאורך הקו מהירך לכתף
+    const [hp0, sp0] = p.torso, tl = Math.hypot(sp0[0] - hp0[0], sp0[1] - hp0[1]), ta = Math.atan2(sp0[1] - hp0[1], sp0[0] - hp0[0]), T0 = PR.torso * h;
+    place(this.torso, hp0[0], hp0[1], ta, tl / T0); place(this.hips, hp0[0], hp0[1], ta, tl / T0);
     if (this.skirt) this.skirt.setAttribute('d', 'M' + p.skirt.map(P).join('L') + 'Z');
     const [cx, cy] = p.head;
     for (const e of [this.hairB, this.head, this.face, this.hairF]) place(e, cx, cy);
