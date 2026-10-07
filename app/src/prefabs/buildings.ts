@@ -4,6 +4,7 @@ import { rngAt } from '../core/rng';
 import { ctx, prop, block, smokeFx } from '../world/context';
 import { register } from './registry';
 import { addPlace } from '../world/places';
+import { markLine, markRect, SOLID, SOFT } from '../world/walk';
 import { house, roofTexture, windowAt, poly, type Pt } from './house';
 import { shop } from './shop';
 
@@ -199,6 +200,7 @@ function stoneFarm(o: any) {
     const ux = (b[0] - a[0]) / len, uy = (b[1] - a[1]) / len;
     for (let t = 2; t < len - 2; t += rg.rand(4.5, 7)) stones += blob(a[0] + ux * t, a[1] + uy * t + rg.rand(-1, 1), rg.rand(2.4, 3.6), rg.rand(1.8, 2.6), 6, .15, rg.rand(0, 6));
   }
+  for (const [a, b] of [...side([X0, Y0], [X1, Y0]), ...side([X1, Y0], [X1, Y1]), ...side([X0, Y1], [X1, Y1]), ...side([X0, Y0], [X0, Y1])]) markLine([a, b], 4, SOLID);   // החומה; נכנסים רק בשערים
   el('path', { d: wall, fill: 'none', stroke: '#a99b84', 'stroke-width': 8, 'stroke-linecap': 'round' }, G);
   el('path', { d: wall, fill: 'none', stroke: '#c9bea9', 'stroke-width': 6, 'stroke-linecap': 'round' }, G);
   el('path', { d: stones, fill: '#d6ccb8', stroke: '#9c8f78', 'stroke-width': .6 }, G);
@@ -214,6 +216,7 @@ function stoneFarm(o: any) {
   const bedY = y + 14, bedH = 38, beds: [number, number][] = [[X0 + 16, x - 24], [x + 6, x + 80]];
   for (const [bx0, bx1] of beds) {
     el('rect', { x: bx0, y: bedY, width: bx1 - bx0, height: bedH, rx: 4, fill: '#9c6f48', stroke: '#7d5636', 'stroke-width': 1.2 }, G);
+    markRect(bx0, bedY, bx1, bedY + bedH, SOFT);   // לא דורכים על הערוגות
     let furrow = ''; for (let r = 0; r < 4; r++) furrow += `M${n2(bx0 + 4)},${n2(bedY + 6 + r * 9.5)}H${n2(bx1 - 4)}`;
     el('path', { d: furrow, stroke: '#7d5636', 'stroke-width': 1.6, 'stroke-linecap': 'round', opacity: .7 }, G);
   }

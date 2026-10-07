@@ -8,6 +8,7 @@ import { el, n2, blob, shade, smoothOpen } from '../core/util';
 import { rand, rngAt, type LocalRng } from '../core/rng';
 import { ctx } from '../world/context';
 import { geo, ROAD_W } from '../world/geometry';
+import { markPolygon, markLine, DANGER, PATH } from '../world/walk';
 import type { WorldData } from '../world/types';
 
 type Pt = number[];
@@ -56,6 +57,7 @@ function massif(x0: number, x1: number, base: number, m: any, rg: LocalRng, foot
     ridge.push(...jag(keys[i], keys[i + 1], base, rg, .05, 2));
   }
   saddleAt.push(ridge.length); ridge.push([x1, base]);
+  markPolygon([...ridge, [x1, base + 2], [x0, base + 2]], DANGER);   // לא מטפסים על ההר
   // הגוף
   el('path', { d: poly([...ridge, [x1, base + 2], [x0, base + 2]]), fill: color, stroke: shade(color, -.1), 'stroke-width': 1.2, 'stroke-linejoin': 'round' }, L);
   peaks.forEach((p, i) => {
@@ -111,8 +113,13 @@ function creek(pts: Pt[], trails: Pt[][]) {
   let ice = '';
   for (const p of geo.CREEK_SAMPLES) if (rg.chance(.06)) ice += blob(p[0] + rg.rand(-3, 3), p[1] + rg.rand(-2, 2), rg.rand(3, 6), rg.rand(1.5, 2.5), 6, .2, rg.rand(0, 6));
   el('path', { d: ice, fill: '#ffffff', opacity: .9 }, L.ground);
-  // חיתוכים עם דרכים ושבילים
-  const C = geo.CREEK_SAMPLES, hits: { x: number; y: number; a: number; road: boolean }[] = [];
+  autoBridges(geo.CREEK_SAMPLES, trails, 22, []);
+}
+
+/** גשרים אוטומטיים: בכל מקום שדרך או שביל חוצים מים (פלג, נהר) ואין שם כבר גשר, מציירים גשר ומסמנים אותו כמעבר.
+ *  כך הכלל "חוצים מים רק בגשר" לא מנתק את העולם, וגם דרך או שביל עתידיים יקבלו גשר מעצמם */
+export function autoBridges(C: Pt[], trails: Pt[][], half: number, existing: Pt[]) {
+  const L = ctx.L, hits: { x: number; y: number; a: number; road: boolean }[] = [];
   const cross = (P: Pt[], road: boolean) => {
     for (let i = 0; i < P.length - 1; i++) for (let j = 0; j < C.length - 1; j++) {
       const [ax, ay] = P[i], [bx, by] = P[i + 1], [cx, cy] = C[j], [dx, dy] = C[j + 1];
@@ -120,21 +127,23 @@ function creek(pts: Pt[], trails: Pt[][]) {
       const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / den, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / den;
       if (t < 0 || t > 1 || u < 0 || u > 1) continue;
       const x = ax + t * (bx - ax), y = ay + t * (by - ay);
-      if (!hits.some(h => Math.hypot(h.x - x, h.y - y) < 40)) hits.push({ x, y, a: Math.atan2(by - ay, bx - ax) * 180 / Math.PI, road });
+      if (existing.some(e => Math.hypot(e[0] - x, e[1] - y) < 60) || hits.some(h => Math.hypot(h.x - x, h.y - y) < 40)) continue;
+      hits.push({ x, y, a: Math.atan2(by - ay, bx - ax) * 180 / Math.PI, road });
     }
   };
   for (const E of [...geo.EDGES, ...geo.OUTER]) cross(E.pts, true);
   for (const t of trails) cross(t, false);
   for (const h of hits) {
-    const g = el('g', { transform: `translate(${n2(h.x)},${n2(h.y)}) rotate(${n2(h.a)})` }, L.groundProps);
+    const g = el('g', { transform: `translate(${n2(h.x)},${n2(h.y)}) rotate(${n2(h.a)})` }, L.groundProps), len = half;
+    { const a = h.a * Math.PI / 180, c = Math.cos(a) * (len + 4), s = Math.sin(a) * (len + 4); markLine([[h.x - c, h.y - s], [h.x + c, h.y + s]], h.road ? ROAD_W / 2 : 7, PATH); }   // הגשר: עוברים עליו מעל המים
     if (h.road) {
-      const h = ROAD_W / 2 + 3;
-      el('rect', { x: -20, y: -h - 3, width: 40, height: 6, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, g);
-      el('rect', { x: -20, y: h - 3, width: 40, height: 6, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, g);
+      const w = ROAD_W / 2 + 3;
+      el('rect', { x: -len, y: -w - 3, width: 2 * len, height: 6, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, g);
+      el('rect', { x: -len, y: w - 3, width: 2 * len, height: 6, rx: 3, fill: '#b5aca2', stroke: '#8f867c', 'stroke-width': 1 }, g);
     } else {
-      el('rect', { x: -16, y: -7, width: 32, height: 14, rx: 2, fill: '#b98552', stroke: '#8a5f39', 'stroke-width': 1 }, g);
-      let pl = ''; for (let k = -13; k <= 13; k += 5) pl += `M${k},-7v14`;
-      el('path', { d: pl + 'M-16,-8h32M-16,8h32', stroke: '#6b4a2f', 'stroke-width': .9 }, g);
+      el('rect', { x: -len + 4, y: -7, width: 2 * len - 8, height: 14, rx: 2, fill: '#b98552', stroke: '#8a5f39', 'stroke-width': 1 }, g);
+      let pl = ''; for (let k = -len + 7; k <= len - 7; k += 5) pl += `M${n2(k)},-7v14`;
+      el('path', { d: pl + `M${-len + 4},-8h${2 * len - 8}M${-len + 4},8h${2 * len - 8}`, stroke: '#6b4a2f', 'stroke-width': .9 }, g);
     }
   }
 }

@@ -9,6 +9,7 @@ import { el, n2, circ, shade, wrap1, ST } from '../core/util';
 import { rngAt, type LocalRng } from '../core/rng';
 import { ctx, prop, block, fxAt, smokeFx } from '../world/context';
 import { addPlace } from '../world/places';
+import { markRect, SOLID } from '../world/walk';
 import { poly, roofTexture, wallTexture, windowAt, doorAt, FLOWERS, type Pt } from './house';
 
 interface Front { x0: number; x1: number; top: number; y: number }   // חלון הראווה
@@ -310,4 +311,5 @@ export function shop(o: any) {
   if (kit.extra && o.variant !== 'bakery') kit.extra(g, x, y, roofTop, w, c, rg);
   (kit.outside || GENERIC.outside)!(g, x, y, side, w, c, rg);
   block(x0 - 30, roofTop - 24, x1 + 30, y + 14);
+  markRect(x0 + 2, y - 30, x1 - 2, y - 3, SOLID);   // מפת מעבר: רק הבניין עצמו (השולחנות והעציצים בחוץ הם מכשולים קטנים)
 }

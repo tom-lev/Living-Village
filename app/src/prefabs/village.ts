@@ -4,11 +4,17 @@ import { rand, R, rngAt } from '../core/rng';
 import { ctx, block } from '../world/context';
 import { register } from './registry';
 import { ROAD_W } from '../world/geometry';
+import { markPrivate, markLine, SOLID } from '../world/walk';
+
+/** המגרש של כל דלת (כדי לדעת מי מורשה להיכנס) */
+export const plotDoors: { x: number; y: number; id: number }[] = [];
+export const plotOfDoor = (d: number[] | undefined) => d ? plotDoors.find(p => Math.abs(p.x - d[0]) < 6 && Math.abs(p.y - d[1]) < 10)?.id ?? 0 : 0;
 
 /** מגרש של בית: מדשאה, גדר חיה או גדר כלונסאות, שביל מהדלת לרחוב וערוגה ליד הבית.
  *  door: [x, y] של דלת הבית; street: 'top' | 'bottom' – לאיזה צד של המגרש פונה הרחוב */
 function plot(o: any) {
   const { x0, y0, x1, y1, fence = 'hedge', door, street = 'bottom', bed = true } = o, G = ctx.L.groundProps;
+  let gateX = door ? door[0] : (x0 + x1) / 2;
   el('path', { d: rrect(x0, y0, x1 - x0, y1 - y0, 7), fill: '#b3d98a' }, G);
   if (fence === 'hedge') el('path', { d: rrect(x0, y0, x1 - x0, y1 - y0, 7), fill: 'none', stroke: '#6f9f52', 'stroke-width': 4.5, 'stroke-linejoin': 'round' }, G);
   else {
@@ -18,11 +24,24 @@ function plot(o: any) {
   if (door) {
     // שביל מרוצף מהדלת לשער
     // השביל מגיע עד שפת הדרך הצרה (המגרשים תוכננו לדרך רחבה יותר)
-    const reach = 3 + (25 - ROAD_W / 2), [dx, dy] = door, ey = street === 'bottom' ? y1 + reach : y0 - reach, top = Math.min(dy, ey), h = Math.abs(ey - dy);
-    el('rect', { x: dx - 5, y: top, width: 10, height: h, rx: 2, fill: '#ecd7b5' }, G);
-    let d = ''; for (let yy = top + 5; yy < top + h - 2; yy += 7) d += `M${dx - 4},${yy}h8`;
-    el('path', { d, stroke: '#dcc29b', 'stroke-width': .9 }, G);
-    if (fence === 'hedge') el('rect', { x: dx - 7, y: (street === 'bottom' ? y1 : y0) - 3, width: 14, height: 6, fill: '#b3d98a' }, G);   // פתח בגדר
+    const reach = 3 + (25 - ROAD_W / 2), [dx, dy] = door, ey = street === 'bottom' ? y1 + reach : y0 - reach;
+    const seg = (ax: number, ay: number, bx: number, by: number) => {   // קטע שביל מרוצף (אופקי או אנכי)
+      const x = Math.min(ax, bx) - 5, y = Math.min(ay, by) - (ax === bx ? 0 : 5), w = Math.abs(bx - ax) + 10, h = ax === bx ? Math.abs(by - ay) : 10;
+      el('rect', { x, y, width: w, height: h, rx: 2, fill: '#ecd7b5' }, G);
+      let d = '';
+      if (ax === bx) for (let yy = y + 5; yy < y + h - 2; yy += 7) d += `M${ax - 4},${yy}h8`;
+      else for (let xx = x + 5; xx < x + w - 2; xx += 7) d += `M${xx},${ay - 4}v8`;
+      el('path', { d, stroke: '#dcc29b', 'stroke-width': .9 }, G);
+    };
+    gateX = dx;
+    if (street === 'bottom') seg(dx, dy, dx, ey);
+    else {
+      // הרחוב מאחורי הבית: מהדלת קצת קדימה, לצד הרחב של המגרש לאורך הגדר, ומשם אל השער
+      const side = x1 - dx >= dx - x0 ? 1 : -1, sx = side > 0 ? x1 - 9 : x0 + 9;
+      seg(dx, dy, dx, dy + 8); seg(dx, dy + 8, sx, dy + 8); seg(sx, dy + 8, sx, ey);
+      gateX = sx;
+    }
+    if (fence === 'hedge') el('rect', { x: gateX - 7, y: (street === 'bottom' ? y1 : y0) - 3, width: 14, height: 6, fill: '#b3d98a' }, G);   // פתח בגדר
   }
   if (bed && door) {
     // הערוגה הישנה צרכה מספרים מהמחולל הכללי; צורכים אותם גם עכשיו, כדי שהיער ושאר העולם יישארו במקומם
@@ -30,6 +49,13 @@ function plot(o: any) {
     flowerBed(G, x0, y0, x1, y1, door, street);
   }
   block(x0, y0, x1, y1 + 30);
+  // מפת מעבר: פנים המגרש פרטי (רק לדיירים), והגדר סביבו חסומה חוץ מהשער מול השביל
+  const id = plotDoors.length + 1, gy = street === 'bottom' ? y1 : y0, gx = gateX;
+  markPrivate(x0, y0, x1, y1, id);
+  if (door) plotDoors.push({ x: door[0], y: door[1], id });
+  const other = street === 'bottom' ? y0 : y1;
+  markLine([[x0, other], [x1, other]], 3, SOLID); markLine([[x0, y0], [x0, y1]], 3, SOLID); markLine([[x1, y0], [x1, y1]], 3, SOLID);
+  markLine([[x0, gy], [gx - 9, gy]], 3, SOLID); markLine([[gx + 9, gy], [x1, gy]], 3, SOLID);
 }
 
 /** ערוגת פרחים: רק בחלק מהמגרשים, ובכל מגרש במקום אחר, בצורה אחרת ועם פרחים אחרים */
@@ -96,14 +122,24 @@ function flowerBed(G: any, x0: number, y0: number, x1: number, y1: number, door:
   if (centers.length) el('path', { d: centers.join(''), fill: '#f2b33d' }, G);
 }
 
-/** כיכר תנועה: אי ירוק עם שפת אבן; המזרקה מגיעה כאובייקט נפרד */
+/** כיכר הכפר (בלי מכוניות): רחבה מרוצפת שהדרכים נפגשות בה, עם מקום להלך מסביב למזרקה שבמרכז.
+ *  ריצוף אבנים בטבעות, שפת אבן, וטבעת פרחים נמוכה סביב המזרקה (המזרקה עצמה אובייקט נפרד) */
 function roundabout(o: any) {
-  const { x, y, r = 40 } = o, G = ctx.L.groundProps;
-  el('circle', { cx: x, cy: y, r: r + 4, fill: '#e3d3bb', stroke: '#cdb895', 'stroke-width': 1.2 }, G);
-  el('circle', { cx: x, cy: y, r, fill: '#a9d37c' }, G);
-  let d = ''; for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2; d += circ(x + Math.cos(a) * (r - 7), y + Math.sin(a) * (r - 7), 2); }
+  const { x, y, r = 40 } = o, G = ctx.L.groundProps, R = r + 42, v = rngAt(x, y, 33);
+  el('circle', { cx: x, cy: y, r: R + 3, fill: '#d9c7a6' }, G);
+  el('circle', { cx: x, cy: y, r: R, fill: '#ece0c8' }, G);
+  // אבני ריצוף: טבעות של אבנים קטנות מעוגלות, כל אבן קצת אחרת
+  let st = '';
+  for (let rr = 12; rr < R - 3; rr += 7.5) {
+    const n = Math.round(2 * Math.PI * rr / 8.5), off = v.rand(0, 1);
+    for (let k = 0; k < n; k++) { const a = (k + off) / n * Math.PI * 2, w = v.rand(5.2, 6.6), h = v.rand(4.4, 5.6), px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr; st += rrect(px - w / 2, py - h / 2, w, h, 1.8); }
+  }
+  el('path', { d: st, fill: '#e3d4b8', stroke: '#d4c19f', 'stroke-width': .5 }, G);
+  // שפת אבן ופרחים סביב המזרקה (נמוכים: לא מסתירים)
+  el('ellipse', { cx: x, cy: y + 5, rx: 46, ry: 22, fill: '#a9d37c', stroke: '#cdb895', 'stroke-width': 2 }, G);
+  let d = ''; for (let i = 0; i < 22; i++) { const a = i / 22 * Math.PI * 2; d += circ(x + Math.cos(a) * 40, y + 5 + Math.sin(a) * 17, 2); }
   el('path', { d, fill: '#f2c94c' }, G);
-  block(x - r, y - r, x + r, y + r);
+  block(x - R, y - R, x + R, y + R);
 }
 
 register({ plot, roundabout });

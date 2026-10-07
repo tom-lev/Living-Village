@@ -3,8 +3,10 @@ import { el, n2, P, clamp, shade, show } from '../core/util';
 import { inView, view } from '../camera/view';
 import { R, rngAt } from '../core/rng';
 import { KINDS, type Place } from '../world/places';
-import { roleOf, routeTo, routeAt, chooseNext, durOf, surnameOf, actOf } from './agenda';
+import { roleOf, routeTo, routeAt, chooseNext, durOf, surnameOf, actOf, prependRoute } from './agenda';
 import { ripple } from '../world/context';
+import { plotOfDoor } from '../prefabs/village';
+import { walkable } from '../world/walk';
 import { ctx } from '../world/context';
 import type { Look } from '../world/types';
 import { Figure, PR, walkPose, sitPose, actPose, type View } from './figure';
@@ -45,18 +47,31 @@ export class Walker {
   }
   /** התחלה: חלק מהדמויות בבית (יוצאות בהדרגה), וחלק כבר בדרך למקום כלשהו */
   start() {
+    this.rules = { priv: plotOfDoor(this.home?.door) };   // מותר להיכנס רק למגרש של הבית שלי
     const d = this.home.door;
     this.place = this.home; this.x = d[0]; this.y = d[1];
     if (this.rg.chance(.4)) { this.state = 'inside'; this.alpha = 0; this.timer = this.rg.rand(0, 25); }
-    else { this.go(chooseNext(this, this.rg), this.home); this.s = this.rg.rand(0, this.route.len * .7); const p = routeAt(this.route, this.s); this.x = p.x; this.y = p.y; }
+    else {
+      this.go(chooseNext(this, this.rg), this.home);
+      if (this.state === 'walk') { this.s = this.rg.rand(0, this.route.len * .7); const p = routeAt(this.route, this.s); this.x = p.x; this.y = p.y; }
+    }
     this.trail = [[this.x, this.y, 0]];
   }
   /** יוצאים ליעד: מסלול מהמקום הנוכחי (מהדלת, אם יוצאים ממבנה) */
   go(to: Place, from: Place | null) {
     if (this.place?.busy === this) this.place.busy = null;   // קמים מהספסל
     if (to.kind === 'sit') to.busy = this;                   // שומרים את הספסל
+    const wasSwimming = this.act === 'swim';
     this.act = null; this.fig.setSwim(false);
-    this.route = routeTo(from?.door ? from.door : [this.x, this.y], from?.door ? from : null, to);
+    // הכללים של הדמות: מותר לה להיכנס רק למגרש של הבית שלה
+    this.rules = this.rules || { priv: plotOfDoor(this.home?.door) };
+    this.bad = this.bad || new Set<number>();
+    // יוצאים מבניין מהדלת; יוצאים מהמים קודם אל החוף (בתוך המים אסור ללכת, רק לשחות)
+    const swimOut = wasSwimming && this.place?.at, start = from?.door ? from.door : swimOut ? this.place.at : [this.x, this.y];
+    let route = routeTo(start, to, this.rules);
+    for (let k = 0; !route && k < 6; k++) { this.bad.add(to.id); to = chooseNext(this, this.rg); route = routeTo(start, to, this.rules); }
+    if (!route) { this.place = to; this.state = 'stay'; this.timer = 5; this.act = 'look'; return; }   // אין לאן: מחכים רגע ומנסים שוב
+    this.route = swimOut ? prependRoute(route, [this.x, this.y]) : route;
     this.place = to; this.s = 0; this.state = 'walk'; this.sf = .2;
     this.recent.push(to.id); if (this.recent.length > 4) this.recent.shift();
     if (to !== this.home) this.outings++;
@@ -76,8 +91,10 @@ export class Walker {
       const left = this.route.len - this.s;
       this.sf = Math.min(1, this.sf + dt * 1.1);
       this.s = Math.min(this.route.len, this.s + this.speed * Math.min(this.sf, clamp(left / 24, .15, 1)) * dt);   // מאטים לפני היעד
-      const p = routeAt(this.route, this.s), off = this.laneOff * p.lane;
+      const p = routeAt(this.route, this.s), tunnel = p.lane < -.3, off = tunnel ? 0 : this.laneOff * Math.max(0, p.lane);
       tx = p.x - p.ty * off; ty = p.y + p.tx * off; walking = true;
+      // במנהרה: נעלמים בכניסה ומופיעים ביציאה
+      this.alpha = tunnel ? Math.max(0, this.alpha - dt / .6) : Math.min(1, this.alpha + dt / .6);
       if (left < .5) {
         if (KINDS[this.place.kind].enter) this.state = 'enter';
         else { this.state = 'stay'; this.timer = durOf(this.place, this.rg); this.act = actOf(this.place, this.rg); this.actPh = this.rg.rand(0, 6); }
@@ -106,6 +123,23 @@ export class Walker {
       walking = Math.hypot(tx - this.x, ty - this.y) > 3;   // הולכים אל הספסל או אל המים בצעדים, לא מחליקים
       this.timer -= dt;
       if (this.timer <= 0) this.go(chooseNext(this, this.rg), null);
+    }
+    // מרחב אישי: מתרחקים קצת מאנשים קרובים; מי שבא מולך עובר מימין, מי שהולך לפניך לאט — מאטים
+    if (this.alpha > 0 && this.act !== 'sit' && this.act !== 'swim') {
+      let px = 0, py = 0;
+      for (const o of dynamics) {
+        if (o === this || !(o.alpha > 0) || o.dogName) continue;
+        const dx = tx - o.x, dy = ty - o.y, d = Math.hypot(dx, dy);
+        if (d > 15 || d < 1e-3) continue;
+        const push = (15 - d) / 15;
+        px += dx / d * push * 7; py += dy / d * push * 4;
+        if (walking && o.hx !== undefined) {
+          const facing = this.hx * o.hx + this.hy * o.hy;
+          if (facing < -.3) { px += -this.hy * push * 9; py += this.hx * push * 6; }                       // נפגשים: כל אחד זז לימינו
+          else if (facing > .5 && (o.x - this.x) * this.hx + (o.y - this.y) * this.hy > 0) this.s -= this.speed * dt * push * .8;   // הולך לפני: מאטים
+        }
+      }
+      if ((px || py) && walkable(tx + px, ty + py, this.rules)) { tx += px; ty += py; }
     }
     const k = 1 - Math.exp(-dt * 7);
     const nx = this.x + (tx - this.x) * k, ny = this.y + (ty - this.y) * k;

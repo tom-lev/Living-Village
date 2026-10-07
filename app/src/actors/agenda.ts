@@ -2,7 +2,8 @@
    כל דמות בוחרת יעד לפי האופי שלה (ילד, מבוגר, מבוגר מאוד, עם כלב), לפי המרחק,
    ובלי לחזור על המקומות האחרונים. אחרי כמה יציאות היא חוזרת הביתה לנוח. */
 import { places, KINDS, spotOf, addPlace, type Place, type Pt } from '../world/places';
-import { nearestNode, frontNode, routeNodes, nodeAt, laneScale, deadEnds, trailSpots } from '../world/nav';
+import { nearestNode, nearNodes, routeNodes, nodeAt, laneScale, deadEnds, trailSpots, compIdOf } from '../world/nav';
+import { gridPath, nearestWalkable, type WalkRules } from '../world/walk';
 import { geo } from '../world/geometry';
 import { ctx } from '../world/context';
 import type { LocalRng } from '../core/rng';
@@ -45,31 +46,42 @@ export function routeAt(R: Route, s: number) {
   return { x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f, tx: (b[0] - a[0]) / d, ty: (b[1] - a[1]) / d, lane: lane[lo] + (lane[hi] - lane[lo]) * f };
 }
 
-/** מסלול מנקודה (או מדלת של מקום) אל מקום: יציאה לרחוב, הדרך הקצרה ברשת, ובסוף עד הדלת או נקודת העמידה */
-export function routeTo(from: Pt, fromPlace: Place | null, to: Place): Route {
+/** מוסיף נקודה בתחילת מסלול (למשל: יוצאים קודם מהמים אל החוף) */
+export function prependRoute(R: Route, p: Pt): Route { return mk([p, ...R.pts], [0, ...R.lane]); }
+
+/** הדרכים לחבר נקודה (דלת, נקודת עמידה, מיקום נוכחי) לרשת ההליכה, במסלול שמכבד את כללי העולם:
+ *  לא דרך מבנים, גדרות, מים או שדות, ומגרש פרטי רק לדייריו. כמה אפשרויות, מהקרובה לרחוקה */
+function connects(p: Pt, rules: WalkRules) {
+  const out: { node: number; path: number[][] }[] = [];
+  for (const n of [...new Set([...nearNodes(p[0], p[1], 420, 16), nearestNode(p[0], p[1])])]) {
+    const q = nodeAt(n); if (q.lane < 0) continue;
+    const path = gridPath(p, [q.x, q.y], rules, 120);
+    if (path) out.push({ node: n, path });
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
+/** מסלול אל מקום: מהמיקום (או מהדלת) לרשת ההליכה, הדרך הקצרה ברשת, ומשם עד הדלת או נקודת העמידה.
+ *  בוחרים צמתים בשני הקצוות ששייכים לאותו חלק של הרשת. מחזיר null אם אי אפשר להגיע בלי לעבור על הכללים */
+export function routeTo(from: Pt, to: Place, rules: WalkRules): Route | null {
   const pts: Pt[] = [], lane: number[] = [];
   const add = (p: Pt, l: number) => {
     const q = pts[pts.length - 1];
     if (q && Math.hypot(q[0] - p[0], q[1] - p[1]) < .5) return;
     pts.push(p); lane.push(l);
   };
-  add(from, 0);
-  const a = fromPlace?.door ? frontNode(from[0], from[1]) : nearestNode(from[0], from[1]), na = nodeAt(a);
-  if (fromPlace?.door) for (const p of doorPath(from, na, fromPlace).reverse()) add(p, 0);   // מהדלת אל הרחוב
-  const target = spotOf(to), b = to.door ? frontNode(target[0], target[1]) : nearestNode(target[0], target[1]), nb = nodeAt(b);
-  for (const i of routeNodes(a, b, LEISURE.has(to.kind) ? .55 : 1)) add([nodeAt(i).x, nodeAt(i).y], laneScale(i));
-  if (to.door) for (const p of doorPath(target, nb, to)) add(p, 0);                     // מהרחוב אל הדלת
-  add(target, 0);
+  const raw = spotOf(to), target = to.door ? raw : nearestWalkable(raw[0], raw[1], rules) || raw;   // יעד שנפל במים או בשדה: הנקודה המותרת הקרובה
+  const A = connects(from, rules), Bs = connects(target, rules);
+  let a = null, b = null;
+  for (const x of A) { b = Bs.find(y => compIdOf(y.node) === compIdOf(x.node)) || null; if (b) { a = x; break; } }
+  if (!a || !b) return null;
+  const mid = routeNodes(a.node, b.node, LEISURE.has(to.kind) ? .55 : 1);
+  if (!mid) return null;
+  for (const p of a.path) add(p, 0);
+  for (const i of mid) add([nodeAt(i).x, nodeAt(i).y], laneScale(i));
+  for (const p of b.path.slice().reverse()) add(p, 0);
   return mk(pts, lane);
-}
-
-/** הדרך מהרחוב אל הדלת (בלי הדלת עצמה). הדלתות בחזית (למטה); אם הרחוב מאחורי המבנה, עוקפים אותו מהצד */
-function doorPath(door: Pt, n: { x: number; y: number }, p: Place): Pt[] {
-  if (n.y < door[1] - 6) {
-    const side = n.x >= door[0] ? 1 : -1, sx = door[0] + side * 38;
-    return [[sx, n.y], [sx, door[1] + 6], [door[0], door[1] + 6]];
-  }
-  return p.vertical ? [[door[0], n.y]] : [];
 }
 
 /* ───────── יעדים לטיול ביער: קצוות של שבילים רחוק מהכפר ───────── */
@@ -89,11 +101,14 @@ function addHikes() {
     addPlace({ kind: 'stroll', name: nearRiver(n.x, n.y) ? 'the riverside path' : 'the meadow path', at: [n.x, n.y] });
   }
 }
-/** אפשר להגיע? (מקום רחוק מכל דרך או שביל, למשל אי בים, לא נכנס לבחירה) */
+/** אפשר להגיע? מקום נכנס לבחירה רק אם יש אליו מסלול מהכפר שמכבד את כללי העולם (נבדק פעם אחת לכל מקום) */
 const reachCache = new Map<number, boolean>();
 function reachable(p: Place) {
   let r = reachCache.get(p.id);
-  if (r === undefined) { const s = spotOf(p), n = nodeAt(nearestNode(s[0], s[1])); r = Math.hypot(n.x - s[0], n.y - s[1]) < 180; reachCache.set(p.id, r); }
+  if (r === undefined) {
+    const H = ctx.home, from = nearestWalkable((H.x0 + H.x1) / 2, (H.y0 + H.y1) / 2) || [(H.x0 + H.x1) / 2, (H.y0 + H.y1) / 2];
+    r = !!routeTo(from, p, { priv: -1 }); reachCache.set(p.id, r);
+  }
   return r;
 }
 
@@ -129,7 +144,9 @@ export function chooseNext(w: any, rg: LocalRng): Place {
   // כך כמות המקומות מכל סוג (למשל עשרות קצוות של שבילים) לא משנה כמה פעמים בוחרים בו
   const byKind = new Map<string, [Place, number][]>();
   for (const p of places) {
-    if (p.kind === 'home' || w.recent.includes(p.id) || !reachable(p) || (p.busy && p.busy !== w)) continue;   // ספסל תפוס: לא
+    if (p.kind === 'home' || w.recent.includes(p.id) || w.bad?.has(p.id) || !reachable(p) || (p.busy && p.busy !== w)) continue;   // ספסל תפוס: לא
+    // ילדים לא הולכים רחוק לבד: לא ליער, לים או לרכבת, ורק קרוב לבית
+    if (w.role === 'child' && (FAR_OK.has(p.kind) || (w.home?.door && Math.hypot(spotOf(p)[0] - w.home.door[0], spotOf(p)[1] - w.home.door[1]) > 700))) continue;
     let wt = like[p.kind] ?? 0; if (!wt) continue;
     const s = spotOf(p), d = Math.hypot(s[0] - here[0], s[1] - here[1]);
     let near = 1 / (1 + (d / (FAR_OK.has(p.kind) ? 3000 : 900)) ** 2);

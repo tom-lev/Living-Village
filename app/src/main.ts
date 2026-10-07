@@ -13,6 +13,9 @@ import { view } from './camera/view';
 import { applySharedNames } from './world/labels';
 import { initGrid, drawGrid } from './ui/grid';
 import { places } from './world/places';
+import * as walkMap from './world/walk';
+import { routeTo } from './actors/agenda';
+import { components, compOf } from './world/nav';
 
 const world = worldJson as unknown as WorldData;
 const stage = document.getElementById('stage');
@@ -132,6 +135,10 @@ async function boot() {
 
   // לבדיקות אוטומטיות
   (window as any).__places = places;   // לבדיקות: כל היעדים
+  (window as any).__walk = walkMap;     // לבדיקות: מפת המעבר
+  (window as any).__routeTo = routeTo;
+  (window as any).__navParts = components;
+  (window as any).__compOf = compOf;
   (window as any).__village = { cam: view.cam, walkers: actors.walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => view.fitK, items, tileStats, applyPalette, vstats };
 }
 boot();

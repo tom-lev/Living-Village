@@ -59,7 +59,7 @@ This file is the complete handoff. Work on this project so far happened in one l
     - Use these names when talking with the owner about fixes.
   - **Text inside the world is English only:** shop signs, the station and character names. A character's full name is the first name from the data plus the surname of their home: "Noa Fisher" lives in Fisher House. A home without a surname gives "Noa of Old Stone Farm". The surname follows renames (`surnameOf` in `actors/agenda.ts`). Children live with an adult, so they share the family name.
   - Bottom-left: ⤢ (home view), ❚❚/▶ (pause), # (block grid toggle), 🎨 (palette menu). There are no +/− buttons, at the owner's request; the keyboard + and − still zoom. Bottom-right: the zoom label.
-  - **Block grid (`ui/grid.ts`).** When the grid is on, tapping a cell selects it and a second tap selects a rectangle. The row and column numbers light up, and a card shows for example "Columns 18–22 · Rows 38–41 · 5×4 blocks". Tapping a character still follows it.
+  - **Block grid (`ui/grid.ts`).** When the grid is on, each tap adds or removes a cell, so the owner can select any shape. The selected rows and columns light up, and a card shows the count and span. **Copy** puts a description on the clipboard for the owner to send you, for example "Living Village area: 5 blocks, columns 18–23, rows 38–43" followed by one line per row. Tapping a character still follows it.
   - **Block grid (`ui/grid.ts`):** 1 block = 100 world units. Columns are numbered from 1 at the left and rows from 1 at the top. The owner uses it to say sizes and places, for example "a forest of 6×4 blocks at columns 20–26". The world is 34×64 blocks, and the village sits at about columns 14–21, rows 32–48.
   - The follow pill appears when you tap a character.
   - There is no title card (removed at their request).
@@ -160,6 +160,31 @@ Order:
   - **Trails (stage 3).** Leisure trips (hike, stroll, view, shore, sit, rest, animals, visit) cost 0.55 on trails, so they prefer park, river and forest paths. Park and riverside trail points near the village become 'stroll' places ("the riverside path", "the meadow path").
 - **LOD:** figures under 30 px tall update their pose every second frame, but move every frame.
 
+### World rules (`world/walk.ts`), applied to everyone
+- **Owner-approved rules:**
+  1. No walking on water. The only exception is swimming in the shallow `SWIM` zone by the beach.
+  2. No walking through buildings or roofs; buildings are entered only by the door.
+  3. No walking on fields, beds or gardens.
+  4. Fenced yards are entered only through their gate.
+  5. Private plots are open only to the people who live there.
+  6. Detour around trees, benches and lamps.
+  7. Cross the railway only where a road or trail crosses it.
+  8. No climbing the mountains, entering deep sea or walking on the frozen lake.
+  9. One person per bench.
+  10. Children do not go far alone: no hike, train or swim, and nothing more than 700 units from home.
+  11. People never enter the paddock (they feed animals from outside), and the dog never enters shops.
+  12. Everyone stays on the ground and fades in or out.
+  13. Calm movement: people keep personal space, step right when meeting someone, and slow down behind a slower walker.
+- **How the rules work:** a 6-unit grid with flags WATER, SWIM, DANGER, SOFT, SOLID and PATH, plus private plot ids.
+  - Objects mark it while they are built, by type. This happens in `scene/build.ts` (`markObject`, `markTerrain`, and the base of every static prop), plus `plot`, `shop`, `house`, `stoneFarm` and mountains, which mark themselves.
+  - Roads and trails are PATH except over water. Only bridges allow crossing water: `stoneBridge` and `footbridge` decks, plus **automatic bridges** that are drawn and marked wherever a road or trail crosses the river or the creek (`autoBridges`).
+  - Tunnel portals are linked as a tunnel. Walkers are hidden inside it (lane −1).
+- **Routing:** the walk network is repaired once against the grid.
+  - A node inside a hard obstacle is cut off. A link that crosses an obstacle is replaced by a detour, and the outside nodes around one obstacle are joined. Dangling trail ends are joined to the nearest line within 220 units.
+  - The first and last mile, from a door or spot to the network, is an A* path on the grid that obeys the walker's rules (`WalkRules {priv, swim}`).
+  - `routeTo` picks end nodes in the same network component. A place counts as reachable only if a real route from the village exists.
+- **Test hooks:** `window.__walk`, `__routeTo`, `__navParts`, `__compOf` and `__places`. In a 2-minute run, violations should stay well below 1% of samples. Leftovers are only edge touches.
+
 ### Code modules
 - `prefabs/` draw with `el(tag, attrs, parent)` from `core/util.ts`. Static drawing goes into `ctx.L.ground/roads/groundProps/water/props`; animated drawing into `waterFx/cloudShadows/pad/fx/actors/air/clouds`. **All animation is JS** through the `FX` list (`world/context.ts`) or actor `update()`. Never use CSS/SMIL animation.
 - **Culling (off-screen work is skipped).** `camera/view.ts` has `updateSeen()` (called once per frame in `actors.update`) and `inView(x, y, r)`.
@@ -220,6 +245,7 @@ Order:
   - `anchors` force a massif behind the tunnel portals, the waterfall and the cave. `gaps` sets how sparse a range is: the front range is 0.65.
   - **The valley** between the southern range (−1440) and the northern range (−2900) shows through two things. First, the snowy foothills at the base of the northern range. Second, a frozen **creek** along the valley floor. Bridges are added automatically wherever a road or trail crosses it, and the creek is stamped in the occupancy grid so trees avoid it.
   - Mountain shapes use local RNG. The old loop's global RNG calls are still consumed, so the forest keeps its exact place.
+- The old roundabout is now a **paved village square** (radius r+42) with walking room around the fountain.
 - **Village** (home 0..800 × 0..1700, "village on the river"):
   - The north road N0 (250, 30) comes from the station and crosses the north bridge to B (480, 485).
   - The **roundabout** R (560, 770), r 46, has a fountain. Shops sit on its corners: bakery (440, 718), flowers (688, 718), barber (690, 950), ice cream (445, 938).

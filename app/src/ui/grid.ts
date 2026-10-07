@@ -1,14 +1,15 @@
 /* רשת בלוקים מעל המפה (כפתור #): בלוק = 100 יחידות עולם, בערך הרוחב של שני בתים עם הגינות.
    עמודות ממוספרות מ-1 משמאל, שורות מ-1 מלמעלה, כדי שאפשר יהיה להגיד "יער מעמודה 20 עד 26, שורות 10 עד 14".
    נצבעת על קנבס נפרד מעל המפה, רק כשהמצלמה זזה.
-   סימון: לחיצה על משבצת מסמנת אותה (המספרים של השורה והעמודה מודגשים, וכרטיס למעלה מראה אותם);
-   לחיצה על משבצת שנייה מסמנת מלבן ביניהן; ✕ בכרטיס מנקה. */
+   סימון: כל לחיצה על משבצת מוסיפה או מורידה אותה (כמה שרוצים). המספרים של השורות והעמודות המסומנות
+   מודגשים, וכרטיס למעלה מראה כמה משבצות ואיפה, עם כפתור Copy שמעתיק תיאור מסודר לשלוח. ✕ מנקה. */
 import { ctx } from '../world/context';
 import { view } from '../camera/view';
 
 const BLOCK = 100, KEY = 'village-grid';
 let on = false, cv: HTMLCanvasElement, g: CanvasRenderingContext2D, last = '';
-let selA: number[] | null = null, selB: number[] | null = null, card: HTMLDivElement;
+const sel = new Set<string>();   // "עמודה,שורה" (מ-0)
+let card: HTMLDivElement;
 
 export function initGrid() {
   cv = document.createElement('canvas'); cv.id = 'gridC';
@@ -16,7 +17,7 @@ export function initGrid() {
   g = cv.getContext('2d')!;
   const btn = document.getElementById('grid') as HTMLButtonElement;
   const set = (v: boolean) => {
-    on = v; cv.hidden = !v; last = ''; if (!v) { selA = selB = null; showCard(); }
+    on = v; cv.hidden = !v; last = ''; if (!v) { sel.clear(); showCard(); }
     btn.setAttribute('aria-pressed', String(v)); btn.classList.toggle('on', v);
     try { localStorage.setItem(KEY, v ? '1' : ''); } catch {}
     drawGrid();
@@ -28,28 +29,33 @@ export function initGrid() {
   set(saved);
 }
 
-/** טווח הסימון: [עמודה ראשונה, אחרונה, שורה ראשונה, אחרונה] (מ-0) */
-function selRange() {
-  if (!selA) return null;
-  const b = selB || selA;
-  return [Math.min(selA[0], b[0]), Math.max(selA[0], b[0]), Math.min(selA[1], b[1]), Math.max(selA[1], b[1])];
+const cellsOf = () => [...sel].map(k => k.split(',').map(Number));
+/** תיאור הסימון: כמה משבצות, טווח העמודות והשורות, ולכל שורה אילו עמודות (רצפים מקובצים) */
+function describe() {
+  const c = cellsOf(); if (!c.length) return '';
+  const cols = c.map(x => x[0]), rows = c.map(x => x[1]);
+  const byRow = new Map<number, number[]>();
+  for (const [i, j] of c) (byRow.get(j) || byRow.set(j, []).get(j))!.push(i);
+  const runs = (a: number[]) => { a.sort((p, q) => p - q); const out: string[] = []; let s0 = a[0], p = a[0]; for (const v of [...a.slice(1), NaN]) { if (v === p + 1) { p = v; continue; } out.push(s0 === p ? `${s0 + 1}` : `${s0 + 1}–${p + 1}`); s0 = p = v; } return out.join(', '); };
+  const lines = [...byRow].sort((p, q) => p[0] - q[0]).map(([j, is]) => `row ${j + 1}: columns ${runs(is)}`);
+  return `Living Village area: ${c.length} block${c.length > 1 ? 's' : ''}, columns ${Math.min(...cols) + 1}–${Math.max(...cols) + 1}, rows ${Math.min(...rows) + 1}–${Math.max(...rows) + 1}.\n${lines.join('\n')}`;
 }
 function showCard() {
-  const r = selRange();
-  if (!r) { card.hidden = true; return; }
-  const cols = r[0] === r[1] ? `Column ${r[0] + 1}` : `Columns ${r[0] + 1}–${r[1] + 1}`, rows = r[2] === r[3] ? `Row ${r[2] + 1}` : `Rows ${r[2] + 1}–${r[3] + 1}`;
-  const size = r[0] === r[1] && r[2] === r[3] ? '' : ` · ${r[1] - r[0] + 1}×${r[3] - r[2] + 1} blocks`;
-  card.innerHTML = `<span>${cols} · ${rows}${size}</span><button aria-label="Clear selection">✕</button>`;
+  const c = cellsOf();
+  if (!c.length) { card.hidden = true; return; }
+  const cols = c.map(x => x[0]), rows = c.map(x => x[1]);
+  const span = (a: number[]) => Math.min(...a) === Math.max(...a) ? `${Math.min(...a) + 1}` : `${Math.min(...a) + 1}–${Math.max(...a) + 1}`;
+  card.innerHTML = `<span>${c.length} block${c.length > 1 ? 's' : ''} · columns ${span(cols)} · rows ${span(rows)}</span><button data-a="copy" aria-label="Copy the selection">Copy</button><button data-a="clear" aria-label="Clear selection">✕</button>`;
   card.hidden = false;
-  (card.querySelector('button') as HTMLButtonElement).onclick = () => { selA = selB = null; showCard(); last = ''; drawGrid(); };
+  (card.querySelector('[data-a=clear]') as HTMLButtonElement).onclick = () => { sel.clear(); showCard(); last = ''; drawGrid(); };
+  const cp = card.querySelector('[data-a=copy]') as HTMLButtonElement;
+  cp.onclick = () => { const t = describe(); navigator.clipboard?.writeText(t).then(() => { cp.textContent = 'Copied'; setTimeout(() => cp.textContent = 'Copy', 1500); }, () => prompt('Copy this:', t)); };
 }
-/** לחיצה על המפה כשהרשת פתוחה: מסמנים משבצת (או מלבן). מחזיר true אם הלחיצה טופלה */
+/** לחיצה על המפה כשהרשת פתוחה: מוסיפים או מורידים משבצת. מחזיר true אם הלחיצה טופלה */
 export function gridTap(sx: number, sy: number) {
   if (!on) return false;
-  const { cam } = view, { B } = ctx, i = Math.floor(((sx - cam.x) / cam.k - B.x0) / BLOCK), j = Math.floor(((sy - cam.y) / cam.k - B.y0) / BLOCK);
-  if (!selA || selB) { selA = [i, j]; selB = null; }      // סימון חדש
-  else if (selA[0] === i && selA[1] === j) selA = null;     // אותה משבצת שוב: מבטלים
-  else selB = [i, j];                                       // משבצת שנייה: מלבן
+  const { cam } = view, { B } = ctx, i = Math.floor(((sx - cam.x) / cam.k - B.x0) / BLOCK), j = Math.floor(((sy - cam.y) / cam.k - B.y0) / BLOCK), k = `${i},${j}`;
+  if (sel.has(k)) sel.delete(k); else sel.add(k);
   showCard(); last = ''; drawGrid();
   return true;
 }
@@ -75,13 +81,11 @@ export function drawGrid() {
     g.strokeStyle = j % 5 ? 'rgba(40,40,60,.22)' : 'rgba(40,40,60,.45)';
     g.beginPath(); g.moveTo(Math.max(0, sx(0)), y); g.lineTo(Math.min(vw, sx(nx)), y); g.stroke();
   }
-  const r = selRange();
-  if (r) {
-    const x0 = sx(r[0]), x1 = sx(r[1] + 1), y0 = sy(r[2]), y1 = sy(r[3] + 1);
-    g.fillStyle = 'rgba(217,112,92,.18)'; g.fillRect(x0, y0, x1 - x0, y1 - y0);
-    g.strokeStyle = 'rgba(200,80,60,.9)'; g.lineWidth = 2; g.strokeRect(x0, y0, x1 - x0, y1 - y0);
-    // פסים עדינים מהסימון אל המספרים בקצוות, כדי שיהיה קל לראות לאיזו שורה ועמודה הוא שייך
-    g.fillStyle = 'rgba(217,112,92,.07)'; g.fillRect(x0, 0, x1 - x0, y0); g.fillRect(x1, y0, vw - x1, y1 - y0);
+  const cells = cellsOf(), hotCols = new Set(cells.map(c => c[0])), hotRows = new Set(cells.map(c => c[1]));
+  for (const [i, j] of cells) {
+    const x0 = sx(i), x1 = sx(i + 1), y0 = sy(j), y1 = sy(j + 1);
+    g.fillStyle = 'rgba(217,112,92,.22)'; g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    g.strokeStyle = 'rgba(200,80,60,.9)'; g.lineWidth = 1.5; g.strokeRect(x0 + .75, y0 + .75, x1 - x0 - 1.5, y1 - y0 - 1.5);
   }
   // מספרים: עמודות לאורך הקצה העליון, שורות לאורך הקצה הימני (משמאל יש כפתורים)
   const lab = px >= 22 ? 1 : px >= 5 ? 5 : 10;
@@ -92,7 +96,7 @@ export function drawGrid() {
     g.fillStyle = hot ? '#d9705c' : 'rgba(255,252,244,.85)'; g.beginPath(); g.roundRect(x - w / 2, y - 8, w, 16, 8); g.fill();
     g.fillStyle = hot ? '#ffffff' : '#3b2f25'; g.fillText(t, x, y + .5);
   };
-  const hotC = (i: number) => !!r && i >= r[0] && i <= r[1], hotR = (j: number) => !!r && j >= r[2] && j <= r[3];
+  const hotC = (i: number) => hotCols.has(i), hotR = (j: number) => hotRows.has(j);
   for (let i = 0; i < nx; i++) { if ((i + 1) % lab && lab > 1 && !hotC(i)) continue; const x = (sx(i) + sx(i + 1)) / 2; if (x > 10 && x < vw - 10) tag(String(i + 1), x, 14, hotC(i)); }
   for (let j = 0; j < ny; j++) { if ((j + 1) % lab && lab > 1 && !hotR(j)) continue; const y = (sy(j) + sy(j + 1)) / 2; if (y > 30 && y < vh - 50) tag(String(j + 1), vw - 18, y, hotR(j)); }
 }

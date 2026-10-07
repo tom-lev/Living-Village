@@ -4,6 +4,7 @@
 import { el, n2, circ, shade, ST } from '../core/util';
 import { rand, rngAt, type LocalRng } from '../core/rng';
 import { ctx, prop, block, smokeFx } from '../world/context';
+import { markRect, SOLID } from '../world/walk';
 
 export type Pt = number[];
 export const P2 = (p: Pt) => `${n2(p[0])},${n2(p[1])}`;
@@ -71,7 +72,7 @@ export function roofTexture(g: any, P: Pt[], kind: string, roof: string, top: nu
 }
 
 /* ───────── מרקם קיר ───────── */
-export function wallTexture(g: any, x0: number, y0: number, w: number, h: number, kind: string, wall: string, rg: LocalRng) {
+export function wallTexture(g: any, x0: number, y0: number, w: number, h: number, kind: string, wall: string, rg: LocalRng, lintel?: number) {
   const ln = shade(wall, -.13), x1 = x0 + w, y1 = y0 + h;
   let d = '';
   if (kind === 'siding') { for (let yy = y0 + 4; yy < y1 - 1; yy += 4) d += `M${n2(x0 + .8)},${n2(yy)}H${n2(x1 - .8)}`; }
@@ -93,7 +94,7 @@ export function wallTexture(g: any, x0: number, y0: number, w: number, h: number
     return;
   } else if (kind === 'timber') {
     // קורות עץ כהות על טיח בהיר
-    const beam = '#6b4a2f', mid = y0 + h * .45;
+    const beam = '#6b4a2f', mid = lintel ?? y0 + h * .45;   // הקורה האופקית: מעל הדלת
     d = `M${n2(x0 + 1.5)},${n2(y0)}V${n2(y1)}M${n2(x1 - 1.5)},${n2(y0)}V${n2(y1)}M${n2(x0)},${n2(mid)}H${n2(x1)}M${n2(x0)},${n2(y0 + 1.2)}H${n2(x1)}`;
     const third = w / 3;
     d += `M${n2(x0 + third)},${n2(y0)}V${n2(mid)}M${n2(x1 - third)},${n2(y0)}V${n2(mid)}`;
@@ -169,7 +170,7 @@ export function house(o: any) {
   const wall = shade(wall0, rg.rand(-.05, .03));
   let roof = snow ? roof0 : shade(roof0, rg.rand(-.08, .06));
   const twoStorey = !snow && !logs && w >= 50 && rg.chance(.22);
-  const h = o.h * (twoStorey ? 1.42 : rg.rand(.94, 1.08));
+  const h = o.h * (twoStorey ? 1.42 : rg.rand(.94, 1.08)) * 1.15;   // פי 1.15: דלת בגובה אדם לא ממלאת את כל הקיר
   let rh = (o.rh ?? w * .55) * rg.rand(.88, 1.12);
   const roofType: string = o.roofType ?? (snow ? rg.pick(['gable', 'steep', 'steep']) : rg.pick(['gable', 'gable', 'steep', 'hip', 'saltbox', 'gambrel', 'cross', 'hip']));
   let roofTex: string = snow ? 'plain' : rg.pick(['tiles', 'tiles', 'shingles', 'slate', 'thatch', 'plain']);
@@ -227,7 +228,8 @@ export function house(o: any) {
   }
   // קיר
   el('rect', { x: x0, y: wy, width: w, height: h, fill: wall, ...ST }, g);
-  wallTexture(g, x0, wy, w, h, wallTex, wall, rg);
+  const dh = Math.min(h - 8, 33), dw = Math.max(13, dh * .46);
+  wallTexture(g, x0, wy, w, h, wallTex, wall, rg, y - dh - 3);
   el('rect', { x: x0, y: wy, width: w * .12, height: h, fill: '#000', opacity: .04 }, g);
   if (twoStorey) el('path', { d: `M${n2(x0)},${n2(y - h * .5)}h${w}`, stroke: shade(wall, -.15), 'stroke-width': 1.2 }, g);
   // גג
@@ -275,7 +277,7 @@ export function house(o: any) {
 
   // דלת: תמיד במרכז (השביל במגרש מגיע אליה)
   // דלת בגובה אדם (אנשים: 31-37 יחידות), כמו שהבעלים ביקש
-  const dh = Math.min(h - 4, 34) * rg.rand(.96, 1.02), dw = Math.max(13, dh * .47) * rg.rand(.94, 1.06);
+  rg.rand(0, 1); rg.rand(0, 1);   // היו כאן מספרים לגודל הדלת; נשארים כדי שהבחירות שאחריהם (גגון, חלונות) לא ישתנו
   if (rg.chance(.3)) {   // מדרגה
     el('rect', { x: x - dw / 2 - 2.5, y: y - 1.5, width: dw + 5, height: 3, rx: 1, fill: '#cfc6b8', stroke: '#b3a999', 'stroke-width': .6 }, g);
   }
@@ -297,9 +299,18 @@ export function house(o: any) {
   const rowY = twoStorey ? [y - h * .28, y - h * .76] : [y - h * .6];
   rowY.forEach((wy2, row) => {
     const xs = row === 0 ? wins : w > 54 ? [x - w * .28, x, x + w * .28] : [x - w * .26, x + w * .26];   // קומה שנייה: שניים או שלושה חלונות
-    for (const wx of xs) {
-      const shut = shutter && ww < 12 && win !== 4 ? shutter : null;
-      windowAt(g, wx, wy2, row ? ww * .85 : ww, row ? wh * .85 : wh, winStyle, frame, shut, row ? null : box);
+    for (let wx of xs) {
+      const W1 = row ? ww * .85 : ww;
+      let shut = shutter && ww < 12 && win !== 4 ? shutter : null;
+      if (!row) {
+        // בקומת הכניסה: מרחק מהדלת (כולל תריסים); אם אין מקום, בלי תריסים; ואם עדיין אין, בלי החלון
+        const side = wx >= x ? 1 : -1, sw = (s: any) => s ? W1 * .42 + 1 : 0;
+        const need = (s: any) => dw / 2 + W1 / 2 + sw(s) + 3, room = (s: any) => w / 2 - W1 / 2 - sw(s) - 2;
+        if (Math.abs(wx - x) < need(shut)) wx = x + side * need(shut);
+        if (Math.abs(wx - x) > room(shut)) { shut = null; wx = x + side * Math.max(need(null), Math.min(Math.abs(wx - x), room(null))); }
+        if (Math.abs(wx - x) > room(null) + .5) continue;
+      }
+      windowAt(g, wx, wy2, W1, row ? wh * .85 : wh, winStyle, frame, shut, row ? null : box);
     }
   });
 
@@ -324,5 +335,6 @@ export function house(o: any) {
   if (chimney && smoke && smokeAt) chimneySmoke(smokeAt[0], smokeAt[1], Math.max(.7, w / 90));
   const ax0 = annex < 0 ? w * .36 : 0, ax1 = annex > 0 ? w * .36 : 0;
   block(x0 - ax0 - 14, roofTop - 10, x1 + ax1 + 14, y + 16);
+  markRect(x0 - ax0 + 2, y - 30, x1 + ax1 - 2, y - 3, SOLID);   // מפת מעבר: גוף הבית והאגף בלבד (לא העציצים והקיסוס שבצד)
   return g;
 }
