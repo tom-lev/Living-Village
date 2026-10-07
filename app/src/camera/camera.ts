@@ -6,6 +6,7 @@ import { ctx } from '../world/context';
 import { requestStatic, resizeCanvas } from '../render/tiles';
 import { view } from './view';
 import { pickLabel, openRename } from '../world/labels';
+import { gridTap } from '../ui/grid';
 
 const { cam } = view;
 let stage: HTMLElement, dWrap: HTMLElement, zoomLbl: HTMLElement, followEl: HTMLElement;
@@ -168,6 +169,7 @@ export function initCamera(followables: any[]) {
       stage.classList.remove('drag');
       if (down && !down.moved && down.f !== null) startFollow(followables[down.f]);
       else if (down && !down.moved && down.label) openRename(down.label);   // לחיצה על שם של מקום: שינוי השם
+      else if (down && !down.moved) { const r = stage.getBoundingClientRect(); gridTap(down.x - r.left, down.y - r.top); }   // רשת פתוחה: סימון משבצות
       down = null;
       endGesture();
     }

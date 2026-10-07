@@ -3,10 +3,11 @@ import { el, n2, P, clamp, shade, show } from '../core/util';
 import { inView, view } from '../camera/view';
 import { R, rngAt } from '../core/rng';
 import { KINDS, type Place } from '../world/places';
-import { roleOf, routeTo, routeAt, chooseNext, durOf, surnameOf } from './agenda';
+import { roleOf, routeTo, routeAt, chooseNext, durOf, surnameOf, actOf } from './agenda';
+import { ripple } from '../world/context';
 import { ctx } from '../world/context';
 import type { Look } from '../world/types';
-import { Figure, PR, walkPose, sitPose, type View } from './figure';
+import { Figure, PR, walkPose, sitPose, actPose, type View } from './figure';
 
 /* כל מה שזז ונמיין לפי עומק, וכל מה שאפשר ללחוץ עליו כדי לעקוב */
 export const dynamics: any[] = [];
@@ -52,6 +53,9 @@ export class Walker {
   }
   /** יוצאים ליעד: מסלול מהמקום הנוכחי (מהדלת, אם יוצאים ממבנה) */
   go(to: Place, from: Place | null) {
+    if (this.place?.busy === this) this.place.busy = null;   // קמים מהספסל
+    if (to.kind === 'sit') to.busy = this;                   // שומרים את הספסל
+    this.act = null; this.fig.setSwim(false);
     this.route = routeTo(from?.door ? from.door : [this.x, this.y], from?.door ? from : null, to);
     this.place = to; this.s = 0; this.state = 'walk'; this.sf = .2;
     this.recent.push(to.id); if (this.recent.length > 4) this.recent.shift();
@@ -76,7 +80,7 @@ export class Walker {
       tx = p.x - p.ty * off; ty = p.y + p.tx * off; walking = true;
       if (left < .5) {
         if (KINDS[this.place.kind].enter) this.state = 'enter';
-        else { this.state = 'stay'; this.timer = durOf(this.place, this.rg); }
+        else { this.state = 'stay'; this.timer = durOf(this.place, this.rg); this.act = actOf(this.place, this.rg); this.actPh = this.rg.rand(0, 6); }
       }
     } else if (this.state === 'enter') {
       this.alpha = Math.max(0, this.alpha - dt / .8);
@@ -92,6 +96,14 @@ export class Walker {
       this.alpha = Math.min(1, this.alpha + dt / .8);
       if (this.alpha >= 1) this.state = 'walk';
     } else if (this.state === 'stay') {
+      if (this.act === 'sit' && this.place.seat) { tx = this.place.seat[0]; ty = this.place.seat[1]; }
+      if (this.act === 'swim') {
+        // נכנסים למים ושוחים לאט לאורך החוף; אדווה קטנה מדי פעם
+        const a = this.place.at, sea = ctx.world.terrain.sea.y;
+        tx = a[0] + Math.sin(t * .12 + this.actPh) * 45; ty = sea + 34 + Math.sin(t * .2 + this.actPh) * 8;
+        if (this.y > sea + 6 && (this.rip = (this.rip || 0) - dt) <= 0) { this.rip = 1.5; ripple(this.x, this.y, 9, 3); }
+      }
+      walking = Math.hypot(tx - this.x, ty - this.y) > 3;   // הולכים אל הספסל או אל המים בצעדים, לא מחליקים
       this.timer -= dt;
       if (this.timer <= 0) this.go(chooseNext(this, this.rg), null);
     }
@@ -121,7 +133,16 @@ export class Walker {
     // דמות קטנה על המסך (פחות מ-30 פיקסלים): התנוחה מתעדכנת בכל פריים שני, וההזזה בכל פריים. ההבדל לא נראה, והחיסכון כפול
     this.tick = (this.tick || 0) + 1;
     if (this.look.h * view.cam.k < 30 && this.alpha >= 1 && (this.tick & 1)) { this.fig.move(this.x, this.y); return; }
-    this.fig.render(walkPose(this.look, this.view, this.phase, this.amp, t), this.x, this.y, this.flip, this.alpha);
+    const swimming = this.act === 'swim' && this.y > ctx.world.terrain.sea.y + 6;
+    this.fig.setSwim(swimming);
+    const settled = this.state === 'stay' && ds < .08;   // הגיעו למקום ולא זזים: תנוחת הפעילות
+    const pose = swimming ? actPose(this.look, 'swim', t, this.actPh)
+      : settled && this.act === 'sit' ? sitPose(this.look, .3 * this.look.h, [[.2 * this.look.h, -.33 * this.look.h], [.17 * this.look.h, -.32 * this.look.h]], t)
+      : settled && this.act ? actPose(this.look, this.act, t, this.actPh)
+      : walkPose(this.look, this.view, this.phase, this.amp, t);
+    // תנוחות פעילות מצוירות מהצד: הכיוון מתייצב על שמאל או ימין (אחרי הליכה ישר למטה הוא יכול להישאר באמצע ולמעוך את הדמות)
+    if (pose.view === 'side' && !(this.state === 'walk' && this.view === 'side')) { const sgn = this.flip >= 0 ? 1 : -1; this.flip += (sgn - this.flip) * Math.min(1, dt * 8 + .02); }
+    this.fig.render(pose, this.x, this.y, this.flip, this.alpha);
   }
   /** נקודה על המסלול שעבר, back יחידות אחורה (לכלב) */
   pointBack(back: number) {

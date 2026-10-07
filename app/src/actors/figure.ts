@@ -101,6 +101,58 @@ export function sitPose(look: Look, seatH: number, hands: number[][], t: number)
   return out;
 }
 
+/** תנוחות של פעילות במקום (מבט מהצד). act: look (עמידה ומבט, לפעמים יד מעל העיניים), work (כפיפה וניכוש),
+ *  feed (זריקת אוכל לברווזים/סוסים), play (קפיצות קטנות), swim (רק ראש וידיים שחותרות). ph: היסט אישי, כדי שלא יזוזו יחד */
+export function actPose(look: Look, act: string, t: number, ph: number): Pose {
+  const h = look.h, gap = PR.gap * h, Lt = PR.thigh * h, Ls = PR.shin * h, T = PR.torso * h;
+  const out: Pose = { view: 'side', h, legs: [], arms: [] };
+  const breath = Math.sin(t * 1.6 + ph) * .008 * h;
+  if (act === 'swim') {
+    // ראש מעל המים וידיים שחותרות לסירוגין (את השאר השלד מסתיר במצב שחייה)
+    const sh = [0, -.07 * h];
+    out.torso = [[0, 0], sh]; out.head = [.02 * h, -.17 * h + Math.sin(t * 1.8 + ph) * .01 * h];
+    for (let k = 0; k < 2; k++) {
+      const q = t * 2.2 + ph + k * Math.PI, hand = [Math.cos(q) * .24 * h, -.06 * h + Math.sin(q) * .07 * h];
+      out.arms.push({ sh, elb: ik(sh, hand, PR.ua * h, PR.fa * h, -1), hand });
+    }
+    out.legs = [0, 1].map(() => ({ hip: [0, 0], knee: [0, 0], ank: [0, 0], heel: [0, 0], toe: [.01, 0] }));
+    return out;
+  }
+  let crouch = 0, lean = .04, lift = 0;
+  if (act === 'work') { crouch = .1 * h; lean = .78 + .07 * Math.sin(t * 2.2 + ph); }
+  if (act === 'play') lift = Math.max(0, Math.sin(t * 4.6 + ph)) * .09 * h;
+  const hip = [-.03 * h * lean, -(.985 * (Lt + Ls) - crouch + gap) - lift];
+  for (const ax of [.05 * h, -.04 * h]) {
+    const ank = [ax, -gap - lift], knee = ik(hip, ank, Lt, Ls, 1);
+    out.legs.push({ hip, knee, ank, heel: [ank[0] - .02 * h, ank[1] + gap * .6], toe: [ank[0] + .075 * h, ank[1] + gap * .6] });
+  }
+  const sh = [hip[0] + Math.sin(lean) * T, hip[1] - Math.cos(lean) * T + breath];
+  out.torso = [hip, sh];
+  out.head = [sh[0] + Math.sin(lean) * .12 * h + .01 * h, sh[1] - Math.cos(lean) * .115 * h];
+  const rest = (dx: number) => [sh[0] + dx, sh[1] + .29 * h];
+  let hands: number[][];
+  if (act === 'work') {
+    const w = Math.sin(t * 2.2 + ph) * .04 * h;
+    hands = [[hip[0] + .36 * h + w, -gap - .04 * h], [hip[0] + .3 * h - w, -gap - .03 * h]];
+  } else if (act === 'feed') {
+    const toss = Math.max(0, Math.sin(t * .9 + ph)) ** 6;
+    hands = [[sh[0] + .17 * h + toss * .14 * h, sh[1] + .14 * h - toss * .2 * h], rest(-.02 * h)];
+  } else if (act === 'play') {
+    const u = Math.sin(t * 4.6 + ph);
+    hands = [[sh[0] + .08 * h, sh[1] - .2 * h - .08 * h * u], [sh[0] - .05 * h, sh[1] - .18 * h + .08 * h * u]];
+  } else {
+    // מבט: לפעמים יד מעל העיניים, כמו מי שמסתכל רחוק
+    const shade = Math.sin(t * .35 + ph) > .55;
+    hands = [shade ? [out.head[0] + .07 * h, out.head[1] + .03 * h] : rest(.03 * h), rest(-.02 * h)];
+  }
+  for (const hd of hands) out.arms.push({ sh, elb: ik(sh, hd, PR.ua * h, PR.fa * h, -1), hand: hd });
+  if (look.skirt) {
+    const ky = Math.max(out.legs[0].knee[1], out.legs[1].knee[1]) - .02 * h;
+    out.skirt = [[hip[0] - .07 * h, hip[1] - .07 * h], [hip[0] + .08 * h, hip[1] - .07 * h], [Math.max(out.legs[0].knee[0], out.legs[1].knee[0]) + .05 * h, ky], [Math.min(out.legs[0].knee[0], out.legs[1].knee[0]) - .06 * h, ky]];
+  }
+  return out;
+}
+
 /* שלד: כל קטע גפה הוא "קפסולה" שנבנית פעם אחת לאורכה, ובכל פריים רק מזיזים ומסובבים אותה.
    בכרטיס הגרפי זה כמעט חינם (מטריצה בלבד); ב-SVG זה transform אחד במקום מסלול חדש */
 const L0 = new WeakMap<any, number>();
@@ -179,6 +231,11 @@ export class Figure {
     }
     this.hairB.setAttribute('d', hb); this.hairF.setAttribute('d', hf); this.face.setAttribute('d', face);
   }
+  /** מצב שחייה: רואים רק ראש וידיים */
+  setSwim(on: boolean) {
+    if (this.swim === on) return; this.swim = on;
+    for (const e of [this.shadow, this.legA1, this.legA2, this.legB1, this.legB2, this.shoeA, this.shoeB, this.hips, this.torso, this.skirt]) if (e) e.setAttribute('display', on ? 'none' : 'inline');
+  }
   render(p: Pose, x: number, y: number, flip: number, opacity?: number) {
     const { look } = this, h = look.h;
     place(this.g, x, y);
@@ -204,7 +261,7 @@ export class Figure {
     // פלג הגוף והמותניים נמתחים יחד לאורך הקו מהירך לכתף
     const [hp0, sp0] = p.torso, tl = Math.hypot(sp0[0] - hp0[0], sp0[1] - hp0[1]), ta = Math.atan2(sp0[1] - hp0[1], sp0[0] - hp0[0]), T0 = PR.torso * h;
     place(this.torso, hp0[0], hp0[1], ta, tl / T0); place(this.hips, hp0[0], hp0[1], ta, tl / T0);
-    if (this.skirt) this.skirt.setAttribute('d', 'M' + p.skirt.map(P).join('L') + 'Z');
+    if (this.skirt && p.skirt) this.skirt.setAttribute('d', 'M' + p.skirt.map(P).join('L') + 'Z');
     const [cx, cy] = p.head;
     for (const e of [this.hairB, this.head, this.face, this.hairF]) place(e, cx, cy);
     // נקודת היד המחזיקה, בקואורדינטות עולם (לבלון ולרצועה)

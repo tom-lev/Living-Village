@@ -59,6 +59,7 @@ This file is the complete handoff. Work on this project so far happened in one l
     - Use these names when talking with the owner about fixes.
   - **Text inside the world is English only:** shop signs, the station and character names. A character's full name is the first name from the data plus the surname of their home: "Noa Fisher" lives in Fisher House. A home without a surname gives "Noa of Old Stone Farm". The surname follows renames (`surnameOf` in `actors/agenda.ts`). Children live with an adult, so they share the family name.
   - Bottom-left: ⤢ (home view), ❚❚/▶ (pause), # (block grid toggle), 🎨 (palette menu). There are no +/− buttons, at the owner's request; the keyboard + and − still zoom. Bottom-right: the zoom label.
+  - **Block grid (`ui/grid.ts`).** When the grid is on, tapping a cell selects it and a second tap selects a rectangle. The row and column numbers light up, and a card shows for example "Columns 18–22 · Rows 38–41 · 5×4 blocks". Tapping a character still follows it.
   - **Block grid (`ui/grid.ts`):** 1 block = 100 world units. Columns are numbered from 1 at the left and rows from 1 at the top. The owner uses it to say sizes and places, for example "a forest of 6×4 blocks at columns 20–26". The world is 34×64 blocks, and the village sits at about columns 14–21, rows 32–48.
   - The follow pill appears when you tap a character.
   - There is no title card (removed at their request).
@@ -148,7 +149,15 @@ Order:
 - **Walker states:** walk → enter → inside → exit, or walk → stay. 18 walkers.
   - The dog waits outside the door while its owner is in a shop, and goes in at home.
   - The follow pill shows live status, for example "Following Noa Fisher · on the way to Bakery".
-  - Stage 2 (poses for work, sitting, swimming and sport) and stage 3 (more trail use) are in `TODO.md`.
+  - **Activities (stage 2).** At open places `actOf()` picks an act. The figure then uses `actPose` in `figure.ts`, which draws the side view with feet on the ground through IK:
+    - look: standing, sometimes a hand shading the eyes;
+    - work: bending and weeding;
+    - feed: tossing food to ducks or horses;
+    - play: small hops;
+    - swim: the walker wades in, then `setSwim` hides legs, body and shadow so only head and arms show, with ripples;
+    - sit: benches are 'sit' places with a seat, one person per bench (`busy`). Moshe's bench is always taken.
+  - Side poses snap the facing to ±1; after walking straight down it can sit near 0, which squashes the figure.
+  - **Trails (stage 3).** Leisure trips (hike, stroll, view, shore, sit, rest, animals, visit) cost 0.55 on trails, so they prefer park, river and forest paths. Park and riverside trail points near the village become 'stroll' places ("the riverside path", "the meadow path").
 - **LOD:** figures under 30 px tall update their pose every second frame, but move every frame.
 
 ### Code modules

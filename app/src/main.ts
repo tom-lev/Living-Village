@@ -12,6 +12,7 @@ import { initCamera, cameraTick, loopState, zoomAt, animateTo } from './camera/c
 import { view } from './camera/view';
 import { applySharedNames } from './world/labels';
 import { initGrid, drawGrid } from './ui/grid';
+import { places } from './world/places';
 
 const world = worldJson as unknown as WorldData;
 const stage = document.getElementById('stage');
@@ -130,6 +131,7 @@ async function boot() {
   applySharedNames();   // השמות ששונו מהדפדפן (names.json המשותף)
 
   // לבדיקות אוטומטיות
+  (window as any).__places = places;   // לבדיקות: כל היעדים
   (window as any).__village = { cam: view.cam, walkers: actors.walkers, followables, zoomAt, animateTo, startFollow, setRunning, fitK: () => view.fitK, items, tileStats, applyPalette, vstats };
 }
 boot();

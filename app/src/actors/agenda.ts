@@ -2,20 +2,23 @@
    כל דמות בוחרת יעד לפי האופי שלה (ילד, מבוגר, מבוגר מאוד, עם כלב), לפי המרחק,
    ובלי לחזור על המקומות האחרונים. אחרי כמה יציאות היא חוזרת הביתה לנוח. */
 import { places, KINDS, spotOf, addPlace, type Place, type Pt } from '../world/places';
-import { nearestNode, frontNode, routeNodes, nodeAt, laneScale, deadEnds } from '../world/nav';
+import { nearestNode, frontNode, routeNodes, nodeAt, laneScale, deadEnds, trailSpots } from '../world/nav';
+import { geo } from '../world/geometry';
 import { ctx } from '../world/context';
 import type { LocalRng } from '../core/rng';
 import { currentName } from '../world/labels';
 
 /* כמה כל אופי אוהב כל סוג מקום (בית מטופל לחוד: רק הבית של הדמות) */
 const LIKES: Record<string, Record<string, number>> = {
-  adult: { shop: 3, work: 2.5, workIn: 1.2, church: .8, train: .7, swim: .8, hike: 1.2, view: 1, shore: 1.2, stroll: 1.2, animals: .8, rest: .8, visit: .8, play: .1 },
-  elder: { shop: 3, church: 2.2, stroll: 2, shore: 1.5, view: .8, rest: 1.6, animals: 1, visit: 1, work: .8, hike: .3, swim: .2, train: .4 },
-  child: { play: 4, shop: 1.5, animals: 2.2, shore: 1.5, swim: 1.2, stroll: 1, visit: .7, hike: .4, rest: .5 },
-  dog:   { hike: 3, shore: 2, stroll: 2, animals: 1, shop: 1, view: 1.5, visit: .8, swim: .3, rest: .6 },
+  adult: { sit: .6, shop: 3, work: 2.5, workIn: 1.2, church: .8, train: .7, swim: .8, hike: 1.2, view: 1, shore: 1.2, stroll: 1.2, animals: .8, rest: .8, visit: .8, play: .1 },
+  elder: { sit: 2.2, shop: 3, church: 2.2, stroll: 2, shore: 1.5, view: .8, rest: 1.6, animals: 1, visit: 1, work: .8, hike: .3, swim: .2, train: .4 },
+  child: { sit: .2, play: 4, shop: 1.5, animals: 2.2, shore: 1.5, swim: 1.2, stroll: 1, visit: .7, hike: .4, rest: .5 },
+  dog:   { sit: .8, hike: 3, shore: 2, stroll: 2, animals: 1, shop: 1, view: 1.5, visit: .8, swim: .3, rest: .6 },
 };
 /* יעדים שהולכים אליהם רחוק בכוונה (טיול, רכבת, ים): המרחק כמעט לא מרתיע */
 const FAR_OK = new Set(['hike', 'train', 'swim']);
+/* בדרך לפנאי מעדיפים שבילים (פארק, נהר, יער) על פני הדרכים, גם אם זה קצת יותר ארוך */
+const LEISURE = new Set(['hike', 'stroll', 'view', 'shore', 'sit', 'rest', 'animals', 'visit']);
 
 /** האופי נגזר מהגיל שבנתונים (age): ילד מתחת ל-13, מבוגר מ-65. מי שהולך עם כלב אוהב טיולים ומים */
 export function roleOf(look: any): string {
@@ -54,7 +57,7 @@ export function routeTo(from: Pt, fromPlace: Place | null, to: Place): Route {
   const a = fromPlace?.door ? frontNode(from[0], from[1]) : nearestNode(from[0], from[1]), na = nodeAt(a);
   if (fromPlace?.door) for (const p of doorPath(from, na, fromPlace).reverse()) add(p, 0);   // מהדלת אל הרחוב
   const target = spotOf(to), b = to.door ? frontNode(target[0], target[1]) : nearestNode(target[0], target[1]), nb = nodeAt(b);
-  for (const i of routeNodes(a, b)) add([nodeAt(i).x, nodeAt(i).y], laneScale(i));
+  for (const i of routeNodes(a, b, LEISURE.has(to.kind) ? .55 : 1)) add([nodeAt(i).x, nodeAt(i).y], laneScale(i));
   if (to.door) for (const p of doorPath(target, nb, to)) add(p, 0);                     // מהרחוב אל הדלת
   add(target, 0);
   return mk(pts, lane);
@@ -79,6 +82,12 @@ function addHikes() {
     if (n.x > H.x0 - 200 && n.x < H.x1 + 200 && n.y > H.y0 - 200 && n.y < H.y1 + 200) continue;   // לא בתוך הכפר
     addPlace({ kind: 'hike', name: 'the forest trail', at: [n.x, n.y] });
   }
+  // טיול רגלי על שבילי הפארק ולאורך הנהר, ליד הכפר
+  const nearRiver = (x: number, y: number) => geo.RIVER_SAMPLES.some(p => Math.hypot(p[0] - x, p[1] - y) < 90);
+  for (const i of trailSpots(H.x0 - 300, H.y0 - 200, H.x1 + 300, H.y1 + 300, 260)) {
+    const n = nodeAt(i);
+    addPlace({ kind: 'stroll', name: nearRiver(n.x, n.y) ? 'the riverside path' : 'the meadow path', at: [n.x, n.y] });
+  }
 }
 /** אפשר להגיע? (מקום רחוק מכל דרך או שביל, למשל אי בים, לא נכנס לבחירה) */
 const reachCache = new Map<number, boolean>();
@@ -96,10 +105,10 @@ export function surnameOf(home: Place | null) {
 }
 
 /** הבית של כל דמות: בית בכפר (או לפי שם מהנתונים). לבוגרים בית משלהם; ילדים גרים עם אחד הבוגרים (משפחה) */
-export function assignHomes(walkers: any[], rg: LocalRng) {
+export function assignHomes(walkers: any[], rg: LocalRng, others: any[] = []) {
   const H = ctx.home;
   const homes = places.filter(p => p.kind === 'home' && p.door && p.door[0] > H.x0 - 400 && p.door[0] < H.x1 + 400 && p.door[1] > H.y0 && p.door[1] < H.y1 + 200);
-  const free = homes.slice().sort(() => rg.r() - .5);
+  const taken = new Set(others.map(o => o.home)), free = homes.filter(p => !taken.has(p)).sort(() => rg.r() - .5);   // בתים שכבר יש בהם דיירים לא נכנסים
   const grown = walkers.filter(w => w.role !== 'child'), kids = walkers.filter(w => w.role === 'child');
   for (const w of grown) {
     const want = w.look.home && homes.find(p => p.name === w.look.home);
@@ -120,7 +129,7 @@ export function chooseNext(w: any, rg: LocalRng): Place {
   // כך כמות המקומות מכל סוג (למשל עשרות קצוות של שבילים) לא משנה כמה פעמים בוחרים בו
   const byKind = new Map<string, [Place, number][]>();
   for (const p of places) {
-    if (p.kind === 'home' || w.recent.includes(p.id) || !reachable(p)) continue;
+    if (p.kind === 'home' || w.recent.includes(p.id) || !reachable(p) || (p.busy && p.busy !== w)) continue;   // ספסל תפוס: לא
     let wt = like[p.kind] ?? 0; if (!wt) continue;
     const s = spotOf(p), d = Math.hypot(s[0] - here[0], s[1] - here[1]);
     let near = 1 / (1 + (d / (FAR_OK.has(p.kind) ? 3000 : 900)) ** 2);
@@ -136,6 +145,19 @@ export function chooseNext(w: any, rg: LocalRng): Place {
   const kinds = [...byKind].map(([k, list]) => [k, like[k] * Math.max(...list.map(x => x[1]))] as [string, number]);
   if (!kinds.length) return w.home;
   return pickW(byKind.get(pickW(kinds))!);
+}
+
+/** מה עושים במקום פתוח (התנוחה): עבודה, מבט, האכלה, משחק, שחייה, ישיבה */
+export function actOf(p: Place, rg: LocalRng): string {
+  switch (p.kind) {
+    case 'work': return 'work';
+    case 'play': return 'play';
+    case 'swim': return 'swim';
+    case 'sit': return 'sit';
+    case 'animals': return rg.chance(.6) ? 'feed' : 'look';
+    case 'shore': return rg.chance(.4) ? 'feed' : 'look';
+    default: return 'look';
+  }
 }
 
 export const durOf = (p: Place, rg: LocalRng) => { const [a, b] = KINDS[p.kind].dur; return rg.rand(a, b); };

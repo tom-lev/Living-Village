@@ -10,7 +10,7 @@ export const KINDS: Record<string, { enter?: boolean; dur: [number, number]; lab
   church:  { enter: true, dur: [20, 45], label: 'at church' },
   train:   { enter: true, dur: [45, 100], label: 'on the train' },
   workIn:  { enter: true, dur: [25, 55], label: 'working inside' },
-  swim:    { enter: true, dur: [20, 45], label: 'swimming' },
+  swim:    { dur: [25, 50], label: 'swimming' },
   work:    { dur: [20, 45], label: 'working' },
   view:    { dur: [8, 18], label: 'enjoying the view' },
   shore:   { dur: [10, 25], label: 'by the water' },
@@ -20,6 +20,7 @@ export const KINDS: Record<string, { enter?: boolean; dur: [number, number]; lab
   stroll:  { dur: [8, 16], label: 'strolling' },
   rest:    { dur: [15, 30], label: 'resting' },
   visit:   { dur: [8, 18], label: 'visiting' },
+  sit:     { dur: [20, 45], label: 'sitting on a bench' },
 };
 
 /** לאיזה סוג מקום שייך כל סוג אובייקט. סוג שלא מופיע כאן עדיין יעד ("visit": באים, עומדים ומביטים).
@@ -32,11 +33,11 @@ const KIND_OF_TYPE: Record<string, string> = {
   lake: 'shore', fishingPond: 'shore', mountainLake: 'shore', frozenLake: 'shore', hotSpring: 'shore', pier: 'shore',
   plaza: 'stroll', fountain: 'stroll', flowerField: 'stroll', maze: 'stroll', ruins: 'stroll',
   lookoutTower: 'view', lighthouse: 'view', observatory: 'view', cave: 'view', cableCar: 'view', skiSlope: 'view',
-  campfire: 'rest', picnicTable: 'rest', picnicBlanket: 'rest', tent: 'rest',
+  campfire: 'rest', picnicTable: 'rest', picnicBlanket: 'rest', tent: 'rest', bench: 'sit',
 };
 /* נוף בלבד: לא יעד (עצים, פנסים, שלטים, חלקים של אובייקט אחר) */
 const SCENERY = new Set(['pine', 'roundTree', 'palm', 'deer', 'plot', 'noTrees', 'lamp', 'signpost', 'bike', 'pigeon', 'mailbox', 'haybale', 'buoy', 'umbrella',
-  'snowman', 'skater', 'iceHut', 'footbridge', 'stoneBridge', 'tunnelPortal', 'train', 'turbine', 'roundabout', 'railway', 'bench', 'well', 'scarecrow', 'sailboat', 'ship', 'island', 'rockIslet', 'igloo']);
+  'snowman', 'skater', 'iceHut', 'footbridge', 'stoneBridge', 'tunnelPortal', 'train', 'turbine', 'roundabout', 'railway', 'well', 'scarecrow', 'sailboat', 'ship', 'island', 'rockIslet', 'igloo']);
 const TOP_LEFT = new Set(['vegGarden', 'field', 'footballPitch', 'pier']);
 
 /** נקרא אחרי שכל אובייקט צויר: אם האובייקט לא רשם מקום בעצמו, רושמים לו מקום לפי הסוג שלו */
@@ -55,7 +56,7 @@ export function autoPlace(o: any) {
   const enter = KINDS[kind].enter;
   // אובייקט שעומד על נקודה (x,y הוא קו הקרקע שלו): עומדים קצת לפניו, לא בתוכו
   const standOff = o.x !== undefined && o.cx === undefined && !TOP_LEFT.has(o.type) ? 14 : 0;
-  addPlace({ kind, name: o.name, door: enter ? [x, y] : undefined, at: enter ? undefined : [x, y + standOff], vertical: o.type === 'house' });
+  addPlace({ kind, name: o.name, door: enter ? [x, y] : undefined, at: enter ? undefined : [x, y + standOff], vertical: o.type === 'house', seat: o.type === 'bench' ? [x, y] : undefined, ...(o.type === 'bench' && !o.name ? { name: 'a bench' } : {}) });
 }
 
 export interface Place {
@@ -65,6 +66,8 @@ export interface Place {
   at?: Pt;            // נקודת עמידה במקום פתוח
   vertical?: boolean; // מגיעים לדלת בשביל ישר מהרחוב (מגרש של בית)
   trade?: string;     // לחנות: מה מוכרים בה
+  seat?: Pt;          // לספסל: איפה יושבים (את נקודת ההגעה at מגיעים מלפנים)
+  busy?: any;         // מי שתופס את המקום עכשיו (ספסל: אדם אחד)
   id: number;
 }
 export const places: Place[] = [];

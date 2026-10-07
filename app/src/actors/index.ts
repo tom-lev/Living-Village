@@ -6,6 +6,7 @@ import { clouds, flock } from './ambient';
 import { updateSeen } from '../camera/view';
 import { updateLabels } from '../world/labels';
 import { assignHomes } from './agenda';
+import { places } from '../world/places';
 import { rngAt } from '../core/rng';
 
 export { followables } from './people';
@@ -25,7 +26,8 @@ export function buildActors(A: Record<string, any>) {
   const walkerUpdate = (dt: number, T: number) => { for (const w of walkers) w.update(dt, T); };
   updates.unshift(walkerUpdate);
   for (const s of A.sitters || []) { const st = new Sitter(s.look, s.x, s.y, s.seat, s.flip, s.behavior); sitters.push(st); updates.push((dt, T) => st.update(dt, T)); }
-  assignHomes([...walkers, ...sitters], rngAt(1, 1, 91));   // שוב עם היושבים: אותו סדר, כך שלהולכים נשארים אותם בתים
+  assignHomes(sitters, rngAt(2, 2, 91), walkers);   // ליושבים: בתים שעוד אין בהם דיירים (בלי לשנות את הבתים של ההולכים)
+  for (const st of sitters) { const b = places.find(p => p.kind === 'sit' && p.seat && Math.hypot(p.seat[0] - st.x, p.seat[1] - st.y) < 25); if (b) b.busy = st; }   // הספסל של משה תפוס
   const horses = (A.horses || []).map((h: any) => new Horse(h));
   updates.push(dt => { for (const h of horses) h.update(dt); });
   if (A.sheep) {

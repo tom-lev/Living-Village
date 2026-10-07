@@ -67,7 +67,7 @@ export function buildTerrain(w: WorldData) {
   };
   el('path', { d: wave(T.beach.y, 14, .013, 0, 120) + `L${B.x1},${B.y1}L${B.x0},${B.y1}Z`, fill: '#f3dfb0' }, L.ground);
   // מקומות לשחייה: נכנסים למים בקצה החוף ונעלמים בהם לזמן מה
-  for (const x of T.beach.swim || []) addPlace({ kind: 'swim', name: 'the sea', door: [x, T.sea.y - 8] });
+  for (const x of T.beach.swim || []) addPlace({ kind: 'swim', name: 'the sea', at: [x, T.sea.y - 8] });
 
   /* הנהר (נמשך מעל החול אל הים) */
   {

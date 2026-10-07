@@ -94,13 +94,23 @@ export function frontNode(x: number, y: number): number {
 }
 export const nodeAt = (i: number) => nodes[i];
 /** קצוות של שבילים שלא מתחברים לשום דבר: יעדים טבעיים לטיול ביער */
+/** נקודות על שבילים ליד הכפר (פארק, לאורך הנהר), במרווחים: יעדים לטיול רגלי רגוע */
+export function trailSpots(x0: number, y0: number, x1: number, y1: number, gapMin: number): number[] {
+  buildNav();
+  const out: number[] = [];
+  nodes.forEach((n, i) => {
+    if (n.lane >= 1 || n.x < x0 || n.x > x1 || n.y < y0 || n.y > y1) return;
+    if (out.every(j => Math.hypot(nodes[j].x - n.x, nodes[j].y - n.y) > gapMin)) out.push(i);
+  });
+  return out;
+}
 export function deadEnds(): number[] { buildNav(); return nodes.map((n, i) => (n.nb.length === 1 && n.lane < 1 ? i : -1)).filter(i => i >= 0); }
 
 /** מסלול קצר בין שני צמתים (A*). מחזיר רשימת צמתים */
-export function routeNodes(a: number, b: number): number[] {
+export function routeNodes(a: number, b: number, trailBias = 1): number[] {
   buildNav();
   const N = nodes.length, g = new Float64Array(N).fill(Infinity), from = new Int32Array(N).fill(-1), done = new Uint8Array(N);
-  const bx = nodes[b].x, by = nodes[b].y, h = (i: number) => Math.hypot(nodes[i].x - bx, nodes[i].y - by);
+  const bx = nodes[b].x, by = nodes[b].y, hk = Math.min(1, trailBias), h = (i: number) => Math.hypot(nodes[i].x - bx, nodes[i].y - by) * hk;
   const heap: [number, number][] = [[h(a), a]]; g[a] = 0;
   const push = (f: number, i: number) => { heap.push([f, i]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
   const pop = () => { const top = heap[0], last = heap.pop()!; if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
@@ -108,7 +118,10 @@ export function routeNodes(a: number, b: number): number[] {
     const [, i] = pop(); if (done[i]) continue; done[i] = 1;
     if (i === b) break;
     const n = nodes[i];
-    for (let k = 0; k < n.nb.length; k++) { const j = n.nb[k], ng = g[i] + n.cost[k]; if (ng < g[j]) { g[j] = ng; from[j] = i; push(ng + h(j), j); } }
+    for (let k = 0; k < n.nb.length; k++) {
+      const j = n.nb[k], trail = n.lane < 1 && nodes[j].lane < 1, ng = g[i] + n.cost[k] * (trail ? trailBias : 1);
+      if (ng < g[j]) { g[j] = ng; from[j] = i; push(ng + h(j), j); }
+    }
   }
   if (from[b] < 0 && a !== b) return [a];
   const path: number[] = []; for (let i = b; i >= 0; i = from[i]) { path.push(i); if (i === a) break; }
