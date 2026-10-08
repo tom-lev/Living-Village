@@ -184,33 +184,81 @@ export function fox(g: any, v: LocalRng): Parts {
   return { body: b, head, tail, legs: [], legBase: [], size: 11 * s, c, s, quad: { specs, far, near, gait: 'walk', A: 2.3, lift: 2, bodyG: body } };
 }
 
-/** דוב: גדול, חום, גבנון בכתפיים, ראש נמוך עם אוזניים עגולות. הליכה איטית בארבע פעימות, הכתפיים מתגלגלות */
+/** דוב חום: גבנון שרירים גבוה בכתפיים, גב שיורד אל עכוז עגול, פרווה עבותה עם שוליים מדובללים בבטן,
+ *  ראש נמוך מהגבנון עם לוע ארוך ובהיר, אף שחור ואוזניים עגולות קטנות.
+ *  רגליים מלאות ועבות שמתחדדות, כפות רחבות עם טפרים; ברגליים האחוריות הברך קדימה וכף הרגל שטוחה על הקרקע (כמו אצל דוב אמיתי).
+ *  הליכה איטית בארבע פעימות בצעדים ארוכים, הכתפיים מתגלגלות והראש מתנדנד נמוך */
 export function bear(g: any, v: LocalRng): Parts {
-  const c = v.pick(['#6b4a32', '#7a553a', '#5c4030', '#8a6444']), s = v.rand(.92, 1.06), d = shade(c, -.25), lt = shade(c, .15);
+  const c = v.pick(['#6b4a32', '#7a553a', '#5c4030', '#8a6444']), s = v.rand(.92, 1.06), d = shade(c, -.28), lt = shade(c, .2), tip = shade(c, .38);
   const b = el('g', { transform: `scale(${n2(s)})` }, g);
-  shadow(b, 20);
+  shadow(b, 21);
   const far = el('g', null, b);
   const body = el('g', null, b);
-  el('path', { d: 'M-17,-13C-18,-20 -12,-23 -4,-23C1,-23.4 5,-25.6 9,-24.4C13,-23.2 14.4,-19 13.6,-15C12.6,-10.4 6,-9.4 -2,-9.4C-10,-9.4 -16.4,-9.4 -17,-13Z', fill: c }, body);
-  el('path', { d: 'M-12,-20.4C-6,-22.6 2,-22.2 8,-23.4', fill: 'none', stroke: lt, 'stroke-width': 1.6, 'stroke-linecap': 'round', opacity: .8 }, body);
-  el('path', { d: 'M-14,-11.4C-8,-10 2,-10.2 10,-11.2', fill: 'none', stroke: d, 'stroke-width': 1, 'stroke-linecap': 'round', opacity: .7 }, body);
-  el('circle', { cx: -16.6, cy: -15.6, r: 1.4, fill: d }, body);   // זנב קטן
+  el('circle', { cx: -19.4, cy: -19.6, r: 1.4, fill: d }, body);   // זנב קטנטן
+  // הגוף: עכוז עגול, גב עולה אל הגבנון, צוואר עבה וחזה
+  el('path', { d: 'M-17.4,-12C-20.4,-15 -20.4,-21 -15.4,-23.2C-9.4,-25.4 -1.4,-24.2 3.8,-25.8C7.4,-27 11.4,-26.2 13.4,-23.4C15,-21.2 15.2,-17.8 14.2,-15C13.2,-12.2 11,-10.6 8,-10.4L-12,-10.2C-14.6,-10.2 -16.2,-10.8 -17.4,-12Z', fill: c }, body);
+  // שוליים מדובללים בבטן ובחזה
+  let fr = 'M10.6,-10.8', x = 10.6;
+  while (x > -14) { const w = v.rand(2.2, 3.6), h = v.rand(.7, 1.5); fr += `Q${n2(x - w * .5)},${n2(-10.2 + h * 2)} ${n2(x - w)},${n2(-10.4)}`; x -= w; }
+  el('path', { d: fr + 'L-14,-11.4L10.6,-11.4Z', fill: c }, body);
+  el('path', { d: 'M-15.4,-22.6C-9.4,-24.8 -1.4,-23.6 3.8,-25.2C7.2,-26.3 10.6,-25.6 12.6,-23.4', fill: 'none', stroke: tip, 'stroke-width': 1.3, 'stroke-linecap': 'round', opacity: .85 }, body);   // אור על הגב והגבנון
+  el('ellipse', { cx: 6, cy: -19.6, rx: 6.4, ry: 5, fill: lt, opacity: .2 }, body);   // שרירי הכתף
+  el('path', { d: 'M-13,-17.6c1.6,-.8 2.6,-.4 3.4,.6M1.8,-14.4c1.4,-.6 2.4,-.2 3,.6', fill: 'none', stroke: d, 'stroke-width': .5, 'stroke-linecap': 'round', opacity: .5 }, body);   // סימני פרווה עדינים
   const near = el('g', null, b);
+  // הראש (מסתובב סביב בסיס הצוואר)
   const head = el('g', null, b);
-  el('path', { d: 'M10,-19C10.4,-23 14.6,-24.4 18,-22.6C20.4,-21.4 21.4,-19.4 23.6,-18.6C25,-18 24.8,-15.6 23,-15.2C19.4,-14.4 14.6,-14 12,-15C10.6,-15.6 9.8,-17 10,-19Z', fill: c }, head);
-  el('path', { d: 'M20.6,-18.8C22.4,-18.4 24.6,-18.2 24.2,-16.2C23.6,-15.2 21.4,-15.2 20.4,-15.8Z', fill: shade(c, .3) }, head);   // לוע
-  el('path', { d: circ(12.6, -23, 1.9) + circ(16, -24.2, 1.8), fill: c }, head);
-  el('path', { d: circ(12.6, -23, .9) + circ(16, -24.2, .85), fill: d }, head);
-  el('circle', { cx: 24.3, cy: -17.2, r: .95, fill: '#1f1a17' }, head);
-  el('circle', { cx: 18.4, cy: -19.6, r: .7, fill: '#1f1a17' }, head);
-  el('circle', { cx: 18.6, cy: -19.8, r: .2, fill: '#fff' }, head);
+  el('circle', { cx: 16.6, cy: -25.4, r: 1.6, fill: d }, head);   // האוזן הרחוקה
+  el('path', { d: 'M11,-21.4C12,-25 16,-26.2 19.4,-24.4C21,-23.4 22,-21.8 24.6,-21C26.4,-20.4 26.6,-18 25,-17.2C22.6,-16.2 19,-15.8 16.6,-16.2C13.4,-16.6 11,-18.4 11,-21.4Z', fill: c }, head);
+  el('path', { d: 'M21,-20.8C23,-20.6 25.8,-20.4 25.6,-18.2C25,-17 22.6,-16.8 21,-17.4C20.4,-18.4 20.4,-19.8 21,-20.8Z', fill: tip }, head);   // לוע בהיר
+  el('circle', { cx: 13.4, cy: -24.4, r: 1.9, fill: c }, head);   // האוזן הקרובה
+  el('circle', { cx: 13.5, cy: -24.3, r: .9, fill: d }, head);
+  el('ellipse', { cx: 25.7, cy: -19.7, rx: 1.15, ry: .85, fill: '#1f1a17' }, head);   // אף
+  el('path', { d: 'M24.6,-17.6q-1.6,.5 -3,0', fill: 'none', stroke: d, 'stroke-width': .45, 'stroke-linecap': 'round' }, head);   // פה
+  el('path', { d: 'M18.2,-23.2q1.4,-.7 2.6,.1', fill: 'none', stroke: d, 'stroke-width': .5, 'stroke-linecap': 'round' }, head);   // גבה
+  el('circle', { cx: 19.6, cy: -21.9, r: .62, fill: '#1f1a17' }, head);
+  el('circle', { cx: 19.8, cy: -22.1, r: .2, fill: '#fff' }, head);
+  const pad = shade(c, -.45);
   const specs: LegSpec[] = [
-    { hip: [-11, -11.4], l1: 6, l2: 5.8, front: false, far: false, w: 5.2, color: c, hoof: d },
-    { hip: [6.4, -12], l1: 6.2, l2: 6, front: true, far: false, w: 5, color: c, hoof: d },
-    { hip: [-8.6, -11.6], l1: 6, l2: 5.8, front: false, far: true, w: 4.6, color: d, hoof: shade(d, -.2) },
-    { hip: [9, -12.2], l1: 6.2, l2: 6, front: true, far: true, w: 4.4, color: d, hoof: shade(d, -.2) },
+    { hip: [-12, -15], l1: 8, l2: 7.8, front: false, far: false, w: 5, color: c, hoof: pad, shape: [8.4, 5.6, 4.4], paw: 3.4, bend: 1 },
+    { hip: [8, -15.4], l1: 8.2, l2: 8.2, front: true, far: false, w: 5, color: c, hoof: pad, shape: [7.6, 5.4, 4.6], paw: 2.2 },
+    { hip: [-9.4, -15.2], l1: 8, l2: 7.8, front: false, far: true, w: 4.6, color: d, hoof: shade(pad, -.2), shape: [7.4, 5, 4], paw: 3.2, bend: 1 },
+    { hip: [10.6, -15.6], l1: 8.2, l2: 8.2, front: true, far: true, w: 4.6, color: d, hoof: shade(pad, -.2), shape: [6.8, 5, 4.2], paw: 2 },
   ];
-  return { body: b, head, legs: [], legBase: [], size: 20 * s, c, s, quad: { specs, far, near, gait: 'walk', A: 3.2, lift: 2.4, bodyG: body } };
+  return { body: b, head, legs: [], legBase: [], size: 20 * s, c, s, quad: { specs, far, near, gait: 'walk', A: 4.2, lift: 3, bodyG: body } };
+}
+
+/** דוב עומד על הרגליים האחוריות, הגב אל גזע עץ (מתגרד). פונה ימינה, הגב בצד שמאל (x≈-6).
+ *  מחזיר את הקבוצה שמתנדנדת למעלה ולמטה, את הראש, את הכפות הקדמיות ואת העפעפיים */
+export function bearStand(g: any, c: string, s: number) {
+  const d = shade(c, -.28), tip = shade(c, .38), pad = shade(c, -.45);
+  const b = el('g', { transform: `scale(${n2(s)})` }, g);
+  shadow(b, 11);
+  // רגל אחורית רחוקה, וכף רגל שטוחה על הקרקע
+  el('path', { d: 'M-5.4,-11C-6,-6 -5.4,-2.4 -4.6,0H1.4C1,-3 1.6,-7 1.2,-11Z', fill: d }, b);
+  el('path', { d: 'M-5.4,0v-2.2q0,-.8 1,-.8h4.6q1.4,.2 1.4,1.6V0Z', fill: shade(pad, -.15) }, b);
+  const rub = el('g', null, b);
+  // הגוף זקוף: גב ישר אל הגזע, בטן מעוגלת, כתפיים רחבות
+  el('path', { d: 'M-7.2,-8C-8.8,-16 -8.6,-26 -6.6,-32.6C-4.6,-37.4 3.4,-37.8 6.4,-33.2C9.2,-29 10.6,-22 10.2,-15.6C9.8,-10 6.8,-6.8 1,-6.6C-3,-6.4 -6.6,-6.6 -7.2,-8Z', fill: c }, rub);
+  el('path', { d: 'M3.8,-30C7,-26 7.8,-19 6.8,-13.4C6,-10.6 4,-9.4 2,-9.6C4,-15 4.2,-23 2.6,-29Z', fill: shade(c, .14), opacity: .6 }, rub);   // בטן בהירה מעט
+  el('path', { d: 'M-7.2,-31C-7.9,-24 -7.9,-15 -7.2,-9.6', fill: 'none', stroke: tip, 'stroke-width': 1, 'stroke-linecap': 'round', opacity: .7 }, rub);
+  el('path', { d: 'M-6.4,-9.4C-6.4,-14 -1,-15.4 3,-12.6C6.4,-10.2 7.2,-4 6,0H-1C-1.2,-1.6 -3,-3 -5,-4.4C-6.2,-5.6 -6.4,-7.6 -6.4,-9.4Z', fill: c }, rub);   // ירך ורגל קרובה
+  el('path', { d: 'M-2,-11.4c2.6,-.6 4.6,.6 5.4,2.6', fill: 'none', stroke: d, 'stroke-width': .5, 'stroke-linecap': 'round', opacity: .6 }, rub);
+  el('path', { d: 'M-1.6,0v-2.4q0,-.8 1,-.8h5.2q1.6,.2 1.6,1.8V0Z', fill: pad }, b);
+  el('path', { d: 'M6.4,-1.2l1.1,.5l-1.1,.3ZM6.4,-2.1l1.1,.5l-1.1,.3Z', fill: pad }, b);
+  // ראש מוטה מעט למעלה: לוע ארוך, אוזניים, עין שנעצמת בהנאה
+  const head = el('g', { transform: 'translate(1.4,-36) scale(1.15) translate(-1.4,36)' }, rub);
+  el('path', { d: circ(-2.6, -40.6, 1.7) + circ(1, -41.6, 1.9), fill: c }, head);
+  el('path', { d: circ(1, -41.6, .9), fill: d }, head);
+  el('path', { d: 'M-4.4,-36.4C-4.6,-39.6 -1.6,-41.4 1.4,-40.6C3.4,-40 4.4,-38.6 6.6,-38.4C8.2,-38.2 8.6,-36 7.2,-35.2C5,-34 1.4,-33.4 -.8,-33.6C-3,-33.8 -4.4,-34.8 -4.4,-36.4Z', fill: c }, head);
+  el('path', { d: 'M3.4,-38.2C5.4,-38 8,-37.8 7.6,-35.8C6.8,-34.8 4.8,-34.6 3.2,-35.2C2.8,-36.2 2.8,-37.4 3.4,-38.2Z', fill: tip }, head);
+  el('ellipse', { cx: 7.8, cy: -37.2, rx: 1.05, ry: .8, fill: '#1f1a17' }, head);
+  const eye = el('circle', { cx: 2.2, cy: -38.4, r: .6, fill: '#1f1a17' }, head);
+  const lid = el('path', { d: 'M1.4,-38.4q.8,.6 1.6,0', fill: 'none', stroke: '#1f1a17', 'stroke-width': .5, 'stroke-linecap': 'round', opacity: 0 }, head);
+  // כפה קדמית מונחת על הבטן
+  const arm = el('g', null, rub);
+  el('path', { d: 'M2.4,-31C6,-29.4 8.6,-26 9.8,-22.2', fill: 'none', stroke: shade(c, -.06), 'stroke-width': 5, 'stroke-linecap': 'round' }, arm);
+  el('path', { d: 'M7.8,-23.6q3,-.6 3.6,1.8q-.4,1.8 -3,1.6ZM11.2,-22.4l1.1,.2l-.9,.6ZM11.2,-21.3l1.1,.3l-1,.5Z', fill: pad }, arm);
+  return { g: b, rub, head, arm, eye, lid };
 }
 
 export const WILD = { rabbit, squirrel, owl, fox, bear, deer };
@@ -265,18 +313,20 @@ export function frontBack(kind: WildKind, g: any, c: string, s: number, front: b
     el('path', { d: 'M-2.6,-31C-6,-31.4 -7,-33.6 -6.6,-34.4C-5,-34.2 -3.4,-33 -2.2,-31.8ZM2.6,-31C6,-31.4 7,-33.6 6.6,-34.4C5,-34.2 3.4,-33 2.2,-31.8Z', fill: c, stroke: d, 'stroke-width': .3 }, b);
     el('path', { d: 'M-2.4,-32C-2.4,-34 2.4,-34 2.4,-32C2.4,-29.6 1,-27 0,-26.4C-1,-27 -2.4,-29.6 -2.4,-32Z', fill: c }, b);
     if (front) { el('path', { d: circ(-1.2, -31.2, .55) + circ(1.2, -31.2, .55) + circ(0, -27, .6), fill: eye }, b); el('path', { d: 'M-1,-28.6Q0,-28 1,-28.6', fill: 'none', stroke: light, 'stroke-width': .6 }, b); }
-  } else {   // bear
-    shadow(b, 12);
-    L(-5, -7, d, 5); L(5, -7, d, 5);
-    el('ellipse', { cx: 0, cy: -11, rx: 10.5, ry: 9, fill: c }, b);
-    if (!front) el('circle', { cx: 0, cy: -5.2, r: 1.8, fill: shade(c, -.1) }, b);
-    el('path', { d: circ(-4.4, -24.4, 2) + circ(4.4, -24.4, 2), fill: c }, b);
-    el('circle', { cx: 0, cy: -19.6, r: 6, fill: c }, b);
+  } else {   // bear: גוף רחב עם גבנון, רגליים עבות כמו עמודים, ראש נמוך עם לוע בהיר
+    shadow(b, 13);
+    L(-6.4, -11, d, 5.2); L(6.4, -11, d, 5.2); L(-3.6, -11, c, 5.4); L(3.6, -11, c, 5.4);
+    el('path', { d: 'M-11,-13C-11.6,-20 -8,-26.4 0,-26.8C8,-26.4 11.6,-20 11,-13C10.4,-10 6,-9.2 0,-9.2C-6,-9.2 -10.4,-10 -11,-13Z', fill: c }, b);
+    el('path', { d: 'M-8,-23C-4,-25 4,-25 8,-23', fill: 'none', stroke: shade(c, .38), 'stroke-width': 1.1, 'stroke-linecap': 'round', opacity: .8 }, b);
+    if (!front) el('circle', { cx: 0, cy: -12, r: 1.5, fill: shade(c, -.25) }, b);
+    el('path', { d: circ(-5, -25.4, 2.1) + circ(5, -25.4, 2.1), fill: c }, b);
     if (front) {
-      el('path', { d: circ(-4.4, -24.4, 1) + circ(4.4, -24.4, 1), fill: shade(c, -.2) }, b);
-      el('ellipse', { cx: 0, cy: -17.6, rx: 2.8, ry: 2.2, fill: light }, b);
-      el('path', { d: circ(-2.2, -21, .8) + circ(2.2, -21, .8) + circ(0, -18.4, .9), fill: eye }, b);
-    }
+      el('path', { d: circ(-5, -25.4, 1) + circ(5, -25.4, 1), fill: shade(c, -.28) }, b);
+      el('path', { d: 'M-6,-20C-6,-25 6,-25 6,-20C6,-16.6 3.4,-14.6 0,-14.6C-3.4,-14.6 -6,-16.6 -6,-20Z', fill: c, stroke: shade(c, -.2), 'stroke-width': .5 }, b);
+      el('path', { d: 'M-2.8,-17.6C-2.8,-20 2.8,-20 2.8,-17.6C2.8,-15.8 1.4,-15 0,-15C-1.4,-15 -2.8,-15.8 -2.8,-17.6Z', fill: shade(c, .38) }, b);
+      el('path', { d: circ(-2.4, -21.2, .65) + circ(2.4, -21.2, .65), fill: eye }, b);
+      el('ellipse', { cx: 0, cy: -18.4, rx: 1.1, ry: .8, fill: eye }, b);
+    } else el('path', { d: 'M-5.6,-20.6C-5.6,-25 5.6,-25 5.6,-20.6C5.6,-18.4 3,-17.4 0,-17.4C-3,-17.4 -5.6,-18.4 -5.6,-20.6Z', fill: shade(c, -.06) }, b);
   }
   return { g: b, legs, base };
 }

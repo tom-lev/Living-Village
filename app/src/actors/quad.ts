@@ -13,6 +13,12 @@ export interface LegSpec {
   w: number;          // עובי
   color: string;
   hoof?: string;      // צבע הפרסה / כף הרגל
+  /** רגל מלאה (דוב): עובי בירך, בברך ובקרסול; בלעדיו – קו עגול בעובי w */
+  shape?: number[];
+  /** כף רגל רחבה עם טפרים, באורך הזה קדימה מהקרסול (כף רגל שטוחה של דוב) */
+  paw?: number;
+  /** לאיזה צד המפרק האמצעי בולט: 1 קדימה, 1- אחורה (ברירת מחדל: קדמית קדימה, אחורית אחורה) */
+  bend?: number;
 }
 export type Gait = 'walk' | 'trot';
 
@@ -28,8 +34,12 @@ export class Legs {
   /** g: לכל רגל, הקבוצה שאליה היא נכנסת (רחוקה – מאחורי הגוף, קרובה – לפניו). A: חצי אורך צעד. lift: גובה הרמת הרגל */
   constructor(specs: LegSpec[], groups: { far: any; near: any }, gait: Gait, A: number, lift: number) {
     this.specs = specs; this.gait = gait; this.A = A; this.lift = lift;
-    this.els = specs.map(s => el('path', { stroke: s.color, 'stroke-width': s.w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', fill: 'none' }, s.far ? groups.far : groups.near));
-    this.hoofs = specs.map(s => s.hoof ? el('path', { stroke: s.hoof, 'stroke-width': s.w * 1.05, 'stroke-linecap': 'round', fill: 'none' }, s.far ? groups.far : groups.near) : null);
+    this.els = specs.map(s => s.shape
+      ? el('path', { fill: s.color, stroke: s.color, 'stroke-width': .6, 'stroke-linejoin': 'round' }, s.far ? groups.far : groups.near)
+      : el('path', { stroke: s.color, 'stroke-width': s.w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', fill: 'none' }, s.far ? groups.far : groups.near));
+    this.hoofs = specs.map(s => !s.hoof ? null : s.paw !== undefined
+      ? el('path', { fill: s.hoof }, s.far ? groups.far : groups.near)
+      : el('path', { stroke: s.hoof, 'stroke-width': s.w * 1.05, 'stroke-linecap': 'round', fill: 'none' }, s.far ? groups.far : groups.near));
     // היסט השלב של כל רגל: [אחורית קרובה, קדמית קרובה, אחורית רחוקה, קדמית רחוקה] לפי הסדר שבו הוגדרו
     this.off = specs.map(s => gait === 'trot' ? ((s.front !== s.far) ? 0 : .5) : (s.far ? .5 : 0) + (s.front ? .25 : 0));
   }
@@ -45,9 +55,23 @@ export class Legs {
       const hip = [s.hip[0], s.hip[1] + bodyDy], foot = [s.hip[0] + fx + (s.front ? .4 : -.4), fy];
       // כמו אצל בעלי חיים אמיתיים: ברגל הקדמית המפרק הנראה (ה"ברך", שורש כף היד) בולט קדימה,
       // ברגל האחורית המפרק הנראה (העקב) בולט אחורה. הפוך מזה – כל צעד נראה כאילו הוא הולך אחורה
-      const knee = ik2(hip, foot, s.l1, s.l2, s.front ? 1 : -1);
-      this.els[i].setAttribute('d', `M${n2(hip[0])},${n2(hip[1])}L${n2(knee[0])},${n2(knee[1])}L${n2(foot[0])},${n2(foot[1])}`);
-      if (this.hoofs[i]) this.hoofs[i].setAttribute('d', `M${n2(foot[0] - .2)},${n2(foot[1] - s.w * .45)}L${n2(foot[0] + s.w * .25)},${n2(foot[1])}`);
+      const knee = ik2(hip, foot, s.l1, s.l2, s.bend ?? (s.front ? 1 : -1));
+      if (s.shape) {
+        // רגל מלאה: מתאר שמתחדד מהירך דרך הברך אל הקרסול
+        const P = [hip, knee, foot], L: string[] = [], R: string[] = [];
+        P.forEach((p, j) => {
+          const a = P[Math.max(0, j - 1)], b = P[Math.min(2, j + 1)], dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy) || 1, w = s.shape![j] / 2;
+          L.push(`${n2(p[0] - dy / d * w)},${n2(p[1] + dx / d * w)}`); R.unshift(`${n2(p[0] + dy / d * w)},${n2(p[1] - dx / d * w)}`);
+        });
+        this.els[i].setAttribute('d', `M${L.join('L')}L${R.join('L')}Z`);
+      } else this.els[i].setAttribute('d', `M${n2(hip[0])},${n2(hip[1])}L${n2(knee[0])},${n2(knee[1])}L${n2(foot[0])},${n2(foot[1])}`);
+      if (this.hoofs[i] && s.paw !== undefined) {
+        // כף רגל רחבה ושטוחה, עם שלושה טפרים קטנים בקצה
+        const w = (s.shape ? s.shape[2] : s.w) / 2, x0 = foot[0] - w - .3, x1 = foot[0] + w + s.paw, y1 = foot[1], y0 = y1 - 2.3;
+        let d = `M${n2(x0)},${n2(y1)}L${n2(x0)},${n2(y0 + .8)}Q${n2(x0)},${n2(y0)} ${n2(x0 + 1)},${n2(y0)}L${n2(x1 - 1.2)},${n2(y0 + .3)}Q${n2(x1)},${n2(y0 + .6)} ${n2(x1)},${n2(y1 - .4)}L${n2(x1)},${n2(y1)}Z`;
+        for (let k = 0; k < 3; k++) d += `M${n2(x1 - .2)},${n2(y1 - .5 - k * .6)}l1.1,.45l-1.1,.15Z`;
+        this.hoofs[i].setAttribute('d', d);
+      } else if (this.hoofs[i]) this.hoofs[i].setAttribute('d', `M${n2(foot[0] - .2)},${n2(foot[1] - s.w * .45)}L${n2(foot[0] + s.w * .25)},${n2(foot[1])}`);
     });
     // הגוף עולה ויורד מעט: פעמיים בכל מחזור (בכל פעם שזוג רגליים עובר מתחת לגוף)
     return -Math.abs(Math.sin(phase * Math.PI * 2)) * .06 * this.lift * amp;

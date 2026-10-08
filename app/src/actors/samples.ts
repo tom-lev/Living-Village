@@ -5,7 +5,7 @@ import { rngAt } from '../core/rng';
 import { ctx } from '../world/context';
 import { animateTo } from '../camera/camera';
 import { view } from '../camera/view';
-import { WILD, setLeg, type WildKind } from './wildlife-art';
+import { WILD, setLeg, frontBack, bearStand, type WildKind } from './wildlife-art';
 import { Legs } from './quad';
 import { hopPose } from './wildlife';
 import { loco, car, LOCOS } from './train-art';
@@ -26,6 +26,21 @@ export function showSample(kind: string) {
       }
     });
     animateTo(view.fitK * 7, X + 60, Y + 70, 1);
+  } else if (kind === 'bear') {
+    // דוב: ארבעה שלבים של צעד, עמידה, מלפנים, מאחור, ועומד על שתיים ומתגרד בעץ
+    for (let i = 0; i < 5; i++) {
+      const x = X - 60 + i * 56, y = Y + 30, g = el('g', { transform: `translate(${x},${y})` }, L);
+      const p = WILD.bear(g, rngAt(X, Y, 81));
+      new Legs(p.quad!.specs, { far: p.quad!.far, near: p.quad!.near }, 'walk', p.quad!.A, p.quad!.lift).pose(i * .25, i < 4 ? 1 : 0);
+    }
+    const p = WILD.bear(el('g', { opacity: 0 }, L), rngAt(X, Y, 81));
+    for (const [dx, front] of [[-40, true], [10, false]] as [number, boolean][]) {
+      const V = frontBack('bear', el('g', { transform: `translate(${X + dx},${Y + 90})` }, L), p.c!, p.s!, front);
+      V.legs.forEach((l: any, j: number) => l.setAttribute('d', `M${V.base[j][0]},${V.base[j][1]}L${V.base[j][0]},0`));
+    }
+    el('rect', { x: X + 62, y: Y + 30, width: 5, height: 60, fill: '#7a5a3a' }, L);
+    bearStand(el('g', { transform: `translate(${X + 71},${Y + 90})` }, L), p.c!, p.s!);
+    animateTo(view.fitK * 9, X + 60, Y + 50, 1);
   } else if (kind === 'trains') {
     LOCOS.forEach((k, row) => {
       const y = Y - 40 + row * 46, g = el('g', { transform: `translate(${n2(X - 120)},${n2(y)})` }, L);
