@@ -99,6 +99,7 @@ class Bird {
     el('ellipse', { cx: 0, cy: .5, rx: kind === 'heron' ? 7 : 3.4, ry: kind === 'heron' ? 1.5 : .8, fill: 'rgba(40,70,20,.2)' }, this.s);
     this.p = kind === 'sparrow' ? sparrow(this.s, rg) : kind === 'lark' ? lark(this.s, rg) : heron(this.s);
     this.ph = rg.rand(0, 6); this.legPh = 0;
+    if (kind === 'sparrow') { this.sq = home; this.hops = 0; this.dir = rg.rand(0, 6.28); }
     dynamics.push(this);
   }
   get name() { return { sparrow: 'A sparrow', heron: 'A heron', lark: 'A skylark' }[this.kind as Kind]; }
@@ -116,6 +117,43 @@ class Bird {
     else { this.state = 'hop'; this.dur = .25 + d / 50; this.lift = 2.2; }
     if (Math.abs(this.to[0] - this.x) > 1) this.face = this.to[0] > this.x ? 1 : -1;
   }
+  /* ── דרורים: מקפצים בשרשראות של קפיצות קטנות בתוך הכיכר, ומדי פעם עפים קצת ── */
+  inSq(x: number, y: number) {
+    const [cx, cy, rx, ry, rmin = 0] = this.sq, n = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
+    return n <= 1 && n >= rmin * rmin;
+  }
+  /** קפיצה קטנה אחת (שתי הרגליים יחד), בכיוון שמשתנה מעט; ליד השוליים פונים פנימה */
+  startHop() {
+    let tx = this.x, ty = this.y;
+    for (let k = 0; k < 10; k++) {
+      if (k > 0) { const s = this.spots[Math.floor(this.rg.r() * this.spots.length)]; this.dir = Math.atan2(s[1] - this.y, s[0] - this.x); }
+      else this.dir += this.rg.rand(-.6, .6);
+      const len = this.rg.rand(2.4, 4.4);
+      tx = this.x + Math.cos(this.dir) * len; ty = this.y + Math.sin(this.dir) * len * .7;
+      if (this.inSq(tx, ty)) break;
+    }
+    if (!this.inSq(tx, ty)) { tx = this.x; ty = this.y; }
+    this.from = [this.x, this.y]; this.to = [tx, ty]; this.t = 0; this.state = 'hop'; this.dur = .16; this.lift = 1.8;
+    if (Math.abs(tx - this.x) > .3) this.face = tx > this.x ? 1 : -1;
+  }
+  /** מעוף קצר נמוך לנקודה אחרת בכיכר; בבהלה – הרחק ממי שהתקרב */
+  shortFlight(threat?: any) {
+    let best: number[] | null = null, bs = -1;
+    for (let k = 0; k < 12; k++) {
+      const a = this.rg.rand(0, 6.28), d = this.rg.rand(threat ? 30 : 16, threat ? 70 : 45), p = [this.x + Math.cos(a) * d, this.y + Math.sin(a) * d * .7];
+      if (!this.inSq(p[0], p[1])) continue;
+      const sc = threat ? Math.hypot(p[0] - threat.x, p[1] - threat.y) : 1;
+      if (sc > bs) { bs = sc; best = p; } if (!threat) break;
+    }
+    if (!best) { const s = this.spots[Math.floor(this.rg.r() * this.spots.length)]; best = [s[0], s[1]]; }
+    const d = Math.hypot(best[0] - this.x, best[1] - this.y);
+    this.from = [this.x, this.y]; this.to = best; this.t = 0; this.state = 'fly'; this.dur = .45 + d / 75; this.lift = 5 + d * .18; this.hops = 0;
+    if (Math.abs(best[0] - this.x) > 1) this.face = best[0] > this.x ? 1 : -1;
+  }
+  sparrowNext() {
+    if (this.rg.r() < .12) this.shortFlight();
+    else { this.hops = 2 + Math.floor(this.rg.r() * 6); this.startHop(); }
+  }
   update(dt: number, t: number) {
     const P = this.p;
     this.timer -= dt;
@@ -123,7 +161,8 @@ class Bird {
     // בהלה: מישהו עובר קרוב → עפים (דרורים יחד, כי כולם רואים אותו)
     if (this.state === 'stand' || this.state === 'walk' || this.state === 'hop') {
       const scare = this.kind === 'heron' ? 50 : 34;
-      if (dynamics.some(o => o.first && o.alpha > 0 && Math.hypot(o.x - this.x, o.y - this.y) < scare)) { this.state = 'stand'; this.timer = 0; this.scared = true; }
+      const th = dynamics.find(o => o.first && o.alpha > 0 && Math.hypot(o.x - this.x, o.y - this.y) < scare);
+      if (th) { this.state = 'stand'; this.timer = 0; this.scared = true; this.threat = th; }
     }
     if (this.state === 'stand') {
       this.actT -= dt;
@@ -139,7 +178,11 @@ class Bird {
       if (this.act === 'look') headA = this.look;
       if (this.act === 'preen') headA = -120 + Math.sin(u * 12) * 8;
       if (this.act === 'strike') headA = u < .5 ? -10 * u / .5 : u < .65 ? 70 : Math.max(0, 70 - (u - .65) * 140);   // נסוג, דוקר מהר, וחוזר לאט
-      if (this.timer <= 0) {
+      if (this.timer <= 0 && this.kind === 'sparrow') {
+        if (this.scared) { this.scared = false; this.shortFlight(this.threat); }
+        else if (this.hops > 0) this.startHop();
+        else this.sparrowNext();
+      } else if (this.timer <= 0) {
         if (this.scared) { this.scared = false; const s = this.spots[Math.floor(this.rg.r() * this.spots.length)]; this.from = [this.x, this.y]; this.to = s; this.t = 0; const d = Math.hypot(s[0] - this.x, s[1] - this.y); this.state = 'fly'; this.dur = .8 + d / 60; this.lift = Math.min(40, 10 + d * .25); if (Math.abs(s[0] - this.x) > 1) this.face = s[0] > this.x ? 1 : -1; }
         else this.next();
         this.timer = this.kind === 'heron' ? this.rg.rand(6, 16) : this.rg.rand(1.5, 6);
@@ -159,7 +202,15 @@ class Bird {
         this.alt = Math.sin(Math.PI * s) * this.lift;
         if (this.state === 'fly') { wings = 1; flap = this.kind === 'heron' ? Math.sin(t * 7) : (this.t * 2 + this.ph) % 1 < .6 ? Math.sin(t * 44) : .3; lean = this.kind === 'heron' ? 0 : -6; }
       }
-      if (s >= 1) { this.alt = 0; this.state = 'stand'; this.timer = this.kind === 'heron' ? this.rg.rand(6, 16) : this.rg.rand(1, 5); this.actT = 0; }
+      if (this.kind === 'sparrow' && this.state === 'hop') lean = -10 * Math.sin(Math.PI * s);
+      if (s >= 1) {
+        this.alt = 0; this.actT = 0;
+        if (this.kind === 'sparrow' && this.state === 'hop' && --this.hops > 0) {
+          // בין קפיצה לקפיצה: הפסקה קצרצרה, ולפעמים ניקור
+          this.state = 'stand'; this.timer = this.rg.rand(.05, .22); this.act = 'idle'; this.actT = this.timer;
+          if (this.rg.chance(.3)) { this.act = 'peck'; this.actS = t; this.timer += .45; this.actT = this.timer; }
+        } else { this.state = 'stand'; this.timer = this.kind === 'heron' ? this.rg.rand(6, 16) : this.rg.rand(1, 4.5); }
+      }
     }
     this.flip += (this.face - this.flip) * Math.min(1, dt * 14);
     const on = inView(this.x, this.y - this.alt - 10, 40); show(this.g, on);
@@ -190,7 +241,7 @@ class Bird {
 export function birds(o: { sparrows?: number; herons?: number; larks?: number }) {
   const w = ctx.world, all: Bird[] = [], T = w.terrain;
   // דרורים: על הרחבה המרוצפת של הכנסייה ועל הכיכר
-  const squares = (w.objects as any[]).filter(q => q.type === 'plaza' || q.type === 'roundabout').map(q => q.type === 'plaza' ? [q.x, q.y, q.rx * .9, q.ry * .8] : [q.x, q.y, (q.r ?? 40) + 36, (q.r ?? 40) + 36]);
+  const squares = (w.objects as any[]).filter(q => q.type === 'plaza' || q.type === 'roundabout').map(q => q.type === 'plaza' ? [q.x, q.y, q.rx * .9, q.ry * .8, 0] : [q.x, q.y, (q.r ?? 40) + 36, (q.r ?? 40) + 36, .45]);
   squares.forEach((sq, si) => {
     const spots: number[][] = [];
     for (let a = 0; a < 18; a++) { const v = rngAt(sq[0] + a, sq[1], 95), r = v.rand(.45, 1), th = v.rand(0, Math.PI * 2); spots.push([sq[0] + Math.cos(th) * sq[2] * r, sq[1] + Math.sin(th) * sq[3] * r]); }

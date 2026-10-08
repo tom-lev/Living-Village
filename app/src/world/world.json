@@ -3067,12 +3067,6 @@
    "name": "Ash House"
   },
   {
-   "type": "cave",
-   "x": -400,
-   "y": -1395,
-   "name": "Cave"
-  },
-  {
    "type": "lookoutTower",
    "x": -800,
    "y": -500,
@@ -3488,6 +3482,96 @@
    "dir": 260,
    "len": 50,
    "kind": "forest"
+  },
+  {
+   "type": "tallGrass",
+   "x": -2750,
+   "y": -3700,
+   "rock": [
+    26,
+    22
+   ]
+  },
+  {
+   "type": "tallGrass",
+   "x": -1850,
+   "y": -3450,
+   "rock": [
+    -28,
+    20
+   ]
+  },
+  {
+   "type": "tallGrass",
+   "x": -1150,
+   "y": -3668,
+   "rock": [
+    30,
+    18
+   ]
+  },
+  {
+   "type": "tallGrass",
+   "x": -300,
+   "y": -3550,
+   "rock": [
+    -24,
+    24
+   ]
+  },
+  {
+   "type": "tallGrass",
+   "x": 520,
+   "y": -3650,
+   "rock": [
+    22,
+    24
+   ]
+  },
+  {
+   "type": "tallGrass",
+   "x": 1250,
+   "y": -3650,
+   "rock": [
+    -30,
+    19
+   ]
+  },
+  {
+   "type": "tallGrass",
+   "x": -2400,
+   "y": -2900,
+   "rock": [
+    28,
+    21
+   ]
+  },
+  {
+   "type": "tallGrass",
+   "x": -1250,
+   "y": -2850,
+   "rock": [
+    -26,
+    22
+   ]
+  },
+  {
+   "type": "tallGrass",
+   "x": -150,
+   "y": -2950,
+   "rock": [
+    24,
+    20
+   ]
+  },
+  {
+   "type": "tallGrass",
+   "x": 1100,
+   "y": -2850,
+   "rock": [
+    -27,
+    23
+   ]
   }
  ],
  "generators": [
@@ -3866,7 +3950,7 @@
   "birds": {
    "sparrows": 10,
    "herons": 4,
-   "larks": 7
+   "larks": 10
   },
   "bluebirds": {
    "count": 7
@@ -4039,6 +4123,9 @@
    "speed": 46,
    "stopAt": 170,
    "stop": 7
+  },
+  "lizards": {
+   "count": 10
   }
  }
 }
