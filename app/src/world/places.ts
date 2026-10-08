@@ -11,7 +11,7 @@ export const KINDS: Record<string, { enter?: boolean; dur: [number, number]; lab
   church:  { enter: true, dur: [20, 45], label: 'at church' },
   train:   { enter: true, dur: [45, 100], label: 'on the train' },
   workIn:  { enter: true, dur: [25, 55], label: 'working inside' },
-  swim:    { dur: [25, 50], label: 'swimming' },
+  swim:    { dur: [50, 110], label: 'swimming' },
   work:    { dur: [20, 45], label: 'working' },
   view:    { dur: [8, 18], label: 'enjoying the view' },
   shore:   { dur: [10, 25], label: 'by the water' },

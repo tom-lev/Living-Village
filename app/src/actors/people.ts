@@ -8,6 +8,8 @@ import { roleOf, routeTo, routeAt, chooseNext, durOf, surnameOf, actOf, prependR
 import { ripple } from '../world/context';
 import { plotOfDoor } from '../prefabs/village';
 import { STATION } from './station';
+import { lakeShore } from '../scene/terrain';
+let LAKE: ReturnType<typeof lakeShore> | undefined;
 import { walkable } from '../world/walk';
 import { ctx } from '../world/context';
 import type { Look } from '../world/types';
@@ -145,14 +147,27 @@ export class Walker {
         if (st && this.x > st.x0 + 8 && this.x < st.x1 - 8 && Math.hypot(tx - this.x, ty - this.y) < 4) { this.state = 'board'; this.act = null; }
       }
       if (this.act === 'swim') {
-        // נכנסים למים ושוחים לאט לאורך החוף; אדווה קטנה מדי פעם
-        const a = this.place.at, sea = ctx.world.terrain.sea.y;
-        tx = a[0] + Math.sin(t * .12 + this.actPh) * 45; ty = sea + 34 + Math.sin(t * .2 + this.actPh) * 8;
+        // שוחים בכל האגם: מהחוף אל נקודות רחוקות במים, בשחייה איטית, ובסוף חוזרים אל המקום שממנו נכנסו
+        const a = this.place.at, sea = ctx.world.terrain.sea.y, L = LAKE ??= lakeShore(ctx.world.terrain);
+        if (!L) { tx = a[0] + Math.sin(t * .12 + this.actPh) * 45; ty = sea + 34 + Math.sin(t * .2 + this.actPh) * 8; }
+        else {
+          const home = [a[0], sea + 30];
+          if (this.timer <= 8) this.swimTo = home;   // הזמן נגמר: שוחים בחזרה לחוף
+          else if (!this.swimTo || Math.hypot(this.swimTo[0] - this.x, this.swimTo[1] - this.y) < 6) {
+            for (let k = 0; k < 12; k++) {
+              const ang = this.rg.rand(0, Math.PI * 2), r = this.rg.rand(60, 380), q = [this.x + Math.cos(ang) * r, this.y + Math.abs(Math.sin(ang)) * r * .8];
+              if (L.inside(q[0], q[1], 30)) { this.swimTo = q; break; }
+            }
+          }
+          const g = this.swimTo || home, d = Math.hypot(g[0] - this.x, g[1] - this.y) || 1, step = Math.min(d, this.speed * .55 * dt * 8);
+          tx = this.x + (g[0] - this.x) / d * step; ty = this.y + (g[1] - this.y) / d * step;
+        }
         if (this.y > sea + 6 && (this.rip = (this.rip || 0) - dt) <= 0) { this.rip = 1.5; ripple(this.x, this.y, 9, 3); }
       }
       walking = Math.hypot(tx - this.x, ty - this.y) > 3;   // הולכים אל הספסל או אל המים בצעדים, לא מחליקים
       this.timer -= dt;
-      if (this.timer <= 0) this.go(chooseNext(this, this.rg), null);
+      // שחייה: יוצאים מהמים רק כשחזרו לחוף (לא "הולכים" על המים)
+      if (this.timer <= 0 && !(this.act === 'swim' && Math.hypot(this.x - this.place.at[0], this.y - ctx.world.terrain.sea.y - 30) > 14)) { this.swimTo = null; this.go(chooseNext(this, this.rg), null); }
     }
     // מרחב אישי: מתרחקים קצת מאנשים קרובים; מי שבא מולך עובר מימין, מי שהולך לפניך לאט — מאטים
     if (this.alpha > 0 && this.act !== 'sit' && this.act !== 'swim') {

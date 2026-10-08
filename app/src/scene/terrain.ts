@@ -1,4 +1,5 @@
 /* פני השטח: קרקע, דשא, דרכים, שבילים, חוף, נהר, ים, שלג והרים */
+import { addLabel } from '../world/labels';
 import { curvePts } from '../world/curve';
 import { el, n2, circ, blob, smoothOpen, clamp } from '../core/util';
 import { rand, pick, rngAt } from '../core/rng';
@@ -132,7 +133,9 @@ export function buildTerrain(w: WorldData) {
   };
   el('path', { d: wave(T.beach.y, 14, .013, 0, 120) + `L${B.x1},${B.y1}L${X0},${B.y1}Z`, fill: '#f3dfb0' }, L.ground);
   // מקומות לשחייה: נכנסים למים בקצה החוף ונעלמים בהם לזמן מה
-  for (const x of T.beach.swim || []) addPlace({ kind: 'swim', name: T.sea.south ? 'the lake' : 'the sea', at: [x, T.sea.y - 8] });
+  for (const x of T.beach.swim || []) addPlace({ kind: 'swim', name: T.sea.name || (T.sea.south ? 'the lake' : 'the sea'), at: [x, T.sea.y - 8] });
+  // שם לאגם הדרומי (אפשר לשנות בלחיצה על התווית, כמו כל שם)
+  if (T.sea.name) addLabel({ type: 'lake', x: T.sea.labelAt?.[0] ?? 300, y: T.sea.labelAt?.[1] ?? T.sea.y + 120, name: T.sea.name }, T.sea.labelAt?.[1] ?? T.sea.y + 120);
 
   /* הנהר (נמשך מעל החול אל הים) */
   {

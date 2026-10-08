@@ -1435,6 +1435,11 @@
    "y": 2330,
    "waves": 90,
    "south": 3110,
+   "name": "Silverwater Lake",
+   "labelAt": [
+    20,
+    2480
+   ],
    "east": 1880,
    "west": -1260
   },
