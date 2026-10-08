@@ -4043,6 +4043,13 @@
     "color": "#e8413b"
    }
   ],
+  "wildlife": {
+   "rabbit": 8,
+   "squirrel": 8,
+   "owl": 4,
+   "fox": 3,
+   "bear": 2
+  },
   "sitters": [
    {
     "look": {

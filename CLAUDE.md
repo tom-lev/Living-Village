@@ -266,6 +266,7 @@ Order:
   - **The dog has three views** (`Dog` in `people.ts`): side (flipped left/right), front (walking toward the viewer) and back (walking away), built once and cross-faded. Moving: the view follows the direction of motion; standing: it looks at the owner. It switches only when one axis clearly dominates (1.4×), so diagonals don't flicker. The leash collar point follows the view.
   - `people.ts`: Walker plus Rover (walks the road graph; at dead ends it slows, waits 2.5–6 s and turns back), Dog (leash, trot), Balloon (spring), Sitter (`feedPigeons`, `warmHands`), and depth sort every 6 frames.
   - `animals.ts`: Horse (grazing neck), Sheep (wander in the paddock), ducks (lake), fish (jump), butterflies.
+  - `wildlife.ts` + `wildlife-art.ts`: forest animals (counts in `actors.wildlife`: 8 rabbits, 8 squirrels, 4 owls, 3 foxes, 2 bears). Each has a fixed home spot chosen by `rngAt` (stable): on walkable ground, not within 22 of a path or water, between the southern ridge and the beach, at least `homeGap` from any home door (bear 800). They roam around their spot (rabbits and squirrels hop, foxes trot, bears walk slowly; owls sit on stumps and turn their heads), never step on paths or water (`clearLine`), and move away from passers-by within 60. They join `dynamics`, so they are depth-sorted with people. Test hook `window.__wildlife`.
   - `ambient.ts`: clouds (with shadows; they fade out at deep zoom) and a bird flock.
 - **Camera** (`camera/camera.ts`):
   - `cam {k,x,y}`, screen = world×k + (x,y).
