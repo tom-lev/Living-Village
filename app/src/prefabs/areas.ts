@@ -1,6 +1,6 @@
 /* אזורים: מכלאה, אגמים, כיכר, שדות, מסילה, אי, אתר סקי ועוד */
 import { el, n2, circ, shade, wrap1, blob, rrect, at, ST } from '../core/util';
-import { rand, pick, R } from '../core/rng';
+import { rand, pick, R, rngAt } from '../core/rng';
 import { ctx, prop, block, fxAt, WATERS, smokeFx } from '../world/context';
 import { register } from './registry';
 import { geo, ROAD_W } from '../world/geometry';
@@ -267,21 +267,118 @@ function ruins(o: any) {
   block(x - 80, y - 75, x + 85, y + 30);
 }
 
+/** גן משחקים (משימה 19): משטח גומי רך עם מסגרת עץ, ומשטחים צבעוניים מתחת למתקנים.
+ *  נדנדות עץ עם שלוש נדנדות שמתנדנדות, מגדל עם גג אדום, סולם, קיר טיפוס ומגלשה מתפתלת, ארגז חול עם דלי, את וטירה,
+ *  קרוסלה שמסתובבת לאט, נדנדת מאזניים, וכיפת טיפוס. החלקים הזזים מצוירים בשכבה הדינמית (fx) ומונפשים רק כשהם על המסך */
 function playground(o: any) {
-  const { x, y } = o, G = ctx.L.groundProps;
-  el('rect', { x: x - 80, y: y - 50, width: 160, height: 80, rx: 14, fill: '#f0d9a8', stroke: '#e0c38a', 'stroke-width': 2 }, G);
-  el('rect', { x: x + 30, y: y - 10, width: 40, height: 30, rx: 4, fill: '#f6e3b6', stroke: '#c9a466', 'stroke-width': 3 }, G);
-  let g = prop(y - 10);
-  el('path', { d: `M${x - 60},${y - 50}l-7,40M${x - 60},${y - 50}l7,40M${x - 20},${y - 50}l-7,40M${x - 20},${y - 50}l7,40M${x - 62},${y - 50}h44`, stroke: '#e2574c', 'stroke-width': 2.6, 'stroke-linecap': 'round' }, g);
-  // נדנדות: שתי מסגרות A (הרגליים נפגשות למעלה) וקורה ביניהן
-  el('path', { d: `M${x - 50},${y - 50}v28M${x - 44},${y - 50}v28M${x - 36},${y - 50}v24M${x - 30},${y - 50}v24`, stroke: '#6b6f78', 'stroke-width': .8 }, g);
-  el('rect', { x: x - 52, y: y - 23, width: 10, height: 3, fill: '#3d9bd9' }, g); el('rect', { x: x - 38, y: y - 27, width: 10, height: 3, fill: '#3d9bd9' }, g);
-  g = prop(y + 4);
-  el('path', { d: `M${x - 8},${y + 4}v-40M${x + 2},${y + 4}v-40`, stroke: '#4a4a55', 'stroke-width': 1.6 }, g);
-  el('path', { d: `M${x - 8},${y - 6}h10M${x - 8},${y - 16}h10M${x - 8},${y - 26}h10`, stroke: '#4a4a55', 'stroke-width': 1.4 }, g);
-  el('rect', { x: x - 10, y: y - 40, width: 14, height: 4, fill: '#ffd23f' }, g);
-  el('path', { d: `M${x + 4},${y - 38}Q${x + 20},${y - 30} ${x + 30},${y + 2}`, stroke: '#ffd23f', 'stroke-width': 5, fill: 'none', 'stroke-linecap': 'round' }, g);
-  block(x - 90, y - 70, x + 90, y + 40);
+  const { x, y } = o, G = ctx.L.groundProps, F = ctx.L.fx, W = 100, H = 90, wood = '#9a6a40', woodD = '#6e4a2c';
+  // משטח: גומי רך, מסגרת עץ, ושביל כניסה מהצד המערבי
+  el('path', { d: rrect(x - W - 4, y - H - 4, 2 * W + 8, 2 * H + 8, 18), fill: woodD }, G);
+  el('path', { d: rrect(x - W, y - H, 2 * W, 2 * H, 15), fill: '#e8cfa8' }, G);
+  let spk = ''; for (let i = 0; i < 160; i++) { const v = rngAt(x + i, y, 61); spk += circ(x - W + 6 + v.r() * (2 * W - 12), y - H + 6 + v.r() * (2 * H - 12), .7); }
+  el('path', { d: spk, fill: '#dcbf95' }, G);   // גרגרי הגומי
+  el('path', { d: `M${x - W - 5},${y + 6}h-34v20h34z`, fill: '#ecd7b5' }, G);   // כניסה
+  el('path', { d: `M${x - W - 4},${y + 6}v20`, stroke: '#e8cfa8', 'stroke-width': 6 }, G);
+  // משטחים צבעוניים מתחת למתקנים
+  el('path', { d: rrect(x - 92, y - 70, 76, 46, 10), fill: '#9fd48a' }, G);    // נדנדות
+  el('path', { d: rrect(x + 8, y - 72, 86, 52, 10), fill: '#8fc3e0' }, G);     // מגדל ומגלשה
+  el('ellipse', { cx: x - 4, cy: y + 14, rx: 30, ry: 16, fill: '#f2b8c6' }, G); // קרוסלה
+  el('ellipse', { cx: x + 62, cy: y + 52, rx: 30, ry: 15, fill: '#f6d77a' }, G); // כיפת טיפוס
+
+  /* נדנדות: שתי מסגרות A, קורה עליונה, ושלוש נדנדות שמתנדנדות כל אחת בקצב משלה */
+  const sx = x - 54, top = y - 66, base = y - 30;
+  let g = prop(base);
+  for (const fx of [sx - 32, sx + 32]) el('path', { d: `M${fx - 8},${base}L${fx},${top}L${fx + 8},${base}M${fx - 4},${base - 14}h8`, stroke: wood, 'stroke-width': 2.6, 'stroke-linecap': 'round', fill: 'none' }, g);
+  el('path', { d: `M${sx - 34},${top}H${sx + 34}`, stroke: woodD, 'stroke-width': 3.4, 'stroke-linecap': 'round' }, g);
+  ['#e2574c', '#3d9bd9', '#ffd23f'].forEach((c, i) => {
+    const px = sx - 18 + i * 18, sw = el('g', null, F), ph = i * 1.9, amp = [9, 4, 14][i];
+    el('path', { d: `M${px - 3.4},${top}L${px - 3.4},${top + 24}M${px + 3.4},${top}L${px + 3.4},${top + 24}`, stroke: '#7c8088', 'stroke-width': .8 }, sw);
+    el('path', { d: rrect(px - 5, top + 23, 10, 3, 1.2), fill: c, stroke: shade(c, -.3), 'stroke-width': .5 }, sw);
+    fxAt(px, top + 12, 30, t => sw.setAttribute('transform', `rotate(${(Math.sin(t * 1.5 + ph) * amp).toFixed(1)} ${px} ${top})`));
+  });
+
+  /* מגדל עם גג, סולם, קיר טיפוס ומגלשה מתפתלת */
+  const tx = x + 40, tb = y - 32, plat = tb - 24;
+  g = prop(tb + 1);
+  el('path', { d: `M${tx - 12},${tb}V${plat - 22}M${tx + 12},${tb}V${plat - 22}`, stroke: wood, 'stroke-width': 2.4 }, g);
+  el('path', { d: rrect(tx - 15, plat - 2, 30, 5, 1.5), fill: '#c99a64', stroke: woodD, 'stroke-width': .6 }, g);   // רצפת המגדל
+  el('path', { d: `M${tx - 12},${plat - 8}h24M${tx - 12},${plat - 14}h24`, stroke: wood, 'stroke-width': 1.2 }, g);  // מעקה
+  el('path', { d: `M${tx - 16},${plat - 21}L${tx},${plat - 36}L${tx + 16},${plat - 21}Z`, fill: '#e2574c', stroke: '#a33223', 'stroke-width': .8 }, g);   // גג
+  el('path', { d: `M${tx},${plat - 36}v-6`, stroke: woodD, 'stroke-width': 1 }, g);
+  el('path', { d: `M${tx},${plat - 42}l7,2.4l-7,2.4z`, fill: '#ffd23f' }, g);   // דגלון
+  // סולם בצד שמאל
+  el('path', { d: `M${tx - 24},${tb}L${tx - 15},${plat}M${tx - 19},${tb}L${tx - 10},${plat}`, stroke: woodD, 'stroke-width': 1.4 }, g);
+  let rungs = ''; for (let k = 1; k < 5; k++) { const u = k / 5; rungs += `M${n2(tx - 24 + 9 * u)},${n2(tb - 24 * u)}h5`; }
+  el('path', { d: rungs, stroke: woodD, 'stroke-width': 1.1 }, g);
+  // קיר טיפוס מתחת לרצפה, עם אחיזות צבעוניות
+  el('path', { d: rrect(tx - 11, plat + 3, 22, 20, 1.5), fill: '#7ab8de', stroke: '#4f8fb8', 'stroke-width': .6 }, g);
+  el('path', { d: circ(tx - 6, plat + 8, 1.2) + circ(tx + 4, plat + 7, 1.1) + circ(tx - 1, plat + 13, 1.2) + circ(tx + 7, plat + 16, 1.1) + circ(tx - 7, plat + 18, 1.1), fill: '#ff7aa2' }, g);
+  el('path', { d: circ(tx + 1, plat + 18, 1) + circ(tx - 3, plat + 4, 1) + circ(tx + 8, plat + 11, 1), fill: '#ffd23f' }, g);
+  // מגלשה מתפתלת לימין
+  el('path', { d: `M${tx + 13},${plat}C${tx + 30},${plat + 2} ${tx + 26},${tb - 4} ${tx + 46},${tb - 6}L${tx + 52},${tb - 2}`, stroke: '#e0a92a', 'stroke-width': 7, fill: 'none', 'stroke-linecap': 'round' }, g);
+  el('path', { d: `M${tx + 13},${plat - 1}C${tx + 30},${plat + 1} ${tx + 26},${tb - 5} ${tx + 46},${tb - 7}L${tx + 52},${tb - 3}`, stroke: '#ffd23f', 'stroke-width': 4.4, fill: 'none', 'stroke-linecap': 'round' }, g);
+  el('path', { d: `M${tx + 36},${tb - 6}v6M${tx + 22},${plat + 6}v${tb - plat - 6}`, stroke: '#7c8088', 'stroke-width': 1 }, g);
+
+  /* ארגז חול: מסגרת עץ, חול, דלי, את וטירה קטנה */
+  const bx = x - 84, by = y + 26;
+  el('path', { d: rrect(bx, by, 52, 38, 3), fill: wood }, G);
+  el('path', { d: rrect(bx + 4, by + 4, 44, 30, 2), fill: '#f3e2b5' }, G);
+  el('path', { d: blob(bx + 30, by + 22, 9, 5, 7, .2, 2), fill: '#e9d29c' }, G);
+  g = prop(by + 30);
+  el('path', { d: `M${bx + 26},${by + 22}h10v-5h-2v2h-2v-2h-2v2h-2v-2h-2z`, fill: '#e2c98c', stroke: '#c9a466', 'stroke-width': .5 }, g);   // טירה
+  el('path', { d: `M${bx + 12},${by + 26}l1,-6h6l1,6z`, fill: '#e2574c' }, g);   // דלי
+  el('path', { d: `M${bx + 13},${by + 20}q3,-3 6,0`, fill: 'none', stroke: '#a33223', 'stroke-width': .6 }, g);
+  el('path', { d: `M${bx + 40},${by + 14}l-6,8`, stroke: '#3d9bd9', 'stroke-width': 1.2, 'stroke-linecap': 'round' }, g);
+  el('path', { d: `M${bx + 33},${by + 22}l1.6,1.8l1.8,-1.4z`, fill: '#3d9bd9' }, g);
+
+  /* קרוסלה שמסתובבת: דיסקה צבעונית עם ידיות; המחיצות והידיות זזות סביב (באליפסה, בפרספקטיבה) */
+  const cx = x - 4, cy = y + 10, R = 20, Ry = 8;
+  g = prop(cy + 10);
+  el('ellipse', { cx, cy: cy + 3, rx: R, ry: Ry, fill: '#c9603f' }, g);
+  const disc = el('g', null, F), segs = el('path', { stroke: '#fff', 'stroke-width': 1, opacity: .9 }, disc), bars = el('path', { stroke: '#4a4a55', 'stroke-width': 1.2, 'stroke-linecap': 'round', fill: 'none' }, disc);
+  el('ellipse', { cx, cy, rx: R, ry: Ry, fill: '#3d9bd9', stroke: '#2a6fa8', 'stroke-width': .8 }, disc);
+  const colors = ['#e2574c', '#ffd23f', '#45a85a', '#ef6fa4'];
+  const wedges = colors.map(c => el('path', { fill: c, opacity: .85 }, disc));
+  disc.appendChild(segs); disc.appendChild(bars);
+  el('path', { d: `M${cx},${cy}v-12`, stroke: '#4a4a55', 'stroke-width': 1.6 }, disc);
+  el('circle', { cx, cy: cy - 12, r: 1.6, fill: '#ffd23f' }, disc);
+  fxAt(cx, cy, 30, t => {
+    const a0 = t * .45;
+    let s = '', b = '';
+    wedges.forEach((wg: any, i: number) => {
+      const a = a0 + i * Math.PI / 2, a2 = a + Math.PI / 4;
+      wg.setAttribute('d', `M${cx},${cy}L${n2(cx + Math.cos(a) * R)},${n2(cy + Math.sin(a) * Ry)}A${R},${Ry} 0 0 1 ${n2(cx + Math.cos(a2) * R)},${n2(cy + Math.sin(a2) * Ry)}Z`);
+    });
+    for (let i = 0; i < 4; i++) {
+      const a = a0 + i * Math.PI / 2 + Math.PI / 8, ex = cx + Math.cos(a) * R * .8, ey = cy + Math.sin(a) * Ry * .8;
+      s += `M${cx},${cy}L${n2(cx + Math.cos(a - Math.PI / 8) * R)},${n2(cy + Math.sin(a - Math.PI / 8) * Ry)}`;
+      b += `M${n2(ex)},${n2(ey)}v-7h${n2(Math.cos(a + Math.PI / 2) * 3)}`;   // ידיות
+    }
+    segs.setAttribute('d', s); bars.setAttribute('d', b);
+  });
+
+  /* נדנדת מאזניים: קורה שמתנדנדת סביב ציר, מושבים וידיות בקצוות */
+  const kx = x + 24, ky = y + 56;
+  g = prop(ky + 1);
+  el('path', { d: `M${kx - 5},${ky}L${kx},${ky - 9}L${kx + 5},${ky}Z`, fill: '#e2574c', stroke: '#a33223', 'stroke-width': .6 }, g);
+  const plank = el('g', null, F);
+  el('path', { d: rrect(kx - 26, ky - 11, 52, 3, 1.4), fill: '#45a85a', stroke: '#2f7a3f', 'stroke-width': .5 }, plank);
+  el('path', { d: `M${kx - 20},${ky - 11}v-5h3M${kx + 20},${ky - 11}v-5h-3`, stroke: '#4a4a55', 'stroke-width': 1.1, fill: 'none' }, plank);
+  el('path', { d: rrect(kx - 25, ky - 13, 7, 2.4, 1) + rrect(kx + 18, ky - 13, 7, 2.4, 1), fill: '#ffd23f' }, plank);
+  fxAt(kx, ky - 10, 30, t => plank.setAttribute('transform', `rotate(${(Math.sin(t * 1.1) * 12).toFixed(1)} ${kx} ${ky - 9})`));
+
+  /* כיפת טיפוס: קשתות צבעוניות */
+  const dx = x + 62, dy = y + 52;
+  g = prop(dy + 2);
+  const arc = (rx: number, ry: number, c: string) => el('path', { d: `M${dx - rx},${dy}A${rx},${ry} 0 0 1 ${dx + rx},${dy}`, fill: 'none', stroke: c, 'stroke-width': 1.6 }, g);
+  arc(22, 22, '#e2574c'); arc(15, 21.4, '#3d9bd9'); arc(7, 20.6, '#45a85a');
+  el('path', { d: `M${dx - 21},${dy - 7}Q${dx},${dy - 11} ${dx + 21},${dy - 7}M${dx - 17},${dy - 14}Q${dx},${dy - 18} ${dx + 17},${dy - 14}M${dx - 9},${dy - 19.4}Q${dx},${dy - 21.6} ${dx + 9},${dy - 19.4}`, fill: 'none', stroke: '#ffd23f', 'stroke-width': 1.3 }, g);
+
+  // פח אשפה ליד הכניסה
+  g = prop(y + 32);
+  el('path', { d: rrect(x - 96, y + 22, 7, 10, 1.4), fill: '#4f8a5a', stroke: '#2f5f3a', 'stroke-width': .6 }, g);
+  el('path', { d: rrect(x - 97, y + 20, 9, 2.4, 1), fill: '#2f5f3a' }, g);
+  block(x - W - 10, y - H - 40, x + W + 10, y + H + 10);
 }
 
 /** בריכת דייגים עם רציף וסירת משוטים */

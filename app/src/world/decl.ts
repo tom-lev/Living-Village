@@ -88,7 +88,7 @@ export const DECL: Record<string, Decl> = {
   vegGarden: { kind: 'work', topLeft: true },
   field: { kind: 'work', topLeft: true },
   orchard: { kind: 'work' }, vineyard: { kind: 'work' }, sunflowerField: { kind: 'work' },
-  playground: { kind: 'play' },
+  playground: { kind: 'play', square: o => [o.x, o.y, 100, 90] },   // ספסלים לידו פונים אליו (ההורים מסתכלים על הילדים)
   footballPitch: { kind: 'play', topLeft: true },
   flowerField: { kind: 'stroll' }, maze: { kind: 'stroll' },
   cableCar: { kind: 'view' }, skiSlope: { kind: 'view' },
