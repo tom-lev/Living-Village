@@ -7,55 +7,52 @@ import { grade, rawColor } from '../core/palette';
 import { ctx } from '../world/context';
 import { DETAIL_GROUPS } from '../scene/terrain';
 import { view } from '../camera/view';
-import { createPainter, type DLItem } from './tilePainter';
+import { createPainter, packDL, type DLItem } from './tilePainter';
+import { SNode, mul, parseTransform, type M6 } from './snode';
 import { createGpuTiles, type GpuTiles } from './gpu';
 
 const TILE = 256, BASE = 1 / 8, LMAX = 10, TILE_CAP = 300;
 const tileScale = (l: number) => BASE * 2 ** l;   // פיקסלים של המסך ליחידת עולם
 
-/** הופך את ה-SVG הסטטי לרשימת ציור (מסלול, צבעים, מטריצה ותיבה תוחמת לכל צורה) */
+/** הופך את הנוף הקבוע (עץ של SNode בזיכרון) לרשימת ציור: מסלול, צבעים, מטריצה ותיבה תוחמת לכל צורה.
+ *  בלי אלמנטים של הדפדפן ובלי למדוד אותם: המטריצות והגבולות מחושבים כאן (render/snode.ts) */
 function extractDisplayList(): DLItem[] {
   const DL: DLItem[] = [], { worldS, svgS, L } = ctx;
-  worldS.removeAttribute('transform');
   const DETAIL = new Set(DETAIL_GROUPS);
   const KEYS = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'font-size', 'font-weight', 'font-family', 'font-style', 'text-anchor'];
-  const walk = (node: Element, inh: Record<string, string>, alpha: number, detail: boolean) => {
-    for (const e of [...node.children] as any[]) {
-      const st = { ...inh };
-      for (const k of KEYS) { const v = rawColor(e, k) ?? e.getAttribute(k); if (v !== null) st[k] = v; }   // צבע מקורי; הפלטה מוחלת בצייר
-      const a = alpha * (e.hasAttribute('opacity') ? +e.getAttribute('opacity') : 1), det = detail || DETAIL.has(e), tag = e.tagName;
-      if (tag === 'g') { walk(e, st, a, det); continue; }
-      const num = (k: string) => +e.getAttribute(k) || 0;
-      const m = e.getCTM();
+  const walk = (node: SNode, inh: Record<string, string>, alpha: number, detail: boolean, pm: M6) => {
+    for (const e of node.kids) {
+      const st = { ...inh }, at = e.attrs;
+      for (const k of KEYS) { const v = rawColor(e as any, k) ?? at[k]; if (v !== undefined) st[k] = v; }   // צבע מקורי; הפלטה מוחלת בצייר
+      const a = alpha * ('opacity' in at ? +at.opacity : 1), det = detail || DETAIL.has(e), tag = e.tagName;
+      const m = at.transform ? mul(pm, parseTransform(at.transform)) : pm;
+      if (tag === 'g') { walk(e, st, a, det, m); continue; }
+      const num = (k: string) => +at[k] || 0;
       if (tag === 'text') {
         // טקסט עובר לשכבה הדינמית כ-SVG רגיל (חד בכל זום, ובלי צורך בגופן בתוך ה-Worker)
         const ta: Record<string, any> = { x: num('x'), y: num('y'), 'font-size': st['font-size'] || 12, 'font-weight': st['font-weight'] || 400,
-          'text-anchor': st['text-anchor'] || 'start', fill: st.fill || '#000', transform: `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})` };
+          'text-anchor': st['text-anchor'] || 'start', fill: st.fill || '#000', transform: `matrix(${m[0]} ${m[1]} ${m[2]} ${m[3]} ${m[4]} ${m[5]})` };
         for (const k of ['font-family', 'font-style', 'stroke', 'stroke-width']) if (st[k] !== undefined) ta[k] = st[k];
         const t = el('text', ta, L.fx);
         t.textContent = e.textContent; continue;
       }
       let d: string;
-      if (tag === 'path') d = e.getAttribute('d') || '';
+      if (tag === 'path') d = at.d || '';
       else if (tag === 'rect') { const rx = Math.min(num('rx'), num('width') / 2, num('height') / 2); d = rx > 0 ? rrect(num('x'), num('y'), num('width'), num('height'), rx) : `M${num('x')},${num('y')}h${num('width')}v${num('height')}h${-num('width')}z`; }
       else if (tag === 'circle') d = circ(num('cx'), num('cy'), num('r'));
       else if (tag === 'ellipse') { const cx = num('cx'), cy = num('cy'), rx = num('rx'), ry = num('ry'); d = `M${cx - rx},${cy}a${rx},${ry} 0 1,0 ${2 * rx},0a${rx},${ry} 0 1,0 ${-2 * rx},0`; }
       else continue;
-      const bb = e.getBBox(), sw = st.stroke && st.stroke !== 'none' ? +(st['stroke-width'] || 1) : 0, pad = sw / 2 + 2;
-      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-      for (const [px, py] of [[bb.x - pad, bb.y - pad], [bb.x + bb.width + pad, bb.y - pad], [bb.x - pad, bb.y + bb.height + pad], [bb.x + bb.width + pad, bb.y + bb.height + pad]]) {
-        const X = m.a * px + m.c * py + m.e, Y = m.b * px + m.d * py + m.f;
-        x0 = Math.min(x0, X); y0 = Math.min(y0, Y); x1 = Math.max(x1, X); y1 = Math.max(y1, Y);
-      }
+      // הגבולות של כל צורה מחושבים בציירים שברקע (Workers), לא כאן: הדף לא מחכה לפענוח של כל המסלולים
+      const sw = st.stroke && st.stroke !== 'none' ? +(st['stroke-width'] || 1) : 0, pad = sw / 2 + 2;
       const fill = st.fill === undefined ? '#000' : st.fill;
-      DL.push({ d, m: [m.a, m.b, m.c, m.d, m.e, m.f], a, det, bb: [x0, y0, x1, y1],
+      DL.push({ d, m: [...m], a, det, bb: null, pad,
         fill: fill === 'none' || fill === 'transparent' ? null : fill, stroke: sw ? st.stroke : null, sw,
         cap: st['stroke-linecap'] || 'butt', join: st['stroke-linejoin'] || 'miter',
         dash: st['stroke-dasharray'] ? st['stroke-dasharray'].split(/[\s,]+/).map(Number) : null });
     }
   };
-  walk(worldS, {}, 1, false);
-  svgS.remove();   // ה-SVG הסטטי שימש רק לבנייה
+  walk(worldS, {}, 1, false, [1, 0, 0, 1, 0, 0]);
+  svgS.remove();   // ה-SVG הסטטי של הדף כבר לא משמש
   return DL;
 }
 
@@ -84,7 +81,7 @@ let cvS: HTMLCanvasElement, cs: CanvasRenderingContext2D;
 // מצב ההרכבה: כרטיס גרפי (WebGL), או קנבס דו-ממדי כגיבוי בדפדפן בלי WebGL
 let gpu: GpuTiles | null = null, mode: 'pending' | 'gpu' | '2d' = 'pending';
 const L0_KEYS: number[][] = [];
-export const tileStats = { missing: 0, painted: 0, mode: '' };
+export const tileStats = { missing: 0, painted: 0, mode: '', log: [] as number[][] };
 let sDirty = true, sRaf = 0, lastNeed = '';
 let wanted = new Set<string>();   // האריחים שהתצוגה הנוכחית צריכה או מכינה מראש: לא נזרקים מהמטמון
 let cap = TILE_CAP;               // גודל המטמון: גדל במסכים גדולים, כדי שכל האריחים שעל המסך תמיד ייכנסו
@@ -107,28 +104,51 @@ export const gpuOverlay = (c: any) => gpu?.overlay(c);
 /** ציור פריים עכשיו (בכרטיס הגרפי: אריחים + דמויות ביחד) */
 export function renderNow() { sDirty = false; drawStatic(); }
 
-export function initTiles(canvas: HTMLCanvasElement) {
-  cvS = canvas;
-  if (mode === '2d') cs = canvas.getContext('2d');
-  gpu?.setBackground(grade('#9cd162'));
-  const DL = extractDisplayList();
-  const onTile = (m: any) => { if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
+let onTileFn: (m: any) => void = () => {};
+/** מפעיל את הציירים שברקע. נקרא בתחילת הטעינה, לפני בניית העולם: הפעלה של Worker צריכה שהדף יהיה פנוי,
+ *  ואם מחכים לסוף הבנייה הוא מתחיל לרוץ רק אחרי שהדף מסיים הכול (זה עיכב את האריחים הראשונים ביותר משנייה וחצי) */
+let hiWait: Promise<void> = Promise.resolve();
+/** מחכה שהציירים ייטענו (לכל היותר max אלפיות שנייה), כדי שלא יחכו לסוף הבנייה של הדף */
+export const paintersLoaded = (max = 400) => Promise.race([hiWait, new Promise<void>(r => setTimeout(r, max))]);
+export function startPainters() {
+  if (painters.length) return;
+  let left = 0, done: () => void = () => {};
+  hiWait = new Promise<void>(r => { done = r; });
   try {
     if (typeof OffscreenCanvas === 'undefined' || !('transferToImageBitmap' in OffscreenCanvas.prototype)) throw 0;
     // כמה ציירים במקביל: אריחים של רמת זום חדשה מוכנים מהר יותר
     const n = clamp(Math.floor((navigator.hardwareConcurrency || 4) / 3), 1, 2);   // בטלפון: מעט ליבות חזקות, לא להתחרות בציור הפריימים
     for (let q = 0; q < n; q++) {
       const w = new Worker(new URL('./tileWorker.ts', import.meta.url), { type: 'module' });
-      w.onmessage = e => onTile(e.data);
+      left++;
+      w.onmessage = e => { if (e.data?.type === 'hi') { if (--left === 0) done(); return; } onTileFn(e.data); };
       painters.push(w);
     }
-  } catch {
+  } catch { painters = []; done(); }
+}
+
+export function initTiles(canvas: HTMLCanvasElement) {
+  cvS = canvas;
+  if (mode === '2d') cs = canvas.getContext('2d');
+  gpu?.setBackground(grade('#9cd162'));
+  const DL = extractDisplayList();
+  startPainters();
+  const onTile = (m: any) => { if (m.type === 'ready') { tileStats.log.push([performance.now(), -1, m.ms, m.n, { lag: performance.now() - m.sent, sentAbs: performance.timeOrigin + m.sent, wBoot: m.wBoot, wStart: m.wStart, wEnd: m.wEnd, recvAbs: performance.timeOrigin + performance.now(), origin: performance.timeOrigin }]); return; } if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; if (tileStats.log.length < 400) tileStats.log.push([performance.now(), m.l, m.ms, m.n, m.dbg]); putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
+  onTileFn = onTile;
+  if (!painters.length) {
     // דפדפן ישן: אותו צייר רץ בדף עצמו (איטי יותר, אבל עובד)
     const handle = createPainter(m => setTimeout(() => onTile(m), 0));
     painters = [{ postMessage: m => handle(m) }];
   }
   colors = [...new Set(DL.flatMap(it => [it.fill, it.stroke]).filter(Boolean))];
-  for (const p of painters) { p.postMessage({ type: 'init', items: DL, B: ctx.B, TILE, BASE }); p.postMessage({ type: 'palette', cmap: colorMap(), gen }); }
+    // ארוז פעם אחת: מחרוזת אחת ומערכים מספריים שמועברים בלי העתקה (לכל צייר נוסף – עותק של המערכים)
+  const { pk } = packDL(DL), KEYS = ['d', 'dLen', 'm', 'a', 'pad', 'sw', 'det', 'sty'];
+  // קודם מכינים עותק לכל צייר (אחרי ההעברה המערכים של המקור כבר לא שלנו), ואז שולחים
+  const packs: any[] = painters.map((_, q) => q === 0 ? pk : { ...pk, ...Object.fromEntries(KEYS.map(k => [k, (pk as any)[k].slice()])) });
+  painters.forEach((p, q) => {
+    (p as any).postMessage({ type: 'init', packed: packs[q], B: ctx.B, TILE, BASE, sent: performance.now() }, KEYS.map(k => packs[q][k].buffer));
+    p.postMessage({ type: 'palette', cmap: colorMap(), gen });
+  });
   const { B } = ctx, tw0 = TILE / tileScale(0);
   for (let j = 0; j < Math.ceil((B.y1 - B.y0) / tw0); j++) for (let i = 0; i < Math.ceil((B.x1 - B.x0) / tw0); i++) L0_KEYS.push([0, i, j]);
   return DL.length;
@@ -163,9 +183,15 @@ function drawStatic() {
     const X = sx(i), Y = sy(j), Wd = sx(i + 1) - X, Ht = sy(j + 1) - Y;
     if (t) cs.drawImage(t, X, Y, Wd, Ht); else standIn(l, i, j, X, Y, Wd, Ht);
   }
+  tileStats.missing = need.length;
+  // קודם הבקשות לציירים, ורק אחר כך ההרכבה בכרטיס הגרפי: ההרכבה הראשונה כבדה, והציירים לא צריכים לחכות לה
+  requestTiles(l, tw, ix0, ix1, iy0, iy1, wx0, wy0, wx1, wy1, ccx, ccy);
   // בכרטיס הגרפי: רק מטריצה אחת ורשימת אריחים נראים
   if (gpu) gpu.compose(l, { ix0, ix1, iy0, iy1 }, cam);
-  tileStats.missing = need.length;
+}
+
+function requestTiles(l: number, tw: number, ix0: number, ix1: number, iy0: number, iy1: number, wx0: number, wy0: number, wx1: number, wy1: number, ccx: number, ccy: number) {
+  const { B } = ctx;
   // את רשימת ההכנה בונים מחדש רק כשהאזור הנראה משתנה (לא בכל פריים של גרירה)
   const key = `${l}|${ix0}|${ix1}|${iy0}|${iy1}|${Math.round(ccx / tw * 2)}|${Math.round(ccy / tw * 2)}`;
   if (key === lastNeed) return;

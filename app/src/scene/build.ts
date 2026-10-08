@@ -27,6 +27,7 @@ import { geo, ROAD_W } from '../world/geometry';
 import { catmull } from '../world/nav';
 import { autoBridges } from './mountains';
 import { WATERS } from '../world/context';
+import { SNode } from '../render/snode';
 
 const rect = ([x0, y0, x1, y1]: number[]) => ({ x0, y0, x1, y1 });
 
@@ -132,7 +133,7 @@ function placeSmall(o: any) {
    לכן מציירים אותו לתוך שכבות שלא מחוברות לשום דבר, ומבטלים את מה שהוא צייר. השטח שהוא חסם לעצים נשאר קרחת */
 function drawAway(o: any, f: (o: any) => void) {
   const L = ctx.L, keep = { ...L }, s0 = statics.length;
-  for (const k of Object.keys(L)) L[k] = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  for (const k of Object.keys(L)) L[k] = new SNode('g');
   try { f(o); } finally { Object.assign(L, keep); statics.length = s0; }   // השטח שהוא חסם נשאר קרחת (עצים לא נשתלים שם)
 }
 

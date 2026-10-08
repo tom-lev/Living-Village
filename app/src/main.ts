@@ -4,7 +4,7 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
-import { initTiles, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame } from './render/tiles';
+import { initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic } from './render/tiles';
 import { ctx } from './world/context';
 import { FRAME } from './world/budget';
 import { vstats } from './render/vnode';
@@ -34,12 +34,17 @@ async function boot() {
   const canvas = await prepareGpu(document.getElementById('mapC') as HTMLCanvasElement);
   view.gpu = ctx.gpuDyn = tileStats.mode === 'gpu';
   const tm: Record<string, number> = {}, t0 = performance.now();   // זמני הטעינה (window.__boot), למדידה
+  startPainters(); await paintersLoaded();   // הציירים שברקע נטענים קודם (הטעינה שלהם צריכה דף פנוי), ואז בונים
   buildScene(world, svgS, svgD); tm.scene = performance.now() - t0;
-  const actors = buildActors(world.actors); tm.actors = performance.now() - t0 - tm.scene;
-  const items = initTiles(canvas); tm.tiles = performance.now() - t0 - tm.scene - tm.actors;
-  (window as any).__boot = tm;
+  // קודם רשימת הציור לציירים (הם מתחילים לעבד אותה ברקע), ורק אחר כך הדמויות
+  const items = initTiles(canvas); tm.tiles = performance.now() - t0 - tm.scene;
+  // המצלמה והבקשה הראשונה לאריחים לפני הדמויות: הציירים מציירים את המפה בזמן שהדף בונה את הדמויות
   if (view.gpu) { gpuOverlay(ctx.worldD.c); document.getElementById('dWrap').style.display = 'none'; }
   const { startFollow } = initCamera(followables);
+  if (view.gpu) renderNow(); else requestStatic();
+  await new Promise(r => setTimeout(r, 0));   // הפסקה קצרה: ההודעות לציירים יוצאות עכשיו, לא אחרי כל הבנייה
+  const actors = buildActors(world.actors); tm.actors = performance.now() - t0 - tm.scene - tm.tiles;
+  (window as any).__boot = tm;
 
   /* ───────── לולאת האנימציה ───────── */
   let last = 0, T = 0;
@@ -52,7 +57,11 @@ async function boot() {
     actors.update(dt, T);
     FRAME.add(performance.now() - u0);   // תקציב ביצועים: זמן העדכון של כל מה שזז
     cameraTick(now, dt);
+    const r0 = performance.now();
     if (view.gpu) renderNow();   // פריים אחד משותף: אריחים ודמויות
+    if (tm.first === undefined) tm.first = performance.now() - r0;   // הפריים הראשון
+    // זמן הטעינה כפי שמרגישים אותו: מתחילת טעינת הדף עד שכל האריחים שעל המסך צוירו (תקציב bootMs)
+    if (tm.ready === undefined && tileStats.painted > 0 && tileStats.missing === 0) tm.ready = performance.now();
     drawGrid();
     requestAnimationFrame(tick);
   }
@@ -174,6 +183,7 @@ async function boot() {
   (window as any).__places = places;   // לבדיקות: כל היעדים
   (window as any).__walk = walkMap;     // לבדיקות: מפת המעבר
   (window as any).__trees = TREES;      // לבדיקות: הבסיס והצמרת של כל עץ ביער
+  (window as any).__ctx = ctx;           // לבדיקות: השכבות (כמה דברים יש בשכבה הדינמית)
   (window as any).__geo = geo;          // לבדיקות: חיבורי שבילים וגשרים
   (window as any).__trails = ctx.world.trails;   // לבדיקות: השבילים אחרי כל הכללים
   (window as any).__world = ctx.world;   // לבדיקות: כל העולם (כולל _bb: המלבן שכל אובייקט צייר)
