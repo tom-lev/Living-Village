@@ -189,5 +189,21 @@ export function wildlife(counts: Partial<Record<WildKind, number>>) {
     }
   }
   (window as any).__wildlife = all;   // לבדיקות
+  WILD_ALL.splice(0, WILD_ALL.length, ...all);
   return (dt: number, t: number) => { for (const a of all) a.update(dt, t); };
+}
+
+/** כל החיות (לבדיקת העולם, כלל wild-apart) */
+export const WILD_ALL: any[] = [];
+/** בדיקת העולם: חיה שעומדת על שביל או מים, מאחורי עץ או מבנה, או קרוב מדי לבית */
+export function wildIssues() {
+  const out: { msg: string; x: number; y: number }[] = [];
+  for (const a of WILD_ALL) {
+    if (a.state === 'move') continue;   // בתנועה היא בדרך בין שתי נקודות שנבדקו
+    const f = flagsAt(a.x, a.y);
+    if (f & (PATH | WATER)) out.push({ msg: `A ${a.kind} stands on a path or water`, x: a.x, y: a.y });
+    if (a.kind !== 'owl' && hidden(a.x, a.y, a.W, a.H)) out.push({ msg: `A ${a.kind} is behind a tree or building`, x: a.x, y: a.y });
+    if (a.homes.some((h: number[]) => Math.hypot(h[0] - a.x, h[1] - a.y) < a.K.homeGap * .75)) out.push({ msg: `A ${a.kind} is too close to a house`, x: a.x, y: a.y });
+  }
+  return out;
 }

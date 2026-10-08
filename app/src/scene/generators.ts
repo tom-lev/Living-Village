@@ -13,6 +13,9 @@ const inRects = (x: number, y: number, rects: number[][]) => rects.some(([x0, y0
 
 /** גובה הפנס לפי טבלת הפרופורציות (הציור הבסיסי גבוה 36 יחידות) */
 const LAMP_K = fitScale(36, REAL_H.lamp);
+/** הפנסים שהוצבו (לבדיקת העולם, כלל lamps): מיקום, כיוון הזרוע, והנקודה בדרך שהם מאירים */
+export const LAMPS: { x: number; y: number; flip: number; rx: number; ry: number }[] = [];
+export const LAMPS_SPACING = { v: 150 };
 
 export const GENERATORS: Record<string, (o: any) => void> = {
   /** אבנים פזורות בפס */
@@ -28,6 +31,7 @@ export const GENERATORS: Record<string, (o: any) => void> = {
    *  9. רק בכפר (בקשת הבעלים): לא ביער ולא בדרכים שיוצאות ממנו, לא על שביל, ולא צמוד לפנס אחר (צמתים) */
   streetLamps(o) {
     const { spacing = 150, offset = 31 } = o, { home } = ctx, M = 40, lamps: number[][] = [];
+    LAMPS.length = 0; LAMPS_SPACING.v = spacing;
     for (const E of geo.EDGES) {
       for (let s = 40; s < E.len - 30; s += spacing) {
         const p = edgeAt(E, s), side = (Math.round(s / spacing) % 2 ? 1 : -1), x = p.x - p.ty * offset * side, y = p.y + p.tx * offset * side;
@@ -36,7 +40,9 @@ export const GENERATORS: Record<string, (o: any) => void> = {
         if (!placeOk(x - 3, y - 3, x + 3, y + 1) || lamps.some(q => Math.hypot(q[0] - x, q[1] - y) < spacing * .55)) continue;
         lamps.push([x, y]);
         // הזרוע של הפנס פונה אל הדרך, כדי שהאור ייפול עליה (ליד דרך אופקית, שהפנס מעליה או מתחתיה: לכיוון ההמשך של הדרך)
-        PREFABS.lamp({ type: 'lamp', x, y, k: LAMP_K, flip: Math.abs(p.x - x) > 4 ? (p.x > x ? 1 : -1) : (p.tx >= 0 ? 1 : -1) });
+        const flip = Math.abs(p.x - x) > 4 ? (p.x > x ? 1 : -1) : (p.tx >= 0 ? 1 : -1);
+        LAMPS.push({ x, y, flip, rx: p.x, ry: p.y });
+        PREFABS.lamp({ type: 'lamp', x, y, k: LAMP_K, flip });
       }
     }
   },

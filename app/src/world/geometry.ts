@@ -34,7 +34,7 @@ export const geo = {
   OUTER: [] as Edge[],            // דרכים מחוץ לכפר (ציור בלבד)
   ADJ: {} as Record<string, { e: number; dir: number }[]>,
   RIVER_SAMPLES: [] as number[][],
-  TRAIL_FLARES: [] as { x: number; y: number; mx: number; my: number; tx: number; ty: number }[],   // שביל שנכנס לדרך: התרחבות רכה בשולי הדרך
+  TRAIL_FLARES: [] as { x: number; y: number; mx: number; my: number; tx: number; ty: number; cx: number; cy: number }[],   // שביל שנכנס לדרך: התרחבות רכה בשולי הדרך
   TRAIL_FREE: [] as { trail: number; start: boolean }[],
   TRAIL_FILLETS: [] as number[][][],   // שביל שפוגש שביל: פינה מעוגלת בכל צד (עקומה ריבועית: נקודה על השביל המארח, הצומת, נקודה על השביל הנכנס)
   DOOR_TRAILS: new Set<number>(),      // שבילים שנוספו מדלת של מבנה אל הרשת (כלל 23): הקצה שבדלת לא נמוג
@@ -85,6 +85,7 @@ export function buildGeometry(w: WorldData) {
   geo.CREEK_SAMPLES = C ? curveFixed(C, 20, true) : [];
   trailRules(w);
   joinTrails(w.trails);
+  tidyTrails(w.trails);   // אחרי החיבורים: בלי נקודות כפולות
   const trailSamples: number[][] = [];
   for (const t of w.trails) for (let i = 0; i < t.length - 1; i++) {
     const n = Math.ceil(Math.hypot(t[i + 1][0] - t[i][0], t[i + 1][1] - t[i][1]) / 6);
@@ -143,9 +144,9 @@ function joinTrails(T: number[][][]) {
     let mx = nx * un + tg[0] * ut, my = ny * un + tg[1] * ut; const ml = Math.hypot(mx, my); mx /= ml; my /= ml;
     const r = (hw + gap) / (mx * nx + my * ny), a = [c[0] + mx * r, c[1] + my * r];
     t[k] = c;
-    if (ul > r + 16) t.splice(start ? 1 : t.length - 1, 0, a);
+    if (ul > r + 16) { t.splice(start ? 1 : t.length - 1, 0, a); soften(t, start ? 2 : t.length - 3); }
     const e = hw / (mx * nx + my * ny);
-    if (flare) geo.TRAIL_FLARES.push({ x: c[0] + mx * e, y: c[1] + my * e, mx, my, tx: tg[0], ty: tg[1] });
+    if (flare) geo.TRAIL_FLARES.push({ x: c[0] + mx * e, y: c[1] + my * e, mx, my, tx: tg[0], ty: tg[1], cx: c[0], cy: c[1] });
     return [mx, my];
   };
   /* ───── כלל: שביל שפוגש שביל משתלב בו בצורה חלקה (בקשת הבעלים) ─────
@@ -160,8 +161,13 @@ function joinTrails(T: number[][][]) {
     T.forEach((o, oi) => {
       if (o.length < 2) return;
       const { out, seg } = curve(o);
+      // אותו שביל: רק לולאה אמיתית מתחברת לעצמה – מדלגים על 400 היחידות הראשונות מהקצה הזה (לפי אורך, לא לפי מספר נקודות – אחרי כללי המים
+      // יכולות להיות הרבה נקודות קרובות לקצה), כדי ששביל לא "יתחבר לעצמו"
+      let arc: number[] | null = null;
+      if (oi === i) { arc = [0]; for (let j = 1; j < out.length; j++) arc.push(arc[j - 1] + Math.hypot(out[j][0] - out[j - 1][0], out[j][1] - out[j - 1][1])); }
       for (let j = 0; j < out.length - 1; j++) {
-        if (oi === i && (start ? seg[j] < 2 : seg[j] > o.length - 4)) continue;
+        if (arc && (start ? arc[j] < 400 : arc[arc.length - 1] - arc[j] < 400)) continue;
+        void seg;
         const a = out[j], b = out[j + 1], m = nearSeg(p, a, b), dd = Math.hypot(m[0] - p[0], m[1] - p[1]);
         if (dd >= d) continue;
         const a2 = out[Math.max(0, j - 2)], b2 = out[Math.min(out.length - 1, j + 3)], l = Math.hypot(b2[0] - a2[0], b2[1] - a2[1]) || 1;
@@ -194,7 +200,7 @@ function joinTrails(T: number[][][]) {
       const cs = Math.cos(35 * Math.PI / 180) * Math.sign(ct || 1);
       mx = nx * MIN + tg[0] * cs; my = ny * MIN + tg[1] * cs;
       const A = Math.min(48, ql * .45);
-      if (ql > A + 20) t.splice(start ? 1 : t.length - 1, 0, [c[0] + mx * A, c[1] + my * A]);
+      if (ql > A + 20) { t.splice(start ? 1 : t.length - 1, 0, [c[0] + mx * A, c[1] + my * A]); soften(t, start ? 2 : t.length - 3); }
     }
     // שתי פינות מעוגלות: מהשביל המארח (משני צידי הצומת) אל השביל הנכנס. הפינה החדה (הצד שאליו השביל נוטה) מתעגלת פחות
     for (const dir of [1, -1] as const) {
@@ -236,7 +242,10 @@ function joinTrails(T: number[][][]) {
     const t = T[i];
     let h = nearTrail(t[start ? 0 : t.length - 1], i, start);
     if (h.d >= 40) { free.push({ i, start }); continue; }
-    // 3. צמתים לא צפופים: צומת חדש ליד צומת קיים (פחות מ-40) מצטרף אליו, עד 4 ענפים בצומת
+    // 3. צמתים לא צפופים: צומת חדש ליד צומת קיים (פחות מ-40) מצטרף אליו, עד 4 ענפים בצומת.
+    //    גם צומת עם דרך נחשב: שביל שהיה פוגש שביל ליד המקום שבו הוא נכנס לדרך – נכנס לדרך באותו מקום
+    const nearRoadJ = roadJ.find(q => Math.hypot(q.c[0] - h.c[0], q.c[1] - h.c[1]) < JUNCTION_GAP && q.n < 2);
+    if (nearRoadJ) { nearRoadJ.n++; roadJoin(t, start, nearRoadJ.c, nearRoadJ.tg); continue; }
     const near = trailJ.find(q => Math.hypot(q.h.c[0] - h.c[0], q.h.c[1] - h.c[1]) < JUNCTION_GAP && q.n < 2);
     if (near) { near.n++; h = near.h; } else trailJ.push({ h, n: 1 });
     trailJoin(t, start, h);
@@ -292,7 +301,10 @@ function joinTrails(T: number[][][]) {
     if (best.d > 400 || (best.d > 80 && atPlace(t[best.start ? 0 : t.length - 1]))) return;
     if (best.start) t.unshift([best.c[0], best.c[1]]); else t.push([best.c[0], best.c[1]]);
     if (best.trail) trailJoin(t, best.start, best.trail);
-    else if (best.tg) roadJoin(t, best.start, best.c, best.tg);
+    else if (best.tg) {
+      const nr = roadJ.find(q => Math.hypot(q.c[0] - best.c[0], q.c[1] - best.c[1]) < JUNCTION_GAP && q.n < 2);   // כלל junction-gap
+      if (nr) { nr.n++; t[best.start ? 0 : t.length - 1] = nr.c; roadJoin(t, best.start, nr.c, nr.tg); } else { roadJ.push({ c: best.c, tg: best.tg, n: 1 }); roadJoin(t, best.start, best.c, best.tg); }
+    }
     lone.add(i * 2 + (best.start ? 0 : 1));
   });
   free.forEach((f, a) => { if (!used.has(a) && !lone.has(f.i * 2 + (f.start ? 0 : 1))) geo.TRAIL_FREE.push({ trail: f.i, start: f.start }); });
@@ -431,4 +443,18 @@ function trailRules(w: WorldData) {
     const r = Math.min(40, la * .4, lb * .4);
     t.splice(k, 1, [v[0] + (a[0] - v[0]) * r / la, v[1] + (a[1] - v[1]) * r / la], [v[0] + (b[0] - v[0]) * r / lb, v[1] + (b[1] - v[1]) * r / lb]);
   }
+}
+
+/** ניקוי אחרון של השבילים, אחרי כל החיבורים: נקודות שכמעט חופפות נמחקות (הקצוות עצמם נשארים במקומם) */
+function tidyTrails(T: number[][][]) {
+  for (const t of T) for (let k = t.length - 1; k > 0; k--) if (Math.hypot(t[k][0] - t[k - 1][0], t[k][1] - t[k - 1][1]) < 1.5) t.splice(k === t.length - 1 ? k - 1 : k, 1);
+}
+/** פינה חדה (יותר מ-70°) בנקודה k נחתכת לשתי נקודות קרובות, כך שהעקומה מתעגלת (כלל gentle-curves) */
+function soften(t: number[][], k: number) {
+  if (k < 1 || k > t.length - 2) return;
+  const a = t[k - 1], v = t[k], b = t[k + 1], la = Math.hypot(a[0] - v[0], a[1] - v[1]), lb = Math.hypot(b[0] - v[0], b[1] - v[1]);
+  const turn = Math.abs(Math.atan2((v[0] - a[0]) * (b[1] - v[1]) - (v[1] - a[1]) * (b[0] - v[0]), (v[0] - a[0]) * (b[0] - v[0]) + (v[1] - a[1]) * (b[1] - v[1])));
+  if (turn < 70 * Math.PI / 180 || la < 4 || lb < 4) return;
+  const r = Math.min(30, la * .4, lb * .4);
+  t.splice(k, 1, [v[0] + (a[0] - v[0]) * r / la, v[1] + (a[1] - v[1]) * r / la], [v[0] + (b[0] - v[0]) * r / lb, v[1] + (b[1] - v[1]) * r / lb]);
 }
