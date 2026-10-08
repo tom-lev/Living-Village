@@ -261,6 +261,7 @@ Order:
 - **Actors** (`actors/`):
   - `figure.ts`: people are a **capsule skeleton**. Each limb segment is a round-capped stroke built once; each frame only `place()`/`bone()` (position, rotation, scale) run. Head, hair and face are built once per view (side/front/back with 9-unit hysteresis).
   - Walking uses distance-based steps (`footPath`) and two-bone IK. There is also a sit pose.
+  - **The dog has three views** (`Dog` in `people.ts`): side (flipped left/right), front (walking toward the viewer) and back (walking away), built once and cross-faded. Moving: the view follows the direction of motion; standing: it looks at the owner. It switches only when one axis clearly dominates (1.4×), so diagonals don't flicker. The leash collar point follows the view.
   - `people.ts`: Walker plus Rover (walks the road graph; at dead ends it slows, waits 2.5–6 s and turns back), Dog (leash, trot), Balloon (spring), Sitter (`feedPigeons`, `warmHands`), and depth sort every 6 frames.
   - `animals.ts`: Horse (grazing neck), Sheep (wander in the paddock), ducks (lake), fish (jump), butterflies.
   - `ambient.ts`: clouds (with shadows; they fade out at deep zoom) and a bird flock.

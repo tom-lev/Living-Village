@@ -1,5 +1,5 @@
 /* אנשים ובני לוויה: הולכים על רשת הדרכים, כלב עם רצועה, בלון, יושבים */
-import { el, n2, P, clamp, shade, show } from '../core/util';
+import { el, n2, P, clamp, shade, show, circ } from '../core/util';
 import { inView, view } from '../camera/view';
 import { R, rngAt } from '../core/rng';
 import { KINDS, type Place } from '../world/places';
@@ -210,6 +210,28 @@ export class Dog {
     el('circle', { cx: 10, cy: -14.2, r: .55, fill: '#2b2220' }, hd);
     el('path', { d: 'M7,-15.6q-2.4,1 -1.6,5.6q2,-1 3,-4z', fill: dk }, hd);
     el('path', { d: 'M5.2,-11.4l1,2.6', stroke: '#e2574c', 'stroke-width': 1.6, 'stroke-linecap': 'round' }, this.b);
+    /* מבט מלפנים (הולך אל הצופה) ומאחור (הולך הלאה ממנו). שלושת המבטים מצוירים פעם אחת, ובכל רגע רק אחד נראה;
+       במעבר יש דהייה קצרה ביניהם */
+    const view = () => el('g', { opacity: 0 }, this.g);
+    const legs = (g: any) => [dk, dk, color, color].map(c => el('path', { stroke: c, 'stroke-width': 2.3, 'stroke-linecap': 'round', fill: 'none' }, g));
+    this.front = view();
+    this.legsFront = legs(this.front);
+    el('ellipse', { cx: 0, cy: -8.5, rx: 5.6, ry: 5, fill: color }, this.front);
+    el('ellipse', { cx: 0, cy: -7.6, rx: 3, ry: 3, fill: shade(color, .25) }, this.front);
+    el('path', { d: 'M-2.6,-11h5.2', stroke: '#e2574c', 'stroke-width': 1.5, 'stroke-linecap': 'round' }, this.front);
+    el('path', { d: 'M-3.6,-17.2q-3.2,.6 -2.6,5.4q2,-.8 2.8,-3.6zM3.6,-17.2q3.2,.6 2.6,5.4q-2,-.8 -2.8,-3.6z', fill: dk }, this.front);
+    el('circle', { cx: 0, cy: -14.6, r: 4.1, fill: color }, this.front);
+    el('ellipse', { cx: 0, cy: -12.6, rx: 2.3, ry: 1.7, fill: shade(color, .3) }, this.front);
+    el('circle', { cx: 0, cy: -13.3, r: .85, fill: '#2b2220' }, this.front);
+    el('path', { d: circ(-1.6, -15.4, .55) + circ(1.6, -15.4, .55), fill: '#2b2220' }, this.front);
+    this.back = view();
+    this.legsBack = legs(this.back);
+    el('circle', { cx: 0, cy: -15.4, r: 3.8, fill: shade(color, -.05) }, this.back);
+    el('path', { d: 'M-3.4,-17.6q-3,.8 -2.4,5q1.8,-.8 2.6,-3.4zM3.4,-17.6q3,.8 2.4,5q-1.8,-.8 -2.6,-3.4z', fill: dk }, this.back);
+    el('path', { d: 'M-2.6,-12.4h5.2', stroke: '#e2574c', 'stroke-width': 1.4, 'stroke-linecap': 'round' }, this.back);
+    el('ellipse', { cx: 0, cy: -8.5, rx: 5.6, ry: 5, fill: color }, this.back);
+    this.tailBack = el('path', { d: 'M0,0q1.5,-3.5 0,-7', stroke: color, 'stroke-width': 2.2, 'stroke-linecap': 'round', fill: 'none' }, this.back);
+    this.vis = { side: 1, front: 0, back: 0 }; this.view = 'side';
     el('rect', { x: -14, y: -22, width: 30, height: 24, fill: 'transparent' }, this.g);
     owner.cullR = 90;   // הכלב והרצועה נראים יחד עם הבעלים
     const p = owner.pointBack(24); this.x = p[0]; this.y = p[1]; this.flip = 1; this.phase = 0; this.amp = 1; this.hx = 1;
@@ -232,13 +254,19 @@ export class Dog {
     const nx = this.x + (tgt[0] - this.x) * k, ny = this.y + (tgt[1] - this.y) * k, dx = nx - this.x, ds = Math.hypot(dx, ny - this.y);
     this.x = nx; this.y = ny;
     const moving = dt > 0 && ds / dt > 3;
-    // לאן פונים: כשזזים בעיקר לרוחב, לכיוון התנועה; אחרת (הולכים למעלה/למטה או עומדים) מסתכלים לכיוון הבעלים
-    if (moving && Math.abs(dx) > ds * .4) this.face = dx > 0 ? 1 : -1;
-    else if (Math.abs(o.x - this.x) > 4) this.face = o.x > this.x ? 1 : -1;
+    // לאן פונים: בזמן תנועה – לכיוון התנועה; בעמידה – אל הבעלים. לרוחב: מבט צד; למטה (אל הצופה): מלפנים; למעלה: מאחור.
+    // מחליפים מבט רק כשהכיוון השתנה בבירור (פי 1.4), כדי שלא יהבהב באלכסון
+    const dy = ny - (this.py ?? ny); this.py = ny;
+    const vx = moving ? dx : o.x - this.x, vy = moving ? dy : o.y - this.y;
+    if (moving || Math.hypot(vx, vy) > 6) {
+      if (Math.abs(vx) > Math.abs(vy) * 1.4) this.view = 'side';
+      else if (Math.abs(vy) > Math.abs(vx) * 1.4) this.view = vy > 0 ? 'front' : 'back';
+    }
+    if (Math.abs(vx) > 2) this.face = vx > 0 ? 1 : -1;
     this.flip += ((this.face ?? 1) - this.flip) * Math.min(1, dt * 9);
     this.amp += ((moving ? 1 : 0) - this.amp) * Math.min(1, dt * 5);
     this.phase += ds / 13;
-    this.collar = [this.x + 5.6 * this.flip, this.y - 10.5];
+    this.collar = this.view === 'side' ? [this.x + 5.6 * this.flip, this.y - 10.5] : [this.x, this.y - (this.view === 'front' ? 11 : 12.4)];
     const vis = this.waiting ? this.alpha > 0 && inView(this.x, this.y - 10, 30) : this.owner.shown && this.alpha > 0;
     show(this.g, vis);
     if (!vis) return;
@@ -248,6 +276,19 @@ export class Dog {
       pe.setAttribute('d', `M${n2(hx)},-7.5L${n2(fx)},${n2(fy)}`);
     };
     leg(this.legsNear[0], 6, 0); leg(this.legsNear[1], -6, .5); leg(this.legsFar[0], 4.5, .5); leg(this.legsFar[1], -7.5, 0);
+    // מלפנים ומאחור: הרגליים לא זזות לרוחב, רק מתרוממות לסירוגין (טרוט)
+    const lift = (pe: any, lx: number, off: number, top: number) => {
+      const q = (this.phase + off) * Math.PI * 2, fy = -Math.max(0, Math.cos(q)) * 1.8 * this.amp;
+      pe.setAttribute('d', `M${n2(lx)},${top}L${n2(lx)},${n2(fy)}`);
+    };
+    for (const L of [this.legsFront, this.legsBack]) {
+      lift(L[0], -4.2, .5, -6); lift(L[1], 4.2, 0, -6);     // הזוג הרחוק (כהה)
+      lift(L[2], -2.6, 0, -5.5); lift(L[3], 2.6, .5, -5.5);  // הזוג הקרוב
+    }
+    this.tailBack.setAttribute('transform', `translate(0,-11) rotate(${(Math.sin(t * (moving ? 7 : 4)) * 22).toFixed(1)})`);
+    // דהייה קצרה בין המבטים
+    for (const v of ['side', 'front', 'back']) this.vis[v] += ((this.view === v ? 1 : 0) - this.vis[v]) * Math.min(1, dt * 12);
+    this.b.setAttribute('opacity', this.vis.side.toFixed(2)); this.front.setAttribute('opacity', this.vis.front.toFixed(2)); this.back.setAttribute('opacity', this.vis.back.toFixed(2));
     this.tail.setAttribute('transform', `translate(-8,-10) rotate(${(Math.sin(t * (moving ? 7 : 4)) * 16).toFixed(1)})`);
     this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y)})`);
     this.g.setAttribute('opacity', this.alpha.toFixed(2));
