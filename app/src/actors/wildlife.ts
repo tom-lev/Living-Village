@@ -22,12 +22,12 @@ const SPAWN_BOX: Record<WildKind, number[]> = { rabbit: [8, 14], squirrel: [8, 1
 
 /** מהירות, מרחק שיטוט, זמני מנוחה ומרחק מינימלי מבתים, לכל סוג */
 const KIND: Record<WildKind, { speed: number; roam: number; rest: [number, number]; homeGap: number; stride: number; hop?: boolean; still?: boolean }> = {
-  rabbit: { speed: 13, roam: 90, rest: [4, 12], homeGap: 260, stride: 1.4, hop: true },     // רגועים: קפיצות ארוכות ואיטיות, עם עצירות
-  squirrel: { speed: 14, roam: 70, rest: [3, 9], homeGap: 240, stride: 1.2, hop: true },
+  rabbit: { speed: 13, roam: 90, rest: [2, 6], homeGap: 260, stride: 1.4, hop: true },     // רגועים: קפיצות ארוכות ואיטיות, עם עצירות
+  squirrel: { speed: 14, roam: 70, rest: [1.5, 5], homeGap: 240, stride: 1.2, hop: true },
   owl: { speed: 0, roam: 0, rest: [3, 9], homeGap: 300, stride: 0, still: true },
-  fox: { speed: 11, roam: 160, rest: [4, 11], homeGap: 360, stride: 2 },
-  bear: { speed: 7, roam: 200, rest: [6, 16], homeGap: 800, stride: 3 },
-  deer: { speed: 9, roam: 220, rest: [6, 16], homeGap: 320, stride: 3 },
+  fox: { speed: 11, roam: 160, rest: [2, 6], homeGap: 360, stride: 2 },
+  bear: { speed: 7, roam: 200, rest: [3, 9], homeGap: 800, stride: 3 },
+  deer: { speed: 9, roam: 220, rest: [4, 10], homeGap: 320, stride: 3 },
 };
 
 /* מה מסתיר מה: העצים, הבתים והחפצים הם חלק מהרקע (אריחים), והחיות מצוירות מעליהם. לכן חיה לא נכנסת אף פעם לשטח
@@ -98,8 +98,11 @@ class Animal {
   legsStill() { this.p.legs.forEach((l, j) => setLeg(l, this.p.legBase[j], j * .5, 0, this.K.stride)); }
   /** יעד חדש קרוב לבית של החיה, בקו ישר פנוי */
   pick() {
-    for (let i = 0; i < 8; i++) {
-      const a = this.rg.rand(0, Math.PI * 2), r = this.rg.rand(.3, 1) * this.K.roam, tx = this.hx + Math.cos(a) * r, ty = this.hy + Math.sin(a) * r * .7;
+    // ביער צפוף רוב היעדים מוסתרים מאחורי עצים, אז מנסים הרבה; חצי מהניסיונות קרובים למקום הנוכחי (צעד קצר תמיד אפשרי יותר)
+    for (let i = 0; i < 28; i++) {
+      const near = i % 2 === 1, a = this.rg.rand(0, Math.PI * 2), r = this.rg.rand(near ? .12 : .3, near ? .45 : 1) * this.K.roam;
+      const cx = near ? this.x : this.hx, cy = near ? this.y : this.hy, tx = cx + Math.cos(a) * r, ty = cy + Math.sin(a) * r * .7;
+      if (Math.hypot(tx - this.hx, ty - this.hy) > this.K.roam * 1.1) continue;
       if (spotOk(tx, ty, this.K.homeGap, this.homes, this.W, this.H) && pathClear([this.x, this.y], [tx, ty], this.W, this.H)) return [tx, ty];
     }
     return null;
@@ -117,12 +120,13 @@ class Animal {
       }
       if (this.state === 'rest' && this.timer <= 0) {
         const tg = this.pick();
-        if (tg) { [this.tx, this.ty] = tg; this.state = 'move'; this.flee = 1; this.sitWant = 0; } else this.timer = this.rg.rand(...K.rest);
+        if (tg) { [this.tx, this.ty] = tg; this.state = 'move'; this.flee = 1; this.sitWant = 0; } else this.timer = this.rg.rand(.4, 1.2);   // לא נמצא יעד: מנסים שוב בקרוב
       }
       if (this.state === 'move') {
         const dx = this.tx - this.x, dy = this.ty - this.y, d = Math.hypot(dx, dy);
         if (d < 1) {
-          this.state = 'rest'; this.timer = this.rg.rand(...K.rest);
+          // לפעמים ממשיכים מיד הלאה (טיול), אחרת עוצרים לנוח
+          this.state = 'rest'; this.timer = this.rg.chance(.35) ? this.rg.rand(.3, 1) : this.rg.rand(...K.rest);
           // ארנבת וסנאי: לפעמים מתיישבים על הרגליים האחוריות (ארנבת מסתכלת סביב, סנאי מכרסם אגוז)
           if (K.hop) this.sitWant = this.rg.chance(.45) ? 1 : 0;
         }

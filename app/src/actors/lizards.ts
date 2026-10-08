@@ -85,14 +85,14 @@ class Lizard {
       if (this.then === 'hide' && this.norm(this.x, this.y) < .8) this.alpha = Math.max(0, this.alpha - dt / .3);
       if (d < 1.2) {
         this.state = this.then === 'hide' ? 'hide' : this.then; this.fast = false;
-        this.timer = this.state === 'hide' ? rg.rand(3, 9) : this.state === 'bask' ? rg.rand(12, 28) : rg.rand(1.5, 5);   // רוב הזמן בחוץ, כדי שיהיה אפשר לראות אותן
+        this.timer = this.state === 'hide' ? rg.rand(3, 9) : this.state === 'bask' ? rg.rand(7, 16) : rg.rand(.8, 3);   // רוב הזמן בחוץ, כדי שיהיה אפשר לראות אותן
       } else if (this.burst <= 0 && !this.fast) { this.state = 'stop'; this.timer = rg.rand(.4, 1.6); }
     } else if (this.state === 'stop') {
       if (this.timer <= 0) { this.state = 'move'; this.burst = rg.rand(5, 13); }
     } else {   // pause / bask: עומדת, מסובבת ראש, לשון
       if (this.timer <= 0) {
         const r = rg.r();
-        if (r < .45) this.go([this.cx + rg.rand(-10, 10), this.cy + rg.rand(-3, 3)], false, 'hide');
+        if (r < .3) this.go([this.cx + rg.rand(-10, 10), this.cy + rg.rand(-3, 3)], false, 'hide');
         else if (r < .7 && this.state !== 'bask') this.go(this.rock, false, 'bask');
         else this.go(this.openSpot(), false, 'pause');
       }

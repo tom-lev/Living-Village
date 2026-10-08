@@ -51,11 +51,11 @@ export class Horse {
         // הולכים למקום אחר במכלאה, בעיקר לרוחב
         const dx = rand(40, 90) * (rand(0, 1) < .5 ? -1 : 1);
         this.tx = clamp(this.x + dx, A.x0 + 40, A.x1 - 34); this.ty = clamp(this.y + rand(-.4, .4) * Math.abs(dx), A.y0 + 60, A.y1 - 8);
-        if (Math.abs(this.tx - this.x) > 20) { this.state = 'move'; this.graze = false; } else this.timer = rand(4, 9);
+        if (Math.abs(this.tx - this.x) > 20) { this.state = 'move'; this.graze = false; } else this.timer = rand(1, 3);
       }
     } else {
       const dx = this.tx - this.x, dy = this.ty - this.y, d = Math.hypot(dx, dy);
-      if (d < 1) { this.state = 'rest'; this.timer = rand(9, 20); this.gTimer = rand(1, 3); }
+      if (d < 1) { this.state = 'rest'; this.timer = rand(4, 10); this.gTimer = rand(1, 3); }
       else { ds = Math.min(d, 9 * dt * Math.min(1, d / 10 + .3)); this.x += dx / d * ds; this.y += dy / d * ds; this.face = dx > 0 ? 1 : -1; }
     }
     this.amp += ((this.state === 'move' ? 1 : 0) - this.amp) * Math.min(1, dt * 3);
@@ -108,7 +108,7 @@ export class Sheep {
     }
     if (this.state === 'walk') {
       const dx = this.tx - this.x, dy = this.ty - this.y, d = Math.hypot(dx, dy);
-      if (d < 1) { this.state = 'graze'; this.timer = rand(3, 9); }
+      if (d < 1) { this.state = 'graze'; this.timer = rand(2, 6); }
       else { ds = Math.min(d, 9 * dt); this.x += dx / d * ds; this.y += dy / d * ds; if (Math.abs(dx) > 2) this.fd = dx > 0 ? 1 : -1; }
     }
     if (this.fd) this.flip += (this.fd - this.flip) * Math.min(1, dt * 10);
