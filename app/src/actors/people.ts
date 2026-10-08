@@ -8,6 +8,7 @@ import { roleOf, routeTo, routeAt, chooseNext, durOf, surnameOf, actOf, prependR
 import { ripple } from '../world/context';
 import { plotOfDoor } from '../prefabs/village';
 import { STATION } from './station';
+import { Legs, type LegSpec } from './quad';
 import { lakeShore } from '../scene/terrain';
 let LAKE: ReturnType<typeof lakeShore> | undefined;
 import { walkable } from '../world/walk';
@@ -248,11 +249,11 @@ export class Dog {
     el('ellipse', { rx: 10, ry: 2.6, fill: 'rgba(40,70,20,.25)' }, this.g);
     this.b = el('g', null, this.g);
     const dk = shade(color, -.22), S = (c: string) => el('path', { stroke: c, 'stroke-width': 2.3, 'stroke-linecap': 'round', fill: 'none' }, this.b);
-    this.legsFar = [S(dk), S(dk)];
+    const farG = el('g', null, this.b);   // רגליים רחוקות: מאחורי הגוף
     this.tail = el('path', { d: 'M0,0q-3,-3 -4,-7', stroke: color, 'stroke-width': 2.2, 'stroke-linecap': 'round', fill: 'none' }, this.b);
     el('ellipse', { cx: 0, cy: -9, rx: 8.5, ry: 4.4, fill: color }, this.b);
     el('ellipse', { cx: -1, cy: -7.6, rx: 6, ry: 2.2, fill: shade(color, .25) }, this.b);
-    this.legsNear = [S(color), S(color)];
+    const nearG = el('g', null, this.b);   // רגליים קרובות: לפני הגוף
     const hd = el('g', null, this.b);
     el('circle', { cx: 9, cy: -13, r: 3.9, fill: color }, hd);
     el('ellipse', { cx: 12.4, cy: -12, rx: 2.6, ry: 1.7, fill: shade(color, .3) }, hd);
@@ -285,7 +286,10 @@ export class Dog {
     el('rect', { x: -14, y: -22, width: 30, height: 24, fill: 'transparent' }, this.g);
     owner.cullR = 90;   // הכלב והרצועה נראים יחד עם הבעלים
     const p = owner.pointBack(24); this.x = p[0]; this.y = p[1]; this.flip = 1; this.phase = 0; this.amp = 1; this.hx = 1;
-    this.k = fitScale(17.8, REAL_DYN.dog);   // גודל לפי טבלת הפרופורציות (הציור גבוה 17.8 עד קצה הראש)
+    this.k = fitScale(17.8, REAL_DYN.dog);
+    // רגליים עם מפרקים בטרוט (actors/quad.ts): צעדים לפי מרחק, כפות שלא מחליקות
+    const spec = (hx: number, front: boolean, far: boolean): LegSpec => ({ hip: [hx, -7.6], l1: 3.9, l2: 4, front, far, w: 2.3, color: far ? dk : color, hoof: far ? shade(dk, -.15) : dk });
+    this.Q = new Legs([spec(-6, false, false), spec(6, true, false), spec(-7.5, false, true), spec(4.5, true, true)], { far: farG, near: nearG }, 'trot', 2.2, 1.9);   // גודל לפי טבלת הפרופורציות (הציור גבוה 17.8 עד קצה הראש)
     dynamics.push(this); followable(this, this.g);
   }
   get name() { return `${this.dogName} (${this.owner.name}'s dog)`; }
@@ -316,7 +320,7 @@ export class Dog {
     if (Math.abs(vx) > 2) this.face = vx > 0 ? 1 : -1;
     this.flip += ((this.face ?? 1) - this.flip) * Math.min(1, dt * 9);
     this.amp += ((moving ? 1 : 0) - this.amp) * Math.min(1, dt * 5);
-    this.phase += ds / (13 * this.k);
+    this.phase += ds / (this.k * this.Q.cycle);
     const sk = this.k;
     this.collar = this.view === 'side' ? [this.x + 5.6 * this.flip * sk, this.y - 10.5 * sk] : [this.x, this.y - (this.view === 'front' ? 11 : 12.4) * sk];
     const vis = this.waiting ? this.alpha > 0 && inView(this.x, this.y - 10, 30) : this.owner.shown && this.alpha > 0;
@@ -327,7 +331,7 @@ export class Dog {
       const q = (this.phase + off) * Math.PI * 2, fx = hx + Math.sin(q) * 2.6 * this.amp, fy = -Math.max(0, Math.cos(q)) * 1.8 * this.amp;
       pe.setAttribute('d', `M${n2(hx)},-7.5L${n2(fx)},${n2(fy)}`);
     };
-    leg(this.legsNear[0], 6, 0); leg(this.legsNear[1], -6, .5); leg(this.legsFar[0], 4.5, .5); leg(this.legsFar[1], -7.5, 0);
+    this.Q.pose(this.phase, this.amp);
     // מלפנים ומאחור: הרגליים לא זזות לרוחב, רק מתרוממות לסירוגין (טרוט)
     const lift = (pe: any, lx: number, off: number, top: number) => {
       const q = (this.phase + off) * Math.PI * 2, fy = -Math.max(0, Math.cos(q)) * 1.8 * this.amp;

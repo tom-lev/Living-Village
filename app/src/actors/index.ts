@@ -44,13 +44,15 @@ export function buildActors(A: Record<string, any>) {
   if (A.sheep) {
     const area = ctx.named[A.sheep.area], flockS = A.sheep.positions.map(([x, y]: number[]) => new Sheep(x, y, area, A.sheep.scale ?? 1));
     (window as any).__sheep = flockS;   // לבדיקת התנועה (tools/motion.mjs)
+    // הסוסים והכבשים במכלאה ממוינים יחד לפי עומק: מי שקרוב לצופה מצויר מעל
+    const herd: any[] = [...horses, ...flockS];
     let f = 0;
     updates.push(dt => {
       for (const s of flockS) s.update(dt);
       if (++f % 8 === 0) {
         // מזיזים רק אם הסדר באמת השתנה (כל הזזה מכריחה לבנות מחדש את רשימת הציור)
-        const sorted = flockS.slice().sort((a: any, b: any) => a.y - b.y);
-        if (sorted.some((s: any, i: number) => s !== flockS[i])) { for (const s of sorted) ctx.L.pad.appendChild(s.g); flockS.splice(0, flockS.length, ...sorted); }
+        const sorted = herd.slice().sort((a: any, b: any) => a.y - b.y);
+        if (sorted.some((s: any, i: number) => s !== herd[i])) { for (const s of sorted) ctx.L.pad.appendChild(s.g); herd.splice(0, herd.length, ...sorted); }
       }
     });
   }

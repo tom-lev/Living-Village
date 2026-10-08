@@ -2874,34 +2874,6 @@
    "name": "Woodcutter's Cabin"
   },
   {
-   "type": "deer",
-   "x": 620,
-   "y": -170,
-   "flip": 1,
-   "antlers": true
-  },
-  {
-   "type": "deer",
-   "x": 670,
-   "y": -150,
-   "flip": -1,
-   "antlers": false
-  },
-  {
-   "type": "deer",
-   "x": 590,
-   "y": -130,
-   "flip": 1,
-   "antlers": false
-  },
-  {
-   "type": "deer",
-   "x": -150,
-   "y": 760,
-   "flip": -1,
-   "antlers": true
-  },
-  {
    "type": "signpost",
    "x": -700,
    "y": -1080
@@ -3750,7 +3722,8 @@
    "squirrel": 14,
    "owl": 7,
    "fox": 5,
-   "bear": 4
+   "bear": 4,
+   "deer": 7
   },
   "sitters": [
    {

@@ -6,6 +6,8 @@ import { ctx } from '../world/context';
 import { animateTo } from '../camera/camera';
 import { view } from '../camera/view';
 import { WILD, setLeg, type WildKind } from './wildlife-art';
+import { Legs } from './quad';
+import { hopPose } from './wildlife';
 import { loco, car, LOCOS } from './train-art';
 
 export function showSample(kind: string) {
@@ -14,9 +16,12 @@ export function showSample(kind: string) {
     const kinds = Object.keys(WILD) as WildKind[];
     kinds.forEach((k, row) => {
       for (let i = 0; i < 4; i++) {
-        const x = X + i * (k === 'bear' ? 56 : 36), y = Y + row * 34 + (k === 'bear' ? 14 : 0);
+        const x = X + i * (k === 'bear' ? 56 : k === 'deer' ? 50 : 36), y = Y + row * 34 + (k === 'bear' ? 14 : k === 'deer' ? 30 : 0);
         const g = el('g', { transform: `translate(${n2(x)},${n2(y)}) scale(${i % 2 ? -1 : 1},1)` }, L);
         const p = WILD[k](g, rngAt(x, y, 81));
+        // הרגליים בשלבים שונים של הצעד (העמודה האחרונה בהליכה), והארנבת/הסנאי בשלבי קפיצה
+        if (p.quad) new Legs(p.quad.specs, { far: p.quad.far, near: p.quad.near }, p.quad.gait, p.quad.A, p.quad.lift).pose(i * .23, i ? 1 : 0);
+        if (p.hop) hopPose(p.hop, k, i * .27, i ? 1 : 0, 0, 0, x);
         p.legs.forEach((lg, j) => setLeg(lg, p.legBase[j] ?? [0, -2], i * .17 + j * .5, i === 3 ? 1 : 0, k === 'bear' ? 3 : 1.6));
       }
     });
