@@ -130,7 +130,7 @@ export function buildTerrain(w: WorldData) {
   };
   el('path', { d: wave(T.beach.y, 14, .013, 0, 120) + `L${B.x1},${B.y1}L${B.x0},${B.y1}Z`, fill: '#f3dfb0' }, L.ground);
   // מקומות לשחייה: נכנסים למים בקצה החוף ונעלמים בהם לזמן מה
-  for (const x of T.beach.swim || []) addPlace({ kind: 'swim', name: 'the sea', at: [x, T.sea.y - 8] });
+  for (const x of T.beach.swim || []) addPlace({ kind: 'swim', name: T.sea.south ? 'the lake' : 'the sea', at: [x, T.sea.y - 8] });
 
   /* הנהר (נמשך מעל החול אל הים) */
   {
@@ -143,14 +143,27 @@ export function buildTerrain(w: WorldData) {
     el('path', { d: wv, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 1.3, 'stroke-linecap': 'round', opacity: .8 }, L.ground);
   }
 
-  /* ים */
+  /* המים בדרום: אגם גדול ושקט (משימה 11). חוף דרומי וחוף מזרחי סוגרים אותו; במערב הוא ממשיך עד קצה העולם
+     (שם יתחבר בעתיד לים). בלי גלים: רק אדוות קטנות וקו חוף רך */
   {
-    const top = wave(T.sea.y, 10, .02, 1, 90);
-    el('path', { d: top + `L${B.x1},${B.y1}L${B.x0},${B.y1}Z`, fill: '#4fb8de' }, L.ground);
-    el('path', { d: top, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 7, 'stroke-linecap': 'round', opacity: .85 }, L.ground);
+    const top = wave(T.sea.y, 10, .02, 1, 90), S = lakeShore(T);
+    el('path', { d: top + `L${B.x1},${B.y1}L${B.x0},${B.y1}Z`, fill: S ? '#5ec0e2' : '#4fb8de' }, L.ground);
+    el('path', { d: top, fill: 'none', stroke: '#e8f8fd', 'stroke-width': S ? 4 : 7, 'stroke-linecap': 'round', opacity: .8 }, L.ground);
     let wv = '';
-    for (let i = 0; i < T.sea.waves; i++) { const x = rand(B.x0, B.x1), y = rand(T.sea.y + 40, B.y1 - 10); wv += `M${n2(x)},${n2(y)}q5,-4 10,0q5,4 10,0`; }
-    el('path', { d: wv, fill: 'none', stroke: '#bfeafa', 'stroke-width': 1.6, 'stroke-linecap': 'round', opacity: .8 }, L.ground);
+    for (let i = 0; i < T.sea.waves; i++) {
+      const x = rand(B.x0, B.x1), y = rand(T.sea.y + 40, B.y1 - 10);   // אותה צריכה של מספרים אקראיים כמו קודם (היער לא זז)
+      if (!S) wv += `M${n2(x)},${n2(y)}q5,-4 10,0q5,4 10,0`;
+      else if (S.inside(x, y, 30) && i % 2) wv += `M${n2(x)},${n2(y)}q3,-2 6,0q3,2 6,0`;
+    }
+    el('path', { d: wv, fill: 'none', stroke: '#c9eefa', 'stroke-width': 1.2, 'stroke-linecap': 'round', opacity: S ? .6 : .8 }, L.ground);
+    if (S) {
+      // היבשה שמסביב: רצועה במזרח ובדרום, חוף חול לאורך הקו, וקו מים בהיר
+      const land = [...S.east.map(p => [p[0], p[1]]), ...S.south.slice().reverse(), [B.x0, B.y1 + 10], [B.x1 + 10, B.y1 + 10], [B.x1 + 10, S.east[0][1]]];
+      el('path', { d: 'M' + land.map(p => `${n2(p[0])},${n2(p[1])}`).join('L') + 'Z', fill: '#9cd162' }, L.ground);
+      const shore = smoothOpen([...S.east, ...S.south.slice().reverse()]);
+      el('path', { d: shore, fill: 'none', stroke: '#f3dfb0', 'stroke-width': 34, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.ground);
+      el('path', { d: shore, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 3, 'stroke-linecap': 'round', opacity: .75, transform: 'translate(-6,-6)' }, L.ground);
+    }
   }
 
   /* צפון ההרים: מעבר הדרגתי לחורף (משימה 10א). מהרכס הדרומי (snow.line) ועד קרקעית העמק (snow.full):
@@ -192,4 +205,22 @@ export function buildTerrain(w: WorldData) {
 export function winter(T: any) {
   const y0 = T.snow.line, y1 = T.snow.full ?? T.snow.line;
   return (y: number) => y >= y0 ? 0 : y <= y1 ? 1 : (y0 - y) / (y0 - y1);
+}
+
+/** קו החוף של האגם הדרומי (אם terrain.sea.south מוגדר): החוף המזרחי (מלמעלה למטה) והחוף הדרומי (ממערב למזרח),
+ *  ובדיקה אם נקודה בתוך המים (עם מרווח). אותה צורה משמשת לציור, למפת ההליכה, לעצים ולבדיקות */
+export function lakeShore(T: any) {
+  if (T.sea?.south === undefined) return null;
+  const { B } = ctx, top = T.sea.y, Sy = (x: number) => T.sea.south + 28 * Math.sin(x / 230) + 14 * Math.sin(x / 83 + 1);
+  const Ex = (y: number) => T.sea.east + 40 * Math.sin(y / 170) + 15 * Math.sin(y / 61);
+  const east: number[][] = [], south: number[][] = [];
+  const yEnd = Sy(Ex(T.sea.south));
+  for (let y = top - 20; y < yEnd; y += 30) east.push([Ex(y), y]);
+  east.push([Ex(yEnd), yEnd]);
+  for (let x = B.x0 - 10; x < Ex(yEnd); x += 40) south.push([x, Sy(x)]);
+  south.push([Ex(yEnd), yEnd]);
+  const inside = (x: number, y: number, m = 0) => y > top + m && y < Sy(x) - m && x < Ex(y) - m;
+  /** פוליגון המים (למפת ההליכה) */
+  const poly = [[B.x0 - 10, top + 2], ...east.filter(p => p[1] > top + 2), ...south.slice().reverse()];
+  return { east, south, inside, poly, Sy, Ex };
 }

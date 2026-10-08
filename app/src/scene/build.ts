@@ -12,11 +12,11 @@ import '../prefabs/buildings';
 import '../prefabs/props';
 import '../prefabs/areas';
 import '../prefabs/village';
-import { buildTerrain } from './terrain';
+import { buildTerrain, lakeShore } from './terrain';
 import { GENERATORS } from './generators';
 import { addLabel } from '../world/labels';
 import { places, autoPlace } from '../world/places';
-import { initWalk, markRect, markEllipse, markLine, markPath, clearPathIn, placeOk, findPlace, flagsAt, WATER, SWIM, SOFT, SOLID, PATH, BRIDGE, LANE, PLAZA } from '../world/walk';
+import { initWalk, markRect, markEllipse, markLine, markPolygon, markPath, clearPathIn, placeOk, findPlace, flagsAt, WATER, SWIM, SOFT, SOLID, PATH, BRIDGE, LANE, PLAZA } from '../world/walk';
 import { geo, ROAD_W } from '../world/geometry';
 import { catmull } from '../world/nav';
 import { autoBridges } from './mountains';
@@ -178,8 +178,9 @@ function markTerrain(w: WorldData) {
   const { B } = ctx, T = w.terrain;
   markLine(geo.RIVER_SAMPLES, 24, WATER);
   markLine(geo.CREEK_SAMPLES, 9, WATER);
-  markRect(B.x0, T.sea.y + 2, B.x1, B.y1, WATER);
-  markRect(B.x0, T.sea.y, B.x1, T.sea.y + 70, SWIM);
+  const lake = lakeShore(T);   // הדרום: אגם עם חופים (או ים פתוח, אם אין חוף דרומי בנתונים)
+  if (lake) { markPolygon(lake.poly, WATER); markRect(B.x0, T.sea.y, lake.Ex(T.sea.y + 40) - 30, T.sea.y + 70, SWIM); }
+  else { markRect(B.x0, T.sea.y + 2, B.x1, B.y1, WATER); markRect(B.x0, T.sea.y, B.x1, T.sea.y + 70, SWIM); }
   // דרכים ושבילים: מותרים, אבל לא מעל מים (שם רק גשר)
   for (const E of [...geo.EDGES, ...geo.OUTER]) markPath(E.pts, ROAD_W / 2);
   for (const t of w.trails) markPath(catmull(t), 6);

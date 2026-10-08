@@ -313,6 +313,7 @@ Order:
     - along R–RX and N0–B.
     - In total: 28 plots, each with a house (33 `house` objects in the whole world), plus 3 modern houses.
   - Riverside park trees and footpaths run along both banks. The flower field (150, 1625) has butterflies.
+- **The southern lake** (task 11): `terrain.sea` keeps its name, but with `south` (3110) and `east` (1880) it is a calm lake: `lakeShore(T)` in `scene/terrain.ts` gives the wavy east and south shorelines, `inside()` and the water polygon used by the walk map. Land with a sand shore surrounds it in the east and south; it stays open to the west edge (a future sea in the west, task 11a). The old wave strokes still consume the same RNG but are drawn only as small ripples inside the lake. The forest's `noBands` allow trees south of 3160. Swim spots are called 'the lake'.
 - **South:**
   - fields, haybales, a barn (225, 1925), a windmill (650, 1940);
   - the beach road BX (410, 1694) → the beach;
