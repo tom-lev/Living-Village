@@ -30,7 +30,7 @@ class Lizard {
     this.rg = rg; this.cx = home.x; this.cy = home.y;
     const rk = home.rock ?? [26, 22]; this.rock = [home.x + rk[0], home.y + rk[1] - 1];
     this.x = this.cx; this.y = this.cy; this.h = rg.rand(0, 6.28); this.alpha = 0; this.z = 0;
-    this.state = 'hide'; this.timer = rg.rand(1, 12); this.phase = 0; this.turn = 0; this.tongue = 0; this.curl = rg.rand(-1, 1);
+    this.state = 'hide'; this.timer = rg.rand(.5, 4); this.phase = 0; this.turn = 0; this.tongue = 0; this.curl = rg.rand(-1, 1);
     this.k = fitScale(LEN, REAL_DYN.lizard);
     const c = rg.pick(['#7bb05a', '#8fae5a', '#a59468', '#6f9c62']), dk = shade(c, -.35);
     this.g = el('g', { opacity: 0 }, ctx.L.actors); this.el = this.g;
@@ -85,7 +85,7 @@ class Lizard {
       if (this.then === 'hide' && this.norm(this.x, this.y) < .8) this.alpha = Math.max(0, this.alpha - dt / .3);
       if (d < 1.2) {
         this.state = this.then === 'hide' ? 'hide' : this.then; this.fast = false;
-        this.timer = this.state === 'hide' ? rg.rand(8, 28) : this.state === 'bask' ? rg.rand(9, 22) : rg.rand(1.5, 5);
+        this.timer = this.state === 'hide' ? rg.rand(3, 9) : this.state === 'bask' ? rg.rand(12, 28) : rg.rand(1.5, 5);   // רוב הזמן בחוץ, כדי שיהיה אפשר לראות אותן
       } else if (this.burst <= 0 && !this.fast) { this.state = 'stop'; this.timer = rg.rand(.4, 1.6); }
     } else if (this.state === 'stop') {
       if (this.timer <= 0) { this.state = 'move'; this.burst = rg.rand(5, 13); }
