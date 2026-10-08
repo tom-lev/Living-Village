@@ -191,7 +191,7 @@ Order:
 - **How the rules work:** a 6-unit grid with flags WATER, SWIM, DANGER, SOFT, SOLID and PATH, plus private plot ids.
   - Objects mark it while they are built, by type. This happens in `scene/build.ts` (`markObject`, `markTerrain`, and the base of every static prop), plus `plot`, `shop`, `house`, `stoneFarm` and mountains, which mark themselves.
   - Roads and trails are PATH except over water. Only bridges allow crossing water: `stoneBridge` and `footbridge` decks, plus **automatic bridges** that are drawn and marked wherever a road or trail crosses the river or the creek (`autoBridges`).
-  - Tunnel portals are linked as a tunnel. Walkers are hidden inside it (lane −1).
+  - Tunnel portals (none in the world now) are linked as a tunnel. Walkers are hidden inside it (lane −1).
 - **Routing:** the walk network is repaired once against the grid.
   - A node inside a hard obstacle is cut off. A link that crosses an obstacle is replaced by a detour, and the outside nodes around one obstacle are joined. Dangling trail ends are joined to the nearest line within 220 units.
   - The first and last mile, from a door or spot to the network, is an A* path on the grid that obeys the walker's rules (`WalkRules {priv, swim}`).
@@ -261,7 +261,7 @@ Order:
 - **Prairie and the great western forest** (2026-10-08, `tools/history/prairie_and_west_forest.py`): everything north of y −2050 was removed (the northern range, frozen lake, ski slope, chapel, observatory, hot spring, turbines, northern chalets, creek and their roads and trails) and is now prairie (`terrain.prairie` {start −2020, full −2380}: a green-gold meadow – large patches of green and dry grass, dense grass tufts in three shades in their own detail groups above the tint, low plant clumps and clover, wildflowers in clusters, lone oaks). The snow is a band in the valley: `terrain.snow` {line −1440, full −1760, thaw [−1900, −2120]}; `winter(y)` rises and melts again into the prairie. West of x −1300 is a huge forest 2000 wide with five trails; the southern lake has a western shore (`terrain.sea.west`).
 - **The forest is placed by position** (`forest` in `scene/generators.ts`): a grid of `cell` 52, each cell with `rngAt`; density by zone (village, forest, open, prairie). Changing the map, adding a clearing or an object never moves other trees.
 - **North** (y < −1440, before 2026-10-08; most of this north of −2050 is gone, see above):
-  - a snowy region behind mountain rows (with tunnel portals);
+  - a snowy region behind mountain rows (the tunnels were removed on 2026-10-08; the road crosses an open pass at x ≈ 712);
   - chalets around (440..530, −2010..−2380), a chapel (250, −2420), a frozen lake with skaters and ice huts (−260, −2430), a ski slope (1320..1640, −1880..−2660);
   - an observatory (1560, −2790), wind turbines (−1100.., −2580..−2790), a hot spring (−500, −2700), igloos, snowmen, deer;
   - a cable car (700, −1010) → (980, −1420), a mountain lake (280, −1180), a cave (−400, −1395).
@@ -275,7 +275,7 @@ Order:
 - **Sample pages** for owner approval: `?sample=animals` (forest animals, `actors/wildlife-art.ts`) and `?sample=trains` (five steam locomotives with carriages, `actors/train-art.ts`), drawn by `actors/samples.ts` near the lake.
 - **Mountains and valley** (`scene/mountains.ts`, data in `terrain.mountains` and `terrain.creek`):
   - **Flat style (owner's request; they disliked strong 3D shading).** Each range is built from separate massifs with gaps (passes) between them. A massif has 1–3 broad peaks, a gently jagged ridge, one body colour, one subtle shadow face, uneven snow caps, foothills and rocks. The broad slopes leave room for future houses, paths and people.
-  - `anchors` force a massif behind the tunnel portals, the waterfall and the cave. `gaps` sets how sparse a range is: the front range is 0.65.
+  - `anchors` force a massif behind the waterfall and the cave; `passes` `[[x, half]]` cut an open pass through a range (the road north crosses at x 712, half-width 125). `gaps` sets how sparse a range is: the front range is 0.65.
   - **The valley** between the southern range (−1440) and the northern range (−2900) shows through two things. First, the snowy foothills at the base of the northern range. Second, a frozen **creek** along the valley floor. Bridges are added automatically wherever a road or trail crosses it, and the creek is stamped in the occupancy grid so trees avoid it.
   - Mountain shapes use local RNG. The old loop's global RNG calls are still consumed, so the forest keeps its exact place.
 - The old roundabout is now a **paved village square** (radius r+42) with walking room around the fountain.

@@ -101,7 +101,18 @@ function range(m: any, idx: number, foot: string): Massif[] {
     x += W * rg.rand(.82, 1.02);
   }
   for (const a of anchors) if (!spans.some(([s0, s1]) => a > s0 + 60 && a < s1 - 60)) spans.push([a - 190, a + 190]);
-  for (const [s0, s1] of spans) out.push(massif(s0, s1, m.baseY, m, rg, foot));
+  // מעברי הרים (passes): שום מסה לא מכסה את הרוחב הזה, כדי שדרך תוכל לעבור בין הפסגות (במקום מנהרה)
+  let cut = spans;
+  for (const p of (m.passes || []) as number[][]) {
+    const [px, half] = p, next: [number, number][] = [];
+    for (const [s0, s1] of cut) {
+      if (s1 <= px - half || s0 >= px + half) { next.push([s0, s1]); continue; }
+      if (px - half - s0 > 140) next.push([s0, px - half]);
+      if (s1 - (px + half) > 140) next.push([px + half, s1]);
+    }
+    cut = next;
+  }
+  for (const [s0, s1] of cut) out.push(massif(s0, s1, m.baseY, m, rg, foot));
   return out;
 }
 
