@@ -3737,6 +3737,9 @@
     "color": "#e8413b"
    }
   ],
+  "bluebirds": {
+   "count": 7
+  },
   "wildlife": {
    "rabbit": 14,
    "squirrel": 14,

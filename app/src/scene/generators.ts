@@ -1,7 +1,7 @@
 /* מחוללים: רצים אחרי שכל האובייקטים הונחו (כי הם צריכים לדעת איפה כבר יש מבנים) */
 import { el, n2, circ, blob } from '../core/util';
 import { rand, pick, R, rngAt } from '../core/rng';
-import { ctx, prop, NO_TREE, inWater } from '../world/context';
+import { ctx, prop, NO_TREE, inWater, statics } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
 import { pine, roundTree } from '../prefabs/nature';
 import { winter, prairie, lakeShore } from './terrain';
@@ -16,6 +16,9 @@ const LAMP_K = fitScale(36, REAL_H.lamp);
 /** הפנסים שהוצבו (לבדיקת העולם, כלל lamps): מיקום, כיוון הזרוע, והנקודה בדרך שהם מאירים */
 export const LAMPS: { x: number; y: number; flip: number; rx: number; ry: number }[] = [];
 export const LAMPS_SPACING = { v: 150 };
+
+/** כל עצי היער שנשתלו: בסיס, וקופסת הצמרת (לציפורים שיושבות עליהם) */
+export const TREES: { x: number; y: number; x0: number; x1: number; top: number; pine: boolean }[] = [];
 
 export const GENERATORS: Record<string, (o: any) => void> = {
   /** אבנים פזורות בפס */
@@ -102,8 +105,12 @@ export const GENERATORS: Record<string, (o: any) => void> = {
       // שלג על העצים בהדרגה: ככל שמצפינים בעמק, יותר עצים מושלגים (משימה 10א)
       const snowy = ctx.world.terrain.snow.full !== undefined ? v.r() < cold(y) ** 1.2 * 1.02 : y < o.snowLine;
       // בערבה: עצים עגולים (אלונים) בודדים, בלי שלג
-      if (pr(y) > .4) { v.r(); roundTree(x, y, v.rand(1.4, 1.9)); continue; }
-      inRects(x, y, o.pineZones) || v.r() < o.pineChance ? pine(x, y, v.rand(1.5, 2.1), snowy) : roundTree(x, y, v.rand(1.3, 1.75));
+      const s0 = statics.length;
+      if (pr(y) > .4) { v.r(); roundTree(x, y, v.rand(1.4, 1.9)); }
+      else if (inRects(x, y, o.pineZones) || v.r() < o.pineChance) pine(x, y, v.rand(1.5, 2.1), snowy);
+      else roundTree(x, y, v.rand(1.3, 1.75));
+      // לציפורים (actors/bluebirds.ts): איפה העץ, וקופסת הצמרת שלו
+      try { const bb = statics[s0].el.getBBox(); TREES.push({ x, y, x0: bb.x, x1: bb.x + bb.width, top: bb.y, pine: statics.length > s0 && bb.height > 0 && bb.width < bb.height * .62 }); } catch {}
     }
   },
 };
