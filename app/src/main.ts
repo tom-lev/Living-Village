@@ -16,6 +16,7 @@ import { applySharedNames } from './world/labels';
 import { initGrid, drawGrid } from './ui/grid';
 import { places } from './world/places';
 import * as walkMap from './world/walk';
+import { TREES } from './scene/generators';
 import { routeTo } from './actors/agenda';
 import { components, compOf } from './world/nav';
 import { relocated } from './scene/build';
@@ -172,6 +173,7 @@ async function boot() {
   // לבדיקות אוטומטיות
   (window as any).__places = places;   // לבדיקות: כל היעדים
   (window as any).__walk = walkMap;     // לבדיקות: מפת המעבר
+  (window as any).__trees = TREES;      // לבדיקות: הבסיס והצמרת של כל עץ ביער
   (window as any).__geo = geo;          // לבדיקות: חיבורי שבילים וגשרים
   (window as any).__trails = ctx.world.trails;   // לבדיקות: השבילים אחרי כל הכללים
   (window as any).__world = ctx.world;   // לבדיקות: כל העולם (כולל _bb: המלבן שכל אובייקט צייר)

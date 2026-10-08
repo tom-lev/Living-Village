@@ -3416,6 +3416,78 @@
    "x": -2950,
    "y": 1030,
    "name": "Fernhollow Cabin"
+  },
+  {
+   "type": "antHill",
+   "x": -2862,
+   "y": 952,
+   "dir": 20,
+   "len": 50,
+   "kind": "forest"
+  },
+  {
+   "type": "antHill",
+   "x": -2736,
+   "y": 1186,
+   "dir": 75,
+   "len": 50,
+   "kind": "forest"
+  },
+  {
+   "type": "antHill",
+   "x": -2096,
+   "y": -200,
+   "dir": 40,
+   "len": 50,
+   "kind": "forest"
+  },
+  {
+   "type": "antHill",
+   "x": -1000,
+   "y": -158,
+   "dir": 200,
+   "len": 50,
+   "kind": "forest"
+  },
+  {
+   "type": "antHill",
+   "x": -150,
+   "y": -2560,
+   "dir": 30,
+   "len": 50,
+   "kind": "soil"
+  },
+  {
+   "type": "antHill",
+   "x": 1000,
+   "y": -2450,
+   "dir": 40,
+   "len": 50,
+   "kind": "soil"
+  },
+  {
+   "type": "antHill",
+   "x": -76,
+   "y": 1944,
+   "dir": 170,
+   "len": 50,
+   "kind": "soil"
+  },
+  {
+   "type": "antHill",
+   "x": -470,
+   "y": 416,
+   "dir": 110,
+   "len": 50,
+   "kind": "soil"
+  },
+  {
+   "type": "antHill",
+   "x": 1420,
+   "y": 844,
+   "dir": 260,
+   "len": 50,
+   "kind": "forest"
   }
  ],
  "generators": [
