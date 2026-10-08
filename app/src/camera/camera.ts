@@ -25,8 +25,11 @@ function measure() {
   const { vw, vh } = view;
   // בטלפון לאורך הכפר ממלא את המסך (כיסוי); במסך רחב רואים את כולו
   const fit = (w: number, h: number) => { const c = Math.min(vw / w, vh / h), v = Math.max(vw / w, vh / h); return v / c < 1.2 ? v : c; };
-  view.fitK = fit(home.x1 - home.x0, home.y1 - home.y0);
-  view.minK = Math.min(view.fitK, Math.max(vw / (B.x1 - B.x0), vh / (B.y1 - B.y0)));   // הכי רחוק: העולם ממלא את המסך
+  // אף פעם לא רואים מעבר לקצה העולם (אין פסים ריקים, בשום יחס מסך): הזום הקטן ביותר הוא זה שבו העולם עוד ממלא את המסך,
+  // וגם תצוגת הבית לא מתרחקת יותר מזה (במסך רחב מאוד היא מתקרבת מעט)
+  const cover = Math.max(vw / (B.x1 - B.x0), vh / (B.y1 - B.y0));
+  view.fitK = Math.max(fit(home.x1 - home.x0, home.y1 - home.y0), cover);
+  view.minK = cover;   // הכי רחוק: העולם ממלא את המסך
   // השכבה הדינמית גדולה מהמסך בשוליים M, כדי שבזמן גרירה לא ייחשפו חורים
   M = Math.round(Math.max(vw, vh) * .3);
   const svgD = ctx.svgD;

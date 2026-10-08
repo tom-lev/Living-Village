@@ -57,3 +57,22 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .palItem.on { border-color: var(--accent); background: rgba(255, 255, 255, .5); }
 .sw { display: inline-flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
 .sw i { width: 12px; height: 22px; display: block; }
+
+/* ───────── מסך רספונסיבי (משימה 12): כל גודל ויחס מסך ─────────
+   שוליים בטוחים גם לרוחב (חריץ מצלמה בטלפון לרוחב); טקסטים ארוכים לא חורגים מהמסך */
+.controls { left: max(16px, env(safe-area-inset-left)); }
+.zoom { right: max(16px, env(safe-area-inset-right)); }
+.follow, .gridCard { max-width: calc(100vw - 32px); box-sizing: border-box; }
+.follow span, .gridCard span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* מסך צר (טלפון לאורך): תג המעקב עולה למעלה, כדי שלא ייפול על הכפתורים או על תווית הזום */
+@media (max-width: 560px) {
+  .follow { bottom: auto; top: max(12px, env(safe-area-inset-top)); }
+  .gridCard { top: max(56px, calc(env(safe-area-inset-top) + 48px)); }
+}
+/* מסך נמוך (טלפון לרוחב): הכפתורים בשורה ולא בעמודה, ותפריט הצבעים נפתח מעליהם */
+@media (max-height: 480px) {
+  .controls { flex-direction: row; }
+  .controls button { min-width: 38px; height: 38px; font-size: 16px; }
+  .palMenu { left: max(16px, env(safe-area-inset-left)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 48px); }
+  .follow { bottom: max(16px, env(safe-area-inset-bottom)); top: auto; }
+}

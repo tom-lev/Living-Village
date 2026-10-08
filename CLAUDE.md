@@ -269,7 +269,8 @@ Order:
   - `ambient.ts`: clouds (with shadows; they fade out at deep zoom) and a bird flock.
 - **Camera** (`camera/camera.ts`):
   - `cam {k,x,y}`, screen = world×k + (x,y).
-  - fitK: the home view covers the screen when the aspect ratio is within 1.2, otherwise it's contained. minK = min(fitK, the world covering the screen), so zoom-out has no bands. The maximum is 24×fitK.
+  - fitK: the home view covers the screen when the aspect ratio is within 1.2, otherwise it's contained, but never less than the zoom at which the world covers the screen. minK = that cover zoom. So on any aspect ratio (even 21:9) nothing beyond the world's edge is ever shown: no bands. The maximum is 24×fitK.
+  - **Responsive UI** (end of `styles.css`): safe-area insets on all sides; the follow pill and grid card never exceed the screen width; on narrow screens (≤560 px) the follow pill moves to the top; on short screens (≤480 px tall, phone landscape) the buttons form a row and the palette menu opens above them. Checked at 320×568, 390×844, 844×390, 768×1024, 1024×768, 1366×768, 1920×1080 and 2560×1080.
   - Wheel, pinch, drag, double-click, `animateTo` (log-interpolated zoom), tap a character to follow it (in GPU mode, a position hit test `pick()`).
   - GPU mode: everything is one Pixi transform. Fallback: the SVG `#mapD` moves with CSS during a gesture (overscan M = 0.3×max(vw,vh)) and is committed sharp at gesture end.
 
