@@ -2,7 +2,8 @@
    מבט מהצד, הקטר פונה ימינה, קו הפסים ב-y=0. מחזירות את הגלגלים (מסתובבים בנסיעה) ואת פי הארובה (משם יוצא העשן). */
 import { el, n2, circ, shade } from '../core/util';
 
-export interface TrainParts { wheels: any[]; chimney: number[]; length: number }
+export interface Wheel { g: any; x: number; r: number }
+export interface TrainParts { wheels: Wheel[]; chimney: number[]; length: number }
 export const LOCOS = ['american', 'tank', 'redStar', 'express', 'forest'] as const;
 export type Loco = typeof LOCOS[number];
 
@@ -11,7 +12,7 @@ const wheel = (g: any, x: number, r: number, c: string, out: any[]) => {
   el('circle', { cx: 0, cy: 0, r, fill: c, stroke: shade(c, -.35), 'stroke-width': .8 }, w);
   el('path', { d: `M${-r * .75},0h${r * 1.5}M0,${-r * .75}v${r * 1.5}`, stroke: shade(c, .35), 'stroke-width': .7 }, w);
   el('circle', { cx: 0, cy: 0, r: r * .22, fill: shade(c, .3) }, w);
-  out.push(w);
+  out.push({ g: w, x, r });   // הגלגל מסתובב בנסיעה: translate(x,-r) rotate(...)
 };
 
 /** קטר. x0: הקצה האחורי שלו. מחזיר את אורכו */

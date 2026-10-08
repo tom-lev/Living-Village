@@ -4,6 +4,7 @@ import { Walker, Dog, Sitter, Balloon, Leash, sortDepth } from './people';
 import { Horse, Sheep, ducks, fish, butterflies } from './animals';
 import { clouds, flock } from './ambient';
 import { wildlife } from './wildlife';
+import { trains } from './trains';
 import { updateSeen } from '../camera/view';
 import { updateLabels } from '../world/labels';
 import { assignHomes } from './agenda';
@@ -53,6 +54,7 @@ export function buildActors(A: Record<string, any>) {
     });
   }
   if (A.wildlife) updates.push(wildlife(A.wildlife));   // חיות היער
+  if (A.trains) updates.push(trains(A.trains));   // רכבות קיטור
   if (A.ducks) updates.push(ducks(A.ducks));
   if (A.fish) updates.push(fish(A.fish));
   if (A.butterflies) updates.push(butterflies(A.butterflies));
