@@ -1461,8 +1461,9 @@
   },
   "snow": {
    "line": -1440,
+   "full": -2200,
    "patches": 90,
-   "patchesTo": -1800
+   "patchesTo": -2200
   },
   "mountains": [
    {

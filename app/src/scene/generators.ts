@@ -4,6 +4,7 @@ import { rand, pick, R, rngAt } from '../core/rng';
 import { ctx, prop, NO_TREE, inWater } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
 import { pine, roundTree } from '../prefabs/nature';
+import { winter } from './terrain';
 import { PREFABS } from '../prefabs/registry';
 import { placeOk } from '../world/walk';
 
@@ -74,9 +75,12 @@ export const GENERATORS: Record<string, (o: any) => void> = {
       const k = Math.floor(x / cell) + ',' + Math.floor(y / cell); (grid.get(k) || grid.set(k, []).get(k)).push([x, y]);
     }
     // סוג העץ וגודלו נקבעים לפי המיקום שלו (rngAt), לא לפי הסדר: כך הוספה או הסרה של עצים (קרחת, אובייקט חדש) לא משנה את שאר היער
+    const cold = winter(ctx.world.terrain);
     for (const [x, y] of trees) {
       const v = rngAt(x, y, 7);
-      inRects(x, y, o.pineZones) || v.r() < o.pineChance ? pine(x, y, v.rand(1.5, 2.1), y < o.snowLine) : roundTree(x, y, v.rand(1.3, 1.75));
+      // שלג על העצים בהדרגה: ככל שמצפינים בעמק, יותר עצים מושלגים (משימה 10א)
+      const snowy = ctx.world.terrain.snow.full !== undefined ? v.r() < cold(y) ** 1.2 * 1.02 : y < o.snowLine;
+      inRects(x, y, o.pineZones) || v.r() < o.pineChance ? pine(x, y, v.rand(1.5, 2.1), snowy) : roundTree(x, y, v.rand(1.3, 1.75));
     }
   },
 };

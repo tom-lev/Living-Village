@@ -20,13 +20,18 @@ export function buildTerrain(w: WorldData) {
   for (let i = 0; i < NR * NC; i++) DETAIL_GROUPS.push(el('g', null, L.ground));
   for (let i = 0; i < T.grass.patches; i++)
     el('path', { d: blob(rand(B.x0 + 40, B.x1 - 40), rand(B.y0 + 40, B.y1 - 40), rand(40, 110), rand(25, 60), 7, .12, rand(0, 6)), fill: '#a9d96f', opacity: .7 }, L.ground);
-  const parts = DETAIL_GROUPS.map(() => '');
+  const parts = DETAIL_GROUPS.map(() => ''), dry = DETAIL_GROUPS.map(() => '');
+  const thaw = winter(T);
   for (let i = 0; i < T.grass.tufts; i++) {
     const x = rand(B.x0 + 14, B.x1 - 14), y = rand(B.y0 + 14, B.y1 - 14);
     if (occ(x, y, O_ROAD | O_RIVER)) continue;
-    parts[tileOf(x, y)] += `M${n2(x - 3)},${n2(y)}l1.6,-4.2l1.4,4.2l1.4,-3.2l1.2,3.2`;
+    // אחרי הרכס הדרומי הדשא מצהיב ומתדלדל בהדרגה (בלי לשנות את סדר המספרים האקראיים: רק מדלגים או צובעים אחרת)
+    const f = thaw(y), d = `M${n2(x - 3)},${n2(y)}l1.6,-4.2l1.4,4.2l1.4,-3.2l1.2,3.2`;
+    if (f > 0 && rngAt(x, y, 61).r() < f * .75) continue;
+    if (f > 0) dry[tileOf(x, y)] += d; else parts[tileOf(x, y)] += d;
   }
   parts.forEach((d, i) => d && el('path', { d, fill: 'none', stroke: '#7fb84d', 'stroke-width': 1.1, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: .8 }, DETAIL_GROUPS[i]));
+  dry.forEach((d, i) => d && el('path', { d, fill: 'none', stroke: '#c2b56a', 'stroke-width': 1.1, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: .85 }, DETAIL_GROUPS[i]));
 
   /* דרכים: דרכי עפר צרות (אין מכוניות): שוליים רכים, כתמים שנשחקו מהליכה, אבנים קטנות ודשא בשוליים */
   const roads = [...geo.EDGES, ...geo.OUTER], all = roads.map(E => E.d).join(''), rv = rngAt(1, 2, 81), hw = ROAD_W / 2;
@@ -148,12 +153,26 @@ export function buildTerrain(w: WorldData) {
     el('path', { d: wv, fill: 'none', stroke: '#bfeafa', 'stroke-width': 1.6, 'stroke-linecap': 'round', opacity: .8 }, L.ground);
   }
 
-  /* צפון ההרים: קרקע מושלגת */
-  // הגבול התחתון גלי (במעברים בין ההרים רואים אותו)
+  /* צפון ההרים: מעבר הדרגתי לחורף (משימה 10א). מהרכס הדרומי (snow.line) ועד קרקעית העמק (snow.full):
+     הקרקע מצהיבה בשכבות שקופות, כתמי שלג קטנים שהולכים וגדלים ומתמזגים, ורק משם קרקע מושלגת מלאה.
+     הכול באקראיות מקומית (rngAt), כדי שהיער ושאר העולם לא יזוזו */
+  const wavy = (y0: number, salt: number, amp = 22) => {
+    const v = rngAt(y0, salt, 71), pts: number[][] = [];
+    for (let x = B.x0 - 60; x <= B.x1 + 60; x += 70) pts.push([x, y0 + v.rand(-amp, amp * .65)]);
+    return `M${B.x0 - 60},${B.y0}` + smoothOpen(pts).replace(/^M/, 'L') + `L${B.x1 + 60},${B.y0}Z`;
+  };
   {
-    const v = rngAt(T.snow.line, 0, 71), pts: number[][] = [];
-    for (let x = B.x0 - 60; x <= B.x1 + 60; x += 70) pts.push([x, T.snow.line + v.rand(-22, 14)]);
-    el('path', { d: `M${B.x0 - 60},${B.y0}` + smoothOpen(pts).replace(/^M/, 'L') + `L${B.x1 + 60},${B.y0}Z`, fill: '#eaf3f7' }, L.ground);
+    const y0 = T.snow.line, y1 = T.snow.full ?? T.snow.line, BANDS = 7;
+    for (let k = 0; k < BANDS; k++) el('path', { d: wavy(y0 - (y0 - y1) * (k + .3) / BANDS, k + 1, 30), fill: '#d9d4a0', opacity: .13 }, L.ground);   // הדשא מצהיב
+    const v = rngAt(y0, y1, 72); let sn = '', sn2 = '';
+    for (let i = 0; i < 260; i++) {
+      const u = v.r() ** .75, y = y0 - (y0 - y1) * u, f = (y0 - y) / (y0 - y1), x = v.rand(B.x0, B.x1);
+      const rx = 5 + 85 * f ** 1.7, ry = 2.5 + 26 * f ** 1.7, d = blob(x, y, rx * v.rand(.7, 1.2), ry * v.rand(.7, 1.2), 7, .16, v.rand(0, 6));
+      if (v.r() < .3) sn2 += d; else sn += d;
+    }
+    el('path', { d: sn, fill: '#f4f9fb', opacity: .92 }, L.ground);
+    el('path', { d: sn2, fill: '#e3eef3', opacity: .92 }, L.ground);
+    el('path', { d: wavy(y1, 0), fill: '#eaf3f7' }, L.ground);   // חורף מלא
   }
   for (let i = 0; i < T.snow.patches; i++)
     el('path', { d: blob(rand(B.x0, B.x1), rand(B.y0 + 60, T.snow.patchesTo), rand(50, 140), rand(20, 50), 7, .12, rand(0, 6)), fill: pick(['#ffffff', '#dfecf2']), opacity: .8 }, L.ground);
@@ -167,4 +186,10 @@ export function buildTerrain(w: WorldData) {
     el('path', { d: `M${x - 8},${top + 2}v${h - 6}M${x},${top}v${h - 2}M${x + 8},${top + 2}v${h - 6}`, stroke: '#ffffff', 'stroke-width': 2, 'stroke-linecap': 'round', opacity: .9 }, L.ground);
     el('ellipse', { cx: x, cy: bottom, rx: 28, ry: 9, fill: '#e8f8fd' }, L.ground);
   }
+}
+
+/** כמה "חורף" יש בגובה y: 0 מדרום לרכס, 1 מקרקעית העמק וצפונה (snow.line → snow.full) */
+export function winter(T: any) {
+  const y0 = T.snow.line, y1 = T.snow.full ?? T.snow.line;
+  return (y: number) => y >= y0 ? 0 : y <= y1 ? 1 : (y0 - y) / (y0 - y1);
 }

@@ -159,6 +159,9 @@ async function boot() {
     });
   }
 
+  // דף דוגמאות לאישור הבעלים לפני שמפזרים בעולם: ?sample=animals או ?sample=trains
+  const sample = new URLSearchParams(location.search).get('sample');
+  if (sample) import('./actors/samples').then(m => m.showSample(sample));
   applySharedNames();   // השמות ששונו מהדפדפן (names.json המשותף)
 
   // לבדיקות אוטומטיות
