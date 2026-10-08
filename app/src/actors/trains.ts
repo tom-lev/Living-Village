@@ -8,6 +8,7 @@ import { ctx } from '../world/context';
 import { inView } from '../camera/view';
 import { loco, car, LOCOS, type Wheel } from './train-art';
 import { dynamics } from './people';
+import { STATION } from './station';
 
 export function trains(o: { every: [number, number]; speed: number; stopAt: number; stop: number }) {
   const rail = (ctx.world.objects as any[]).find(r => r.type === 'railway');
@@ -45,11 +46,14 @@ export function trains(o: { every: [number, number]; speed: number; stopAt: numb
       if (!c.served) want = toStop > 0 ? Math.min(target, Math.max(4, toStop * .35)) : 0;
       if (!c.served && toStop <= .5) { c.stopped += dt; want = 0; if (c.stopped > o.stop) c.served = true; }
       c.speed += (want - c.speed) * Math.min(1, dt * (want > c.speed ? .5 : 1.5));
+      // עומדת בתחנה: הנוסעים יכולים לעלות ולרדת (people.ts)
+      const tail0 = c.head - c.dir * c.len;
+      STATION.stopped = !c.served && toStop <= .5 && c.speed < .5 ? { x0: Math.min(c.head, tail0), x1: Math.max(c.head, tail0), y: Y } : null;
       c.head += c.dir * c.speed * dt;
       c.rot += c.speed * dt;
       const tail = c.head - c.dir * c.len, mid = (c.head + tail) / 2;
       if ((c.dir > 0 && tail > B.x1 + 40) || (c.dir < 0 && tail < B.x0 - 40)) {
-        c.g.remove(); dynamics.splice(dynamics.indexOf(c), 1); cur = null; wait = rg.rand(o.every[0], o.every[1]);
+        c.g.remove(); dynamics.splice(dynamics.indexOf(c), 1); cur = null; wait = rg.rand(o.every[0], o.every[1]); STATION.stopped = null;
       } else {
         // עשן מהארובה: נקודת הארובה בעולם (הקטר מקדימה)
         const cx = c.head - c.dir * (c.len - c.chimney[0] * K), cy = Y + c.chimney[1] * K;

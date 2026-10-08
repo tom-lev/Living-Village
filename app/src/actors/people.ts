@@ -7,6 +7,7 @@ import { KINDS, type Place } from '../world/places';
 import { roleOf, routeTo, routeAt, chooseNext, durOf, surnameOf, actOf, prependRoute } from './agenda';
 import { ripple } from '../world/context';
 import { plotOfDoor } from '../prefabs/village';
+import { STATION } from './station';
 import { walkable } from '../world/walk';
 import { ctx } from '../world/context';
 import type { Look } from '../world/types';
@@ -61,6 +62,7 @@ export class Walker {
   /** יוצאים ליעד: מסלול מהמקום הנוכחי (מהדלת, אם יוצאים ממבנה) */
   go(to: Place, from: Place | null) {
     if (this.place?.busy === this) this.place.busy = null;   // קמים מהספסל
+    this.platform = null;   // עוזבים את הרציף
     if (to.kind === 'sit') to.busy = this;                   // שומרים את הספסל
     const wasSwimming = this.act === 'swim';
     this.act = null; this.fig.setSwim(false);
@@ -84,6 +86,8 @@ export class Walker {
     const p = this.place, n = p?.name ? ` (${p.name})` : '';
     if (!p) return this.name;
     if (this.state === 'walk' || this.state === 'exit') return `${this.name} · ${p === this.home ? 'walking home' : 'on the way to ' + (p.name || KINDS[p.kind].label)}`;
+    if (this.platform) return `${this.name} · waiting for the train`;
+    if (this.state === 'board' || this.state === 'away' || this.state === 'alight') return `${this.name} · on the train`;
     return `${this.name} · ${p === this.home ? 'at home' : KINDS[p.kind].label}${p === this.home ? '' : n}`;
   }
   update(dt: number, t: number) {
@@ -97,7 +101,9 @@ export class Walker {
       // במנהרה: נעלמים בכניסה ומופיעים ביציאה
       this.alpha = tunnel ? Math.max(0, this.alpha - dt / .6) : Math.min(1, this.alpha + dt / .6);
       if (left < .5) {
-        if (KINDS[this.place.kind].enter) this.state = 'enter';
+        // תחנת רכבת: לא נעלמים בדלת, אלא מחכים על הרציף לרכבת הבאה (ומוותרים אחרי 150 שניות)
+        if (this.place.kind === 'train' && this.place.door) { const d = this.place.door; this.platform = [d[0] + this.rg.rand(-45, 45), d[1] + 9]; this.state = 'stay'; this.act = 'look'; this.actPh = this.rg.rand(0, 6); this.timer = 150; }
+        else if (KINDS[this.place.kind].enter) this.state = 'enter';
         else { this.state = 'stay'; this.timer = durOf(this.place, this.rg); this.act = actOf(this.place, this.rg); this.actPh = this.rg.rand(0, 6); }
       }
     } else if (this.state === 'enter') {
@@ -110,11 +116,34 @@ export class Walker {
         const d = from.door; this.x = d[0]; this.y = d[1];
         this.go(chooseNext(this, this.rg), from); this.state = 'exit';
       }
+    } else if (this.state === 'board') {
+      // עולים לרכבת: צעד אל הקרון ונעלמים
+      tx = this.x; ty = STATION.stopped ? STATION.stopped.y - 7 : this.y; walking = Math.abs(ty - this.y) > 2;
+      this.alpha = Math.max(0, this.alpha - dt / .8);
+      if (!this.alpha) { this.state = 'away'; this.timer = durOf(this.place, this.rg); this.platform = null; }
+    } else if (this.state === 'away') {
+      // בנסיעה: חוזרים ברכבת שעוצרת בתחנה אחרי שהזמן עבר
+      this.timer -= dt;
+      const st = STATION.stopped, d = this.place.door;
+      if (this.timer <= 0 && st && d) {
+        this.x = clamp(d[0] + this.rg.rand(-50, 50), st.x0 + 12, st.x1 - 12); this.y = st.y - 7; this.state = 'alight';
+      }
+    } else if (this.state === 'alight') {
+      // יורדים מהרכבת אל הרציף, ומשם ממשיכים
+      const d = this.place.door; tx = this.x; ty = d[1] + 9; walking = Math.abs(ty - this.y) > 1;
+      this.alpha = Math.min(1, this.alpha + dt / .8);
+      if (this.alpha >= 1 && !walking) this.go(chooseNext(this, this.rg), null);
     } else if (this.state === 'exit') {
       this.alpha = Math.min(1, this.alpha + dt / .8);
       if (this.alpha >= 1) this.state = 'walk';
     } else if (this.state === 'stay') {
       if (this.act === 'sit' && this.place.seat) { tx = this.place.seat[0]; ty = this.place.seat[1]; }
+      if (this.platform) {
+        // מחכים על הרציף; כשרכבת עומדת בתחנה ממול – עולים
+        tx = this.platform[0]; ty = this.platform[1];
+        const st = STATION.stopped;
+        if (st && this.x > st.x0 + 8 && this.x < st.x1 - 8 && Math.hypot(tx - this.x, ty - this.y) < 4) { this.state = 'board'; this.act = null; }
+      }
       if (this.act === 'swim') {
         // נכנסים למים ושוחים לאט לאורך החוף; אדווה קטנה מדי פעם
         const a = this.place.at, sea = ctx.world.terrain.sea.y;
@@ -248,7 +277,7 @@ export class Dog {
   update(dt: number, t: number) {
     const o = this.owner, k = 1 - Math.exp(-dt * 8);
     // הבעלים בתוך מבנה שאינו הבית (חנות, כנסייה): הכלב מחכה בחוץ ליד הדלת. בבית: נכנס איתו
-    const inside = o.state === 'enter' || o.state === 'inside' || o.state === 'exit';
+    const inside = o.state === 'enter' || o.state === 'inside' || o.state === 'exit' || o.state === 'board' || o.state === 'away' || o.state === 'alight';
     this.waiting = inside && o.place !== o.home && !!o.place?.door;
     this.alpha = this.waiting ? 1 : o.alpha;
     let tgt = this.waiting ? [o.place.door[0] + 16, o.place.door[1] + 9] : o.pointBack(26);
