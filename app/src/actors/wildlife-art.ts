@@ -177,10 +177,11 @@ export function fox(g: any, v: LocalRng): Parts {
   const specs: LegSpec[] = [
     { hip: [-5.8, -7.6], l1: 4.1, l2: 4, front: false, far: false, w: 1.7, color: c, hoof: sock },
     { hip: [6, -7.8], l1: 4.1, l2: 4, front: true, far: false, w: 1.6, color: c, hoof: sock },
-    { hip: [-4.4, -7.8], l1: 4.1, l2: 4, front: false, far: true, w: 1.5, color: shade(c, -.25), hoof: shade(sock, -.2) },
-    { hip: [7.4, -8], l1: 4.1, l2: 4, front: true, far: true, w: 1.4, color: shade(c, -.25), hoof: shade(sock, -.2) },
+    // הרגליים הרחוקות: כהות בבירור ומוזזות מעט מהקרובות, כדי שרואים ארבע רגליים
+    { hip: [-3.6, -7.9], l1: 4.1, l2: 4, front: false, far: true, w: 1.6, color: '#7a3f1c', hoof: '#2e2018' },
+    { hip: [8.2, -8.1], l1: 4.1, l2: 4, front: true, far: true, w: 1.5, color: '#7a3f1c', hoof: '#2e2018' },
   ];
-  return { body: b, head, tail, legs: [], legBase: [], size: 11 * s, c, s, quad: { specs, far, near, gait: 'trot', A: 2.6, lift: 2.2, bodyG: body } };
+  return { body: b, head, tail, legs: [], legBase: [], size: 11 * s, c, s, quad: { specs, far, near, gait: 'walk', A: 2.3, lift: 2, bodyG: body } };
 }
 
 /** דוב: גדול, חום, גבנון בכתפיים, ראש נמוך עם אוזניים עגולות. הליכה איטית בארבע פעימות, הכתפיים מתגלגלות */

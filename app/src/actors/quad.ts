@@ -43,8 +43,9 @@ export class Legs {
       if (q < .5) { fx = A - 4 * A * q; fy = 0; }                       // על הקרקע: זזה אחורה בקצב הגוף
       else { const u = (q - .5) / .5; fx = -A + 2 * A * (1 - Math.cos(Math.PI * u)) / 2; fy = -this.lift * amp * Math.sin(Math.PI * u); }   // באוויר: קשת קדימה
       const hip = [s.hip[0], s.hip[1] + bodyDy], foot = [s.hip[0] + fx + (s.front ? .4 : -.4), fy];
-      // ברך קדמית מתכופפת אחורה (sgn 1 כשפונים ימינה), עקב אחורי מתכופף קדימה במבט, כמו אצל סוס
-      const knee = ik2(hip, foot, s.l1, s.l2, s.front ? -1 : 1);
+      // כמו אצל בעלי חיים אמיתיים: ברגל הקדמית המפרק הנראה (ה"ברך", שורש כף היד) בולט קדימה,
+      // ברגל האחורית המפרק הנראה (העקב) בולט אחורה. הפוך מזה – כל צעד נראה כאילו הוא הולך אחורה
+      const knee = ik2(hip, foot, s.l1, s.l2, s.front ? 1 : -1);
       this.els[i].setAttribute('d', `M${n2(hip[0])},${n2(hip[1])}L${n2(knee[0])},${n2(knee[1])}L${n2(foot[0])},${n2(foot[1])}`);
       if (this.hoofs[i]) this.hoofs[i].setAttribute('d', `M${n2(foot[0] - .2)},${n2(foot[1] - s.w * .45)}L${n2(foot[0] + s.w * .25)},${n2(foot[1])}`);
     });

@@ -22,12 +22,12 @@ const SPAWN_BOX: Record<WildKind, number[]> = { rabbit: [8, 14], squirrel: [8, 1
 
 /** מהירות, מרחק שיטוט, זמני מנוחה ומרחק מינימלי מבתים, לכל סוג */
 const KIND: Record<WildKind, { speed: number; roam: number; rest: [number, number]; homeGap: number; stride: number; hop?: boolean; still?: boolean }> = {
-  rabbit: { speed: 26, roam: 90, rest: [2, 7], homeGap: 260, stride: 1.4, hop: true },
-  squirrel: { speed: 24, roam: 70, rest: [1.5, 5], homeGap: 240, stride: 1.2, hop: true },
+  rabbit: { speed: 13, roam: 90, rest: [4, 12], homeGap: 260, stride: 1.4, hop: true },     // רגועים: קפיצות ארוכות ואיטיות, עם עצירות
+  squirrel: { speed: 14, roam: 70, rest: [3, 9], homeGap: 240, stride: 1.2, hop: true },
   owl: { speed: 0, roam: 0, rest: [3, 9], homeGap: 300, stride: 0, still: true },
-  fox: { speed: 16, roam: 160, rest: [3, 9], homeGap: 360, stride: 2 },
+  fox: { speed: 11, roam: 160, rest: [4, 11], homeGap: 360, stride: 2 },
   bear: { speed: 7, roam: 200, rest: [6, 16], homeGap: 800, stride: 3 },
-  deer: { speed: 11, roam: 220, rest: [5, 14], homeGap: 320, stride: 3 },
+  deer: { speed: 9, roam: 220, rest: [6, 16], homeGap: 320, stride: 3 },
 };
 
 /* מה מסתיר מה: העצים, הבתים והחפצים הם חלק מהרקע (אריחים), והחיות מצוירות מעליהם. לכן חיה לא נכנסת אף פעם לשטח
@@ -113,7 +113,7 @@ class Animal {
       const near = dynamics.find(o => o !== this && !o.kind && o.alpha > 0 && Math.hypot(o.x - this.x, o.y - this.y) < 60);
       if (near && this.state === 'rest') {
         const dx = this.x - near.x, dy = this.y - near.y, d = Math.hypot(dx, dy) || 1, tx = this.x + dx / d * 50, ty = this.y + dy / d * 35;
-        if (spotOk(tx, ty, K.homeGap * .8, this.homes, this.W, this.H) && pathClear([this.x, this.y], [tx, ty], this.W, this.H)) { this.tx = tx; this.ty = ty; this.state = 'move'; this.flee = 1.6; }
+        if (spotOk(tx, ty, K.homeGap * .8, this.homes, this.W, this.H) && pathClear([this.x, this.y], [tx, ty], this.W, this.H)) { this.tx = tx; this.ty = ty; this.state = 'move'; this.flee = 1.3; }
       }
       if (this.state === 'rest' && this.timer <= 0) {
         const tg = this.pick();
@@ -127,7 +127,8 @@ class Animal {
           if (K.hop) this.sitWant = this.rg.chance(.45) ? 1 : 0;
         }
         else {
-          ds = Math.min(d, K.speed * this.flee * dt);
+          this.pauseT = (this.pauseT ?? 0) - dt;
+          ds = this.pauseT > 0 ? 0 : Math.min(d, K.speed * this.flee * dt);
           this.x += dx / d * ds; this.y += dy / d * ds;
           if (Math.abs(dx) > 1) this.face = dx > 0 ? 1 : -1;
           // לאן פונים: לרוחב – מהצד; כשהולכים בעיקר למטה (אל הצופה) – מלפנים, למעלה – מאחור. מחליפים רק כשהכיוון ברור
@@ -150,7 +151,12 @@ class Animal {
     const unit = this.k * (this.p.s ?? 1);   // יחידת ציור אחת בעולם
     if (this.Q) this.phase += ds / (unit * this.Q.cycle);
     else this.phase += ds / ((K.hop ? 7 : 9) * this.k);
-    if (K.hop) { this.hopH += ds / (unit * (this.kind === 'rabbit' ? 9 : 7)); if (this.state !== 'move') this.hopH = Math.ceil(this.hopH - .02); }   // עומדים: מסיימים את הקפיצה
+    if (K.hop) {
+      this.hopH += ds / (unit * (this.kind === 'rabbit' ? 13 : 10));
+      if (this.state !== 'move') this.hopH = Math.ceil(this.hopH - .02);   // עומדים: מסיימים את הקפיצה
+      // אחרי קפיצה, לפעמים עוצרים לרגע ומסתכלים סביב (רגוע, לא קופצים ברצף)
+      if (Math.floor(this.hopH) !== this.lastHop) { this.lastHop = Math.floor(this.hopH); if (this.state === 'move' && this.rg.chance(.4)) this.pauseT = this.rg.rand(.5, 1.6); }
+    }
     this.sit += (this.sitWant - this.sit) * Math.min(1, dt * 3);
     this.shown = inView(this.x, this.y - 10, 40); show(this.g, this.shown);
     if (!this.shown) return;
@@ -272,12 +278,12 @@ export function hopPose(P: any, kind: string, h: number, amp: number, sit: numbe
   P.front.setAttribute('d', `M${n2(c[0])},${n2(c[1])}L${n2(px)},${n2(py)}M${n2(c[0] + .9)},${n2(c[1])}L${n2(px + .9)},${n2(py)}`);
   P.bodyG.setAttribute('transform', `rotate(${a.toFixed(1)} ${G.hip[0]} ${G.hip[1]})`);
   // אוזניים: נשכבות לאחור באוויר, מתעוותות במנוחה; אף מתנועע
-  const air = u > .3 && u < .7 ? Math.sin((u - .3) / .4 * Math.PI) : 0, twitch = Math.max(0, Math.sin(t * 1.7 + seed)) ** 12 * 14;
+  const air = u > .3 && u < .7 ? Math.sin((u - .3) / .4 * Math.PI) : 0, twitch = Math.max(0, Math.sin(t * .8 + seed)) ** 16 * 12;
   P.ears.setAttribute('transform', `rotate(${(-30 * air * amp + twitch).toFixed(1)} ${G.ear[0]} ${G.ear[1]})`);
-  P.nose.setAttribute('transform', `translate(0,${n2(Math.sin(t * 18 + seed) * .14 * (1 - amp))})`);
+  P.nose.setAttribute('transform', `translate(0,${n2(Math.max(0, Math.sin(t * 2.2 + seed)) ** 3 * Math.sin(t * 9) * .14 * (1 - amp))})`);   // רחרוח: סדרות קצרות, לא כל הזמן
   if (kind === 'squirrel') {
     // זנב: גל לאורך הזנב בריצה, נפנוף רך במנוחה
-    const w = Math.sin(h * Math.PI * 2) * 1.4 * amp + Math.sin(t * 2.2 + seed) * .5;
+    const w = Math.sin(h * Math.PI * 2) * 1.2 * amp + Math.sin(t * 1.1 + seed) * .4;
     const T2 = `M-2.6,${n2(-2.2 + w)}C-6,${n2(-2.2 + w)} -8.4,${n2(-5 + w)} -7.4,-8.6C-6.8,-10.8 -4.4,${n2(-11.6 + w * .6)} -3.6,-9.2`;
     P.tail.setAttribute('d', T2);
     P.tailHi.setAttribute('d', `M-6.4,${n2(-4 + w)}C-7.4,${n2(-6 + w * .5)} -7,-8.6 -5.6,-9.8`);
