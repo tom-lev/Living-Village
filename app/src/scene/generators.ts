@@ -4,7 +4,7 @@ import { rand, pick, R, rngAt } from '../core/rng';
 import { ctx, prop, NO_TREE, inWater } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
 import { pine, roundTree } from '../prefabs/nature';
-import { winter } from './terrain';
+import { winter, prairie, lakeShore } from './terrain';
 import { PREFABS } from '../prefabs/registry';
 import { placeOk } from '../world/walk';
 import { REAL_H, fitScale } from '../world/scale';
@@ -76,10 +76,21 @@ export const GENERATORS: Record<string, (o: any) => void> = {
         for (const t of grid.get((cx + i) + ',' + (cy + j)) || []) if ((t[0] - x) ** 2 + ((t[1] - y) * 1.4) ** 2 < 30 * 30) return true;
       return false;
     };
-    const dens = o.density;
-    for (let i = 0; i < o.attempts && trees.length < o.max; i++) {
-      const x = rand(B.x0, B.x1), y = rand(B.y0, B.y1);
-      if (R() > (dense(x, y) ? (inHome(x, y) ? dens.village : dens.forest) : dens.open)) continue;
+    const dens = o.density, T = ctx.world.terrain, pr = prairie(T), lake = lakeShore(T);
+    /* מיקומי העצים נקבעים לפי המקום (רשת של תאים, ובכל תא אקראיות מקומית rngAt), לא לפי סדר הגרלה:
+       כך הרחבת המפה, הוספת אובייקט או קרחת לא מזיזות אף עץ אחר (כלל stable-forest) */
+    const C = o.cell ?? 52, cand: number[][] = [];
+    for (let gy = Math.floor(B.y0 / C); gy < B.y1 / C; gy++) for (let gx = Math.floor(B.x0 / C); gx < B.x1 / C; gx++) {
+      const v = rngAt(gx, gy, 11);
+      cand.push([gx * C + v.r() * C, gy * C + v.r() * C, v.r()]);
+    }
+    for (const [x, y, roll] of cand) {
+      if (x < B.x0 || x > B.x1 || y < B.y0 || y > B.y1) continue;
+      // בערבה: עצים בודדים בלבד
+      const d = (dense(x, y) ? (inHome(x, y) ? dens.village : dens.forest) : dens.open) * (1 - pr(y) * (1 - (dens.prairie ?? .04)));
+      if (roll > d) continue;
+      // האגם הדרומי: לא בחול ולא במים; על היבשה שמסביבו מותר
+      if (lake && y > T.beach.y - 40 && x > lake.Wx(y) - 45 && !(x > lake.Ex(y) + 40 || y > lake.Sy(x) + 50)) continue;
       if (!treeOk(x, y, o.noBands) || near(x, y)) continue;
       trees.push([x, y]);
       const k = Math.floor(x / cell) + ',' + Math.floor(y / cell); (grid.get(k) || grid.set(k, []).get(k)).push([x, y]);
@@ -90,6 +101,8 @@ export const GENERATORS: Record<string, (o: any) => void> = {
       const v = rngAt(x, y, 7);
       // שלג על העצים בהדרגה: ככל שמצפינים בעמק, יותר עצים מושלגים (משימה 10א)
       const snowy = ctx.world.terrain.snow.full !== undefined ? v.r() < cold(y) ** 1.2 * 1.02 : y < o.snowLine;
+      // בערבה: עצים עגולים (אלונים) בודדים, בלי שלג
+      if (pr(y) > .4) { v.r(); roundTree(x, y, v.rand(1.4, 1.9)); continue; }
       inRects(x, y, o.pineZones) || v.r() < o.pineChance ? pine(x, y, v.rand(1.5, 2.1), snowy) : roundTree(x, y, v.rand(1.3, 1.75));
     }
   },

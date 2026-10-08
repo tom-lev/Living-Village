@@ -16,6 +16,9 @@ import { dynamics } from './people';
 /** הגובה הטבעי של כל ציור (יחידות, בלי הגדלה): ממנו ומהגובה האמיתי נקבע הגודל */
 const NATURAL_H: Record<WildKind, number> = { rabbit: 14.6, squirrel: 15, owl: 12.4, fox: 18, bear: 25 };
 
+/** השטח (רוחב לכל צד, גובה) שכל חיה תופסת בגודלה האמיתי */
+const SPAWN_BOX: Record<WildKind, number[]> = { rabbit: [8, 14], squirrel: [8, 14], owl: [9, 16], fox: [15, 19], bear: [27, 30] };
+
 /** מהירות, מרחק שיטוט, זמני מנוחה ומרחק מינימלי מבתים, לכל סוג */
 const KIND: Record<WildKind, { speed: number; roam: number; rest: [number, number]; homeGap: number; stride: number; hop?: boolean; still?: boolean }> = {
   rabbit: { speed: 26, roam: 90, rest: [2, 7], homeGap: 260, stride: 1.4, hop: true },
@@ -60,7 +63,7 @@ function pathClear(a: number[], b: number[], w: number, h: number) {
 function spotOk(x: number, y: number, gap: number, homes: number[][], w = 8, h = 12) {
   const { B } = ctx, T = ctx.world.terrain;
   if (x < B.x0 + 60 || x > B.x1 - 60 || y < T.snow.line + 60 || y > T.beach.y - 80) return false;
-  if (!walkable(x, y) || hidden(x, y, w, h)) return false;
+  if (!walkable(x, y) || flagsAt(x, y) & (PATH | WATER) || hidden(x, y, w, h)) return false;
   for (let a = 0; a < 8; a++) { const t = a * Math.PI / 4; if (flagsAt(x + Math.cos(t) * 22, y + Math.sin(t) * 22) & (PATH | WATER)) return false; }
   return !homes.some(h => Math.hypot(h[0] - x, h[1] - y) < gap);
 }
@@ -186,7 +189,8 @@ export function wildlife(counts: Partial<Record<WildKind, number>>) {
     const v = rngAt(kind.length * 97, 13, 84), K = KIND[kind];
     for (let n = 0, tries = 0; n < (counts[kind] ?? 0) && tries < 4000; tries++) {
       const x = v.rand(B.x0, B.x1), y = v.rand(ctx.world.terrain.snow.line, ctx.world.terrain.beach.y);
-      if (!spotOk(x, y, K.homeGap, homes) || all.some(a => Math.hypot(a.x - x, a.y - y) < 120)) continue;
+      const [sw, sh] = SPAWN_BOX[kind];   // השטח שהחיה תופסת (כדי שלא תתחיל מאחורי עץ)
+      if (!spotOk(x, y, K.homeGap, homes, sw, sh) || all.some(a => Math.hypot(a.x - x, a.y - y) < 120)) continue;
       all.push(new Animal(kind, x, y, homes)); n++;
     }
   }

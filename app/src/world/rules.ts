@@ -51,7 +51,7 @@ export const RULES: Rule[] = [
   { id: 'lamps', group: 'layout', title: 'Street lamps only in the village, never on a road or trail, not crowded, arm toward the road', where: 'scene/generators.ts streetLamps', check: 'lamps' },
   { id: 'benches-face', group: 'layout', title: 'A bench faces what there is to see: water, a square, or the nearest path', where: 'scene/build.ts orientBench', check: 'bench' },
   { id: 'level-crossings', group: 'layout', title: 'Wherever a road or trail crosses the railway there is a level crossing', where: 'prefabs/areas.ts railway', built: true },
-  { id: 'stable-forest', group: 'layout', title: 'Adding or removing content never moves the rest of the forest', where: 'scene/generators.ts forest (rngAt per tree), scene/build.ts drawAway (removed: true)', built: true },
+  { id: 'stable-forest', group: 'layout', title: 'Adding or removing content never moves the rest of the forest', where: 'scene/generators.ts forest (position grid with rngAt), world/walk.ts initWalk (grid anchored to world coordinates)', built: true },
   { id: 'no-bands', group: 'layout', title: 'Nothing beyond the edge of the world is ever shown, on any screen shape', where: 'camera/camera.ts measure (cover zoom)', built: true },
 
   // ── פרופורציות ──

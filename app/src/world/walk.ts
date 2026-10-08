@@ -15,7 +15,10 @@ let W = 0, H = 0, X0 = 0, Y0 = 0, F: Uint16Array, PRIV: Uint16Array;
 
 export function initWalk() {
   const { B } = ctx;
-  X0 = B.x0; Y0 = B.y0; W = Math.ceil((B.x1 - B.x0) / C); H = Math.ceil((B.y1 - B.y0) / C);
+  // הרשת מעוגנת לקואורדינטות העולם (קווי התאים ב-x ≡ 2, y ≡ 2 מודולו C), לא לקצה המפה: כשהמפה גדלה
+  // התאים לא זזים, אז דלתות, שערים ושבילים נשארים באותם תאים (בלי זה, הרחבה של 2 יחידות "סוגרת" דלתות)
+  X0 = Math.floor((B.x0 - 2) / C) * C + 2; Y0 = Math.floor((B.y0 - 2) / C) * C + 2;
+  W = Math.ceil((B.x1 - X0) / C); H = Math.ceil((B.y1 - Y0) / C);
   F = new Uint16Array(W * H); PRIV = new Uint16Array(W * H);
 }
 const ix = (x: number) => Math.floor((x - X0) / C), iy = (y: number) => Math.floor((y - Y0) / C);

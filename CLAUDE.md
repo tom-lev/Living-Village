@@ -68,7 +68,7 @@ This file is the complete handoff. Work on this project so far happened in one l
   - **Text inside the world is English only:** shop signs, the station and character names. A character's full name is the first name from the data plus the surname of their home: "Noa Fisher" lives in Fisher House. A home without a surname gives "Noa of Old Stone Farm". The surname follows renames (`surnameOf` in `actors/agenda.ts`). Children live with an adult, so they share the family name.
   - Bottom-left: ⤢ (home view), ❚❚/▶ (pause), # (block grid toggle), 🎨 (palette menu). There are no +/− buttons, at the owner's request; the keyboard + and − still zoom. Bottom-right: the zoom label.
   - **Block grid (`ui/grid.ts`).** When the grid is on, each tap adds or removes a cell, so the owner can select any shape. The selected rows and columns light up, and a card shows the count and span. **Copy** puts a description on the clipboard for the owner to send you, for example "Living Village area: 5 blocks, columns 18–23, rows 38–43" followed by one line per row. Tapping a character still follows it.
-  - **Block grid (`ui/grid.ts`):** 1 block = 100 world units. Columns are numbered from 1 at the left and rows from 1 at the top. The owner uses it to say sizes and places, for example "a forest of 6×4 blocks at columns 20–26". The world is 34×64 blocks, and the village sits at about columns 14–21, rows 32–48.
+  - **Block grid (`ui/grid.ts`):** 1 block = 100 world units. Columns are numbered from 1 at the left and rows from 1 at the top. The owner uses it to say sizes and places, for example "a forest of 6×4 blocks at columns 20–26". The world is 54×74 blocks since 2026-10-08 (it grew 20 blocks west and 10 north), and the village sits at about columns 34–41, rows 42–58.
   - The follow pill appears when you tap a character.
   - There is no title card (removed at their request).
 
@@ -124,7 +124,7 @@ Order:
   - `seed` (mulberry32);
   - `palette` (the default name) and `palettes` (the menu: 'רכה', 'מאוזנת');
   - `home` [0,0,800,1700] (the home view: fills a phone in portrait);
-  - `bounds` [-1300,-3100,2100,3300];
+  - `bounds` [-3300,-4100,2100,3300] (grew west and north on 2026-10-08; the walk grid is anchored to world coordinates, so growing never shifts its cells);
   - `roads.nodes/edges`: the walkable graph. Edges are `[a, b, c1x, c1y, c2x, c2y]` cubic Béziers.
   - `roads.outer`: decorative roads, `[[p0], c1x,c1y,c2x,c2y, [p1]]`. Index 4 carries the power line.
   - `trails` (footpaths), `river` (a polyline, smoothed with Catmull-Rom), `terrain` (beach/sea/snow/mountains/waterfall);
@@ -250,7 +250,9 @@ Order:
   - GPU mode: everything is one Pixi transform. Fallback: the SVG `#mapD` moves with CSS during a gesture (overscan M = 0.3×max(vw,vh)) and is committed sharp at gesture end.
 
 ## 6. The world as it is now (coordinates are world units; y grows downward)
-- **North** (y < −1440):
+- **Prairie and the great western forest** (2026-10-08, `tools/history/prairie_and_west_forest.py`): everything north of y −2050 was removed (the northern range, frozen lake, ski slope, chapel, observatory, hot spring, turbines, northern chalets, creek and their roads and trails) and is now prairie (`terrain.prairie` {start −2020, full −2380}: golden tall grass, wildflowers, wind-flattened patches, lone oaks). The snow is a band in the valley: `terrain.snow` {line −1440, full −1760, thaw [−1900, −2120]}; `winter(y)` rises and melts again into the prairie. West of x −1300 is a huge forest 2000 wide with five trails; the southern lake has a western shore (`terrain.sea.west`).
+- **The forest is placed by position** (`forest` in `scene/generators.ts`): a grid of `cell` 52, each cell with `rngAt`; density by zone (village, forest, open, prairie). Changing the map, adding a clearing or an object never moves other trees.
+- **North** (y < −1440, before 2026-10-08; most of this north of −2050 is gone, see above):
   - a snowy region behind mountain rows (with tunnel portals);
   - chalets around (440..530, −2010..−2380), a chapel (250, −2420), a frozen lake with skaters and ice huts (−260, −2430), a ski slope (1320..1640, −1880..−2660);
   - an observatory (1560, −2790), wind turbines (−1100.., −2580..−2790), a hot spring (−500, −2700), igloos, snowmen, deer;

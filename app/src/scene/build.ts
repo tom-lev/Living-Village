@@ -201,7 +201,7 @@ function markTerrain(w: WorldData) {
   markLine(geo.RIVER_SAMPLES, 24, WATER);
   markLine(geo.CREEK_SAMPLES, 9, WATER);
   const lake = lakeShore(T);   // הדרום: אגם עם חופים (או ים פתוח, אם אין חוף דרומי בנתונים)
-  if (lake) { markPolygon(lake.poly, WATER); markRect(B.x0, T.sea.y, lake.Ex(T.sea.y + 40) - 30, T.sea.y + 70, SWIM); }
+  if (lake) { markPolygon(lake.poly, WATER); markRect(lake.Wx(T.sea.y + 40) + 30, T.sea.y, lake.Ex(T.sea.y + 40) - 30, T.sea.y + 70, SWIM); }
   else { markRect(B.x0, T.sea.y + 2, B.x1, B.y1, WATER); markRect(B.x0, T.sea.y, B.x1, T.sea.y + 70, SWIM); }
   // דרכים ושבילים: מותרים, אבל לא מעל מים (שם רק גשר)
   for (const E of [...geo.EDGES, ...geo.OUTER]) markPath(E.pts, ROAD_W / 2);

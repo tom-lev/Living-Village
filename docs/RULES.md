@@ -42,7 +42,7 @@ Every rule says where in the code it is enforced and how it is verified: **check
 | **lamps**: Street lamps only in the village, never on a road or trail, not crowded, arm toward the road | `scene/generators.ts streetLamps` | check `lamps` |
 | **benches-face**: A bench faces what there is to see: water, a square, or the nearest path | `scene/build.ts orientBench` | check `bench` |
 | **level-crossings**: Wherever a road or trail crosses the railway there is a level crossing | `prefabs/areas.ts railway` | built |
-| **stable-forest**: Adding or removing content never moves the rest of the forest | `scene/generators.ts forest (rngAt per tree), scene/build.ts drawAway (removed: true)` | built |
+| **stable-forest**: Adding or removing content never moves the rest of the forest | `scene/generators.ts forest (position grid with rngAt), world/walk.ts initWalk (grid anchored to world coordinates)` | built |
 | **no-bands**: Nothing beyond the edge of the world is ever shown, on any screen shape | `camera/camera.ts measure (cover zoom)` | built |
 
 ## Proportions

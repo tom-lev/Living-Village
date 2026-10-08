@@ -21,12 +21,12 @@ export function buildTerrain(w: WorldData) {
   for (let i = 0; i < T.grass.patches; i++)
     el('path', { d: blob(rand(B.x0 + 40, B.x1 - 40), rand(B.y0 + 40, B.y1 - 40), rand(40, 110), rand(25, 60), 7, .12, rand(0, 6)), fill: '#a9d96f', opacity: .7 }, L.ground);
   const parts = DETAIL_GROUPS.map(() => ''), dry = DETAIL_GROUPS.map(() => '');
-  const thaw = winter(T);
+  const thaw = winter(T), pr = prairie(T);
   for (let i = 0; i < T.grass.tufts; i++) {
     const x = rand(B.x0 + 14, B.x1 - 14), y = rand(B.y0 + 14, B.y1 - 14);
     if (occ(x, y, O_ROAD | O_RIVER)) continue;
     // אחרי הרכס הדרומי הדשא מצהיב ומתדלדל בהדרגה (בלי לשנות את סדר המספרים האקראיים: רק מדלגים או צובעים אחרת)
-    const f = thaw(y), d = `M${n2(x - 3)},${n2(y)}l1.6,-4.2l1.4,4.2l1.4,-3.2l1.2,3.2`;
+    const f = Math.max(thaw(y), pr(y)), d = `M${n2(x - 3)},${n2(y)}l1.6,-4.2l1.4,4.2l1.4,-3.2l1.2,3.2`;
     if (f > 0 && rngAt(x, y, 61).r() < f * .75) continue;
     if (f > 0) dry[tileOf(x, y)] += d; else parts[tileOf(x, y)] += d;
   }
@@ -122,13 +122,15 @@ export function buildTerrain(w: WorldData) {
   }
 
   /* חוף (למטה) */
+  // החוף והמים מתחילים בחוף המערבי של האגם (אם יש לו), ממערב לו יבשה (היער)
+  const LS = lakeShore(T), X0 = LS ? LS.Wx(T.beach.y) - 60 : B.x0;
   const wave = (y0: number, amp: number, freq: number, ph: number, step: number) => {
-    const pts: number[][] = [[B.x0, y0 + 5]];
-    for (let x = B.x0; x < B.x1; x += step) pts.push([x, y0 + Math.sin(x * freq + ph) * amp]);
+    const pts: number[][] = [[X0, y0 + 5]];
+    for (let x = X0; x < B.x1; x += step) pts.push([x, y0 + Math.sin(x * freq + ph) * amp]);
     pts.push([B.x1, y0 + Math.sin(B.x1 * freq + ph) * amp]);
     return smoothOpen(pts);
   };
-  el('path', { d: wave(T.beach.y, 14, .013, 0, 120) + `L${B.x1},${B.y1}L${B.x0},${B.y1}Z`, fill: '#f3dfb0' }, L.ground);
+  el('path', { d: wave(T.beach.y, 14, .013, 0, 120) + `L${B.x1},${B.y1}L${X0},${B.y1}Z`, fill: '#f3dfb0' }, L.ground);
   // מקומות לשחייה: נכנסים למים בקצה החוף ונעלמים בהם לזמן מה
   for (const x of T.beach.swim || []) addPlace({ kind: 'swim', name: T.sea.south ? 'the lake' : 'the sea', at: [x, T.sea.y - 8] });
 
@@ -147,7 +149,7 @@ export function buildTerrain(w: WorldData) {
      (שם יתחבר בעתיד לים). בלי גלים: רק אדוות קטנות וקו חוף רך */
   {
     const top = wave(T.sea.y, 10, .02, 1, 90), S = lakeShore(T);
-    el('path', { d: top + `L${B.x1},${B.y1}L${B.x0},${B.y1}Z`, fill: S ? '#5ec0e2' : '#4fb8de' }, L.ground);
+    el('path', { d: top + `L${B.x1},${B.y1}L${X0},${B.y1}Z`, fill: S ? '#5ec0e2' : '#4fb8de' }, L.ground);
     el('path', { d: top, fill: 'none', stroke: '#e8f8fd', 'stroke-width': S ? 4 : 7, 'stroke-linecap': 'round', opacity: .8 }, L.ground);
     let wv = '';
     for (let i = 0; i < T.sea.waves; i++) {
@@ -158,9 +160,12 @@ export function buildTerrain(w: WorldData) {
     el('path', { d: wv, fill: 'none', stroke: '#c9eefa', 'stroke-width': 1.2, 'stroke-linecap': 'round', opacity: S ? .6 : .8 }, L.ground);
     if (S) {
       // היבשה שמסביב: רצועה במזרח ובדרום, חוף חול לאורך הקו, וקו מים בהיר
-      const land = [...S.east.map(p => [p[0], p[1]]), ...S.south.slice().reverse(), [B.x0, B.y1 + 10], [B.x1 + 10, B.y1 + 10], [B.x1 + 10, S.east[0][1]]];
+      const land = [...S.east.map(p => [p[0], p[1]]), ...S.south.slice().reverse(), [S.south[0][0] - 10, B.y1 + 10], [B.x1 + 10, B.y1 + 10], [B.x1 + 10, S.east[0][1]]];
       el('path', { d: 'M' + land.map(p => `${n2(p[0])},${n2(p[1])}`).join('L') + 'Z', fill: '#9cd162' }, L.ground);
-      const shore = smoothOpen([...S.east, ...S.south.slice().reverse()]);
+      // החוף המערבי: יבשה מערבה ממנו (היער הגדול)
+      const westLand = [[X0 - 5, T.beach.y - 40], ...S.west, [S.west[S.west.length - 1][0], B.y1 + 10], [X0 - 5, B.y1 + 10]];
+      el('path', { d: 'M' + westLand.map(p => `${n2(p[0])},${n2(p[1])}`).join('L') + 'Z', fill: '#9cd162' }, L.ground);
+      const shore = smoothOpen([...S.west.slice().reverse().filter(p => p[1] > T.sea.y - 30), ...S.south.filter(p => p[0] > S.west[S.west.length - 1][0] + 10), ...S.east.slice().reverse()].reverse());
       el('path', { d: shore, fill: 'none', stroke: '#f3dfb0', 'stroke-width': 34, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.ground);
       el('path', { d: shore, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 3, 'stroke-linecap': 'round', opacity: .75, transform: 'translate(-6,-6)' }, L.ground);
     }
@@ -174,21 +179,63 @@ export function buildTerrain(w: WorldData) {
     for (let x = B.x0 - 60; x <= B.x1 + 60; x += 70) pts.push([x, y0 + v.rand(-amp, amp * .65)]);
     return `M${B.x0 - 60},${B.y0}` + smoothOpen(pts).replace(/^M/, 'L') + `L${B.x1 + 60},${B.y0}Z`;
   };
+  const wavyPts = (y0: number, salt: number, amp = 22) => {
+    const v = rngAt(y0, salt, 71), pts: number[][] = [];
+    for (let x = B.x0 - 60; x <= B.x1 + 60; x += 70) pts.push([x, y0 + v.rand(-amp, amp * .65)]);
+    return pts;
+  };
   {
-    const y0 = T.snow.line, y1 = T.snow.full ?? T.snow.line, BANDS = 7;
+    const y0 = T.snow.line, y1 = T.snow.full ?? T.snow.line, th = T.snow.thaw as number[] | undefined, BANDS = 7, cold = winter(T);
     for (let k = 0; k < BANDS; k++) el('path', { d: wavy(y0 - (y0 - y1) * (k + .3) / BANDS, k + 1, 30), fill: '#d9d4a0', opacity: .13 }, L.ground);   // הדשא מצהיב
-    const v = rngAt(y0, y1, 72); let sn = '', sn2 = '';
-    for (let i = 0; i < 260; i++) {
-      const u = v.r() ** .75, y = y0 - (y0 - y1) * u, f = (y0 - y) / (y0 - y1), x = v.rand(B.x0, B.x1);
+    // כתמי שלג: גדלים לכיוון קרקעית העמק, ומתכווצים שוב צפונה ממנה (השלג נמס אל הערבה)
+    const yTop = th ? th[1] : y1, v = rngAt(y0, y1, 72); let sn = '', sn2 = '';
+    for (let i = 0; i < (th ? 420 : 260); i++) {
+      const y = th ? v.rand(yTop, y0) : y0 - (y0 - y1) * v.r() ** .75, f = cold(y), x = v.rand(B.x0, B.x1);
+      if (f < .04) { v.r(); v.r(); v.r(); v.r(); continue; }
       const rx = 5 + 85 * f ** 1.7, ry = 2.5 + 26 * f ** 1.7, d = blob(x, y, rx * v.rand(.7, 1.2), ry * v.rand(.7, 1.2), 7, .16, v.rand(0, 6));
       if (v.r() < .3) sn2 += d; else sn += d;
     }
     el('path', { d: sn, fill: '#f4f9fb', opacity: .92 }, L.ground);
     el('path', { d: sn2, fill: '#e3eef3', opacity: .92 }, L.ground);
-    el('path', { d: wavy(y1, 0), fill: '#eaf3f7' }, L.ground);   // חורף מלא
+    if (!th) el('path', { d: wavy(y1, 0), fill: '#eaf3f7' }, L.ground);   // חורף מלא עד קצה העולם
+    else {
+      // חורף מלא רק ברצועה שבקרקעית העמק (בין full לתחילת ההפשרה)
+      const S = wavyPts(y1, 0), N = wavyPts(th[0], 5).reverse();
+      el('path', { d: smoothOpen(S) + smoothOpen(N).replace(/^M/, 'L') + 'Z', fill: '#eaf3f7' }, L.ground);
+    }
+  }
+  /* הערבה (prairie) בצפון: מעבר הדרגתי מהדשא הירוק לעשב זהוב וגבוה, פרחי בר, וכתמים שהרוח השכיבה */
+  if (T.prairie) {
+    const P = T.prairie, BANDS = 8, pr = prairie(T);
+    for (let k = 0; k < BANDS; k++) el('path', { d: wavy(P.start - (P.start - P.full) * (k + .4) / BANDS, 40 + k, 40), fill: '#d6cc78', opacity: .14 }, L.ground);
+    el('path', { d: wavy(P.full - 60, 49, 50), fill: '#d3c977', opacity: .55 }, L.ground);
+    const v = rngAt(P.start, P.full, 73), parts2 = DETAIL_GROUPS.map(() => ''), dark = DETAIL_GROUPS.map(() => '');
+    let sway = '', fl: Record<string, string> = { '#b48ad6': '', '#f2d24f': '', '#ffffff': '', '#e57a6a': '' };
+    const N = Math.round((B.x1 - B.x0) * (P.start - B.y0) / 1500);
+    for (let i = 0; i < N; i++) {
+      const x = v.rand(B.x0 + 10, B.x1 - 10), y = v.rand(B.y0 + 10, P.start + 80), f = pr(y), r = v.r(), h = v.rand(6, 11);
+      if (r > f * 1.05 || occ(x, y, O_ROAD | O_RIVER)) { v.r(); continue; }
+      // גבעול עשב גבוה, מעט מוטה ברוח
+      const d = `M${n2(x - 2.4)},${n2(y)}q.6,${n2(-h * .6)} 2,${n2(-h)}M${n2(x)},${n2(y)}q.4,${n2(-h * .7)} 2.4,${n2(-h * 1.1)}M${n2(x + 2.2)},${n2(y)}q.6,${n2(-h * .5)} 2,${n2(-h * .8)}`;
+      (v.r() < .35 ? dark : parts2)[tileOf(x, y)] += d;
+    }
+    for (let i = 0; i < N / 6; i++) {
+      const x = v.rand(B.x0, B.x1), y = v.rand(B.y0 + 10, P.start), c = v.pick(Object.keys(fl));
+      if (v.r() > pr(y)) continue;
+      fl[c] += circ(x, y - 2, v.rand(.9, 1.5));
+    }
+    for (let i = 0; i < N / 40; i++) {
+      const x = v.rand(B.x0, B.x1), y = v.rand(B.y0 + 40, P.start);
+      if (v.r() > pr(y)) continue;
+      sway += blob(x, y, v.rand(60, 160), v.rand(14, 30), 7, .14, v.rand(0, 6));
+    }
+    el('path', { d: sway, fill: '#e3d98e', opacity: .55 }, L.ground);
+    parts2.forEach((d, i) => d && el('path', { d, fill: 'none', stroke: '#c9b45a', 'stroke-width': 1, 'stroke-linecap': 'round', opacity: .9 }, DETAIL_GROUPS[i]));
+    dark.forEach((d, i) => d && el('path', { d, fill: 'none', stroke: '#a59a4c', 'stroke-width': 1, 'stroke-linecap': 'round', opacity: .8 }, DETAIL_GROUPS[i]));
+    for (const c in fl) if (fl[c]) el('path', { d: fl[c], fill: c }, L.ground);
   }
   for (let i = 0; i < T.snow.patches; i++)
-    el('path', { d: blob(rand(B.x0, B.x1), rand(B.y0 + 60, T.snow.patchesTo), rand(50, 140), rand(20, 50), 7, .12, rand(0, 6)), fill: pick(['#ffffff', '#dfecf2']), opacity: .8 }, L.ground);
+    el('path', { d: blob(rand(T.snow.thaw ? B.x0 : B.x0, B.x1), rand(T.snow.thaw ? T.snow.full : B.y0 + 60, T.snow.patchesTo), rand(50, 140), rand(20, 50), 7, .12, rand(0, 6)), fill: pick(['#ffffff', '#dfecf2']), opacity: .8 }, L.ground);
 
   /* רכסי הרים, העמק שביניהם והפלג */
   buildMountains(w);
@@ -203,8 +250,17 @@ export function buildTerrain(w: WorldData) {
 
 /** כמה "חורף" יש בגובה y: 0 מדרום לרכס, 1 מקרקעית העמק וצפונה (snow.line → snow.full) */
 export function winter(T: any) {
-  const y0 = T.snow.line, y1 = T.snow.full ?? T.snow.line;
-  return (y: number) => y >= y0 ? 0 : y <= y1 ? 1 : (y0 - y) / (y0 - y1);
+  const y0 = T.snow.line, y1 = T.snow.full ?? T.snow.line, th = T.snow.thaw as number[] | undefined;
+  return (y: number) => {
+    const f = y >= y0 ? 0 : y <= y1 ? 1 : (y0 - y) / (y0 - y1);
+    // צפונה מהעמק השלג נמס בהדרגה אל הערבה (thaw: מתחיל להימס → נמס לגמרי)
+    return th && y < th[0] ? f * Math.max(0, Math.min(1, (y - th[1]) / (th[0] - th[1]))) : f;
+  };
+}
+/** כמה "ערבה" יש בגובה y: 0 דרומה מ-prairie.start, 1 מ-prairie.full וצפונה */
+export function prairie(T: any) {
+  const P = T.prairie;
+  return (y: number) => !P || y >= P.start ? 0 : y <= P.full ? 1 : (P.start - y) / (P.start - P.full);
 }
 
 /** קו החוף של האגם הדרומי (אם terrain.sea.south מוגדר): החוף המזרחי (מלמעלה למטה) והחוף הדרומי (ממערב למזרח),
@@ -213,14 +269,18 @@ export function lakeShore(T: any) {
   if (T.sea?.south === undefined) return null;
   const { B } = ctx, top = T.sea.y, Sy = (x: number) => T.sea.south + 28 * Math.sin(x / 230) + 14 * Math.sin(x / 83 + 1);
   const Ex = (y: number) => T.sea.east + 40 * Math.sin(y / 170) + 15 * Math.sin(y / 61);
-  const east: number[][] = [], south: number[][] = [];
-  const yEnd = Sy(Ex(T.sea.south));
+  // חוף מערבי (sea.west): האגם נסגר, ומערבה ממנו יבשה. בלי west – האגם פתוח עד קצה העולם
+  const Wx = (y: number) => T.sea.west === undefined ? B.x0 - 10 : T.sea.west + 45 * Math.sin(y / 150 + 2) + 18 * Math.sin(y / 57);
+  const east: number[][] = [], south: number[][] = [], west: number[][] = [];
+  const yEnd = Sy(Ex(T.sea.south)), wEnd = Sy(Wx(T.sea.south));
   for (let y = top - 20; y < yEnd; y += 30) east.push([Ex(y), y]);
   east.push([Ex(yEnd), yEnd]);
-  for (let x = B.x0 - 10; x < Ex(yEnd); x += 40) south.push([x, Sy(x)]);
+  for (let y = T.beach.y - 40; y < wEnd; y += 30) west.push([Wx(y), y]);
+  west.push([Wx(wEnd), wEnd]);
+  for (let x = Wx(wEnd); x < Ex(yEnd); x += 40) south.push([x, Sy(x)]);
   south.push([Ex(yEnd), yEnd]);
-  const inside = (x: number, y: number, m = 0) => y > top + m && y < Sy(x) - m && x < Ex(y) - m;
+  const inside = (x: number, y: number, m = 0) => y > top + m && y < Sy(x) - m && x < Ex(y) - m && x > Wx(y) + m;
   /** פוליגון המים (למפת ההליכה) */
-  const poly = [[B.x0 - 10, top + 2], ...east.filter(p => p[1] > top + 2), ...south.slice().reverse()];
-  return { east, south, inside, poly, Sy, Ex };
+  const poly = [[Wx(top), top + 2], ...east.filter(p => p[1] > top + 2), ...south.slice().reverse(), ...west.filter(p => p[1] > top + 2).reverse()];
+  return { east, south, west, inside, poly, Sy, Ex, Wx };
 }
