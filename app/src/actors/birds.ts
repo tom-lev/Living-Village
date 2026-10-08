@@ -212,7 +212,7 @@ class Bird {
         } else { this.state = 'stand'; this.timer = this.kind === 'heron' ? this.rg.rand(6, 16) : this.rg.rand(1, 4.5); }
       }
     }
-    this.flip += (this.face - this.flip) * Math.min(1, dt * 14);
+    this.flip = this.face;   // ציפור מסתובבת בקפיצה מהירה: היפוך מיידי, בלי להתכווץ על הציר
     const on = inView(this.x, this.y - this.alt - 10, 40); show(this.g, on);
     if (!on) return;
     const fl = wings > 0;

@@ -4,6 +4,7 @@ import { inView } from '../camera/view';
 import { rand, pick } from '../core/rng';
 import { ctx, fxAt, ripple } from '../world/context';
 import { Legs, type LegSpec } from './quad';
+import { Heading, liftLegs } from './heading';
 
 /** סוס: רועה, מרים ראש, ומדי פעם הולך לאט למקום אחר במכלאה, בהליכה של ארבע פעימות עם רגליים מפרקיות (actors/quad.ts).
  *  הזנב מתנופף, הרעמה זזה עם הראש, הראש מהנהן בהליכה. מבט מהצד: הולכים בעיקר לרוחב, כדי שהמבט יתאים לכיוון */
@@ -39,6 +40,41 @@ export class Horse {
     const spec = (hx: number, front: boolean, far: boolean): LegSpec => ({ hip: [hx, far ? -33 : -32], l1: 15.6, l2: 16.8, front, far, w: far ? 4.4 : 5, color: far ? dk : color, hoof });
     this.Q = new Legs([spec(-19, false, false), spec(15, true, false), spec(-16, false, true), spec(18, true, true)], { far, near }, 'walk', 5.2, 4);
     this.Q.pose(0, 0);
+    // מבט מלפנים (הולך אל הצופה) ומאחור; מתחלפים מיד לפי הכיוון (actors/heading.ts)
+    const leg4 = (gg: any) => [dk, dk, color, color].map((c, j) => el('path', { stroke: c, 'stroke-width': j < 2 ? 5 : 5.8, 'stroke-linecap': 'butt', fill: 'none' }, gg));
+    this.fw = el('g', { display: 'none' }, this.g); this.bw = el('g', { display: 'none' }, this.g);
+    for (const [gg, front] of [[this.fw, true], [this.bw, false]] as [any, boolean][]) {
+      el('ellipse', { cx: 0, cy: 1, rx: 13, ry: 3.4, fill: 'rgba(60,40,10,.22)' }, gg);
+      const legs = leg4(gg), base = [[-8.6, -30], [8.6, -30], [-5.4, -30], [5.4, -30]];
+      // פרסות: נעות יחד עם הרגליים (מתעדכנות ב-update)
+      const hoofs = [0, 1, 2, 3].map(j => el('path', { stroke: hoof, 'stroke-width': j < 2 ? 5 : 5.8, fill: 'none' }, gg));
+      if (front) { this.fLegs = legs; this.fBase = base; this.fHoofs = hoofs; } else { this.bLegs = legs; this.bBase = base; this.bHoofs = hoofs; }
+      if (!front) {
+        // מאחור: הראש והצוואר מאחורי הגוף, אוזניים ורעמה; עכוז עגול וזנב
+        el('path', { d: 'M-5.4,-62l-1.4,-5.4l3.4,4zM5.4,-62l1.4,-5.4l-3.4,4z', fill: dk }, gg);
+        el('path', { d: 'M-7,-46C-7,-56 -5.6,-63 0,-63.6C5.6,-63 7,-56 7,-46Z', fill: color }, gg);
+        el('path', { d: 'M0,-63V-46', stroke: mane, 'stroke-width': 3.6, 'stroke-linecap': 'round' }, gg);
+      }
+      el('path', { d: 'M-15,-38C-15,-46 -9,-49.6 0,-49.6C9,-49.6 15,-46 15,-38C15,-31 10,-27 0,-27C-10,-27 -15,-31 -15,-38Z', fill: color }, gg);
+      if (front) {
+        el('path', { d: 'M-10.6,-36C-10.6,-42 -6,-44.6 0,-44.6C6,-44.6 10.6,-42 10.6,-36C10.6,-31 6,-28.6 0,-28.6C-6,-28.6 -10.6,-31 -10.6,-36Z', fill: shade(color, .07) }, gg);   // חזה רחב
+        el('path', { d: 'M-7,-44C-7,-50 -6.4,-54 -5.6,-56H5.6C6.4,-54 7,-50 7,-44Z', fill: color }, gg);   // צוואר קצר ועבה
+        el('path', { d: 'M-5.8,-55C-7.6,-51 -8,-47 -7.2,-44L-5.4,-45.4C-6,-48.6 -5.6,-52 -4.4,-55Z', fill: mane }, gg);   // רעמה לצד אחד
+        this.fHead = el('g', null, gg);
+        el('path', { d: 'M-4.6,-63.4l-1.4,-5l3.4,4zM4.6,-63.4l1.4,-5l-3.4,4z', fill: color, stroke: dk, 'stroke-width': .5 }, this.fHead);
+        el('path', { d: 'M-5.8,-61C-6.2,-66 6.2,-66 5.8,-61L4.4,-48.6C4,-45.6 -4,-45.6 -4.4,-48.6Z', fill: color }, this.fHead);
+        el('path', { d: 'M-1,-62L0,-52L1,-62Z', fill: shade(color, .35), opacity: .8 }, this.fHead);   // פס בהיר במצח
+        el('ellipse', { cx: 0, cy: -48, rx: 4.2, ry: 2.8, fill: shade(color, -.18) }, this.fHead);   // לוע
+        el('path', { d: circ(-1.6, -47.6, .6) + circ(1.6, -47.6, .6), fill: shade(color, -.5) }, this.fHead);   // נחיריים
+        el('path', { d: circ(-5.1, -58.6, 1.1) + circ(5.1, -58.6, 1.1), fill: '#2b2220' }, this.fHead);
+        el('path', { d: 'M-1.8,-64.6q1.8,3 3.6,0q-.4,3 -1.8,4.6q-1.4,-1.6 -1.8,-4.6z', fill: mane }, this.fHead);   // בלורית
+      } else {
+        el('path', { d: circ(-6, -41, 8.4) + circ(6, -41, 8.4), fill: color }, gg);   // עכוז
+        el('path', { d: 'M0,-48V-36', stroke: shade(color, -.2), 'stroke-width': .7 }, gg);
+        this.bTail = el('path', { d: 'M0,-46C-1.6,-40 -1.4,-32 0,-24C1.4,-32 1.6,-40 0,-46Z', fill: mane, stroke: mane, 'stroke-width': 1.6, 'stroke-linejoin': 'round' }, gg);
+      }
+    }
+    this.Hd = new Heading(flip > 0 ? 0 : Math.PI, 1.2); this.shownView = 'side';
     this.state = 'rest'; this.timer = rand(2, 6); this.a = 0; this.graze = true; this.gTimer = rand(1, 4); this.phase = 0; this.amp = 0; this.ph = rand(0, 6);
   }
   update(dt: number) {
@@ -48,27 +84,37 @@ export class Horse {
     if (this.state === 'rest') {
       if (this.gTimer <= 0) { this.graze = !this.graze; this.gTimer = this.graze ? rand(5, 11) : rand(2, 4); }
       if (this.timer <= 0 && A) {
-        // הולכים למקום אחר במכלאה, בעיקר לרוחב
-        const dx = rand(40, 90) * (rand(0, 1) < .5 ? -1 : 1);
-        this.tx = clamp(this.x + dx, A.x0 + 40, A.x1 - 34); this.ty = clamp(this.y + rand(-.4, .4) * Math.abs(dx), A.y0 + 60, A.y1 - 8);
-        if (Math.abs(this.tx - this.x) > 20) { this.state = 'move'; this.graze = false; } else this.timer = rand(1, 3);
+        // הולכים למקום אחר במכלאה, לכל כיוון
+        this.tx = rand(A.x0 + 44, A.x1 - 38); this.ty = rand(A.y0 + 62, A.y1 - 10);
+        if (Math.hypot(this.tx - this.x, this.ty - this.y) > 24) { this.state = 'move'; this.graze = false; this.moveT = 0; } else this.timer = rand(1, 3);
       }
     } else {
       const dx = this.tx - this.x, dy = this.ty - this.y, d = Math.hypot(dx, dy);
-      if (d < 1) { this.state = 'rest'; this.timer = rand(4, 10); this.gTimer = rand(1, 3); }
-      else { ds = Math.min(d, 9 * dt * Math.min(1, d / 10 + .3)); this.x += dx / d * ds; this.y += dy / d * ds; this.face = dx > 0 ? 1 : -1; }
+      this.moveT += dt;
+      if (d < 3 || this.moveT > 40) { this.state = 'rest'; this.timer = rand(4, 10); this.gTimer = rand(1, 3); }
+      else {
+        // פונה בהדרגה והולך תמיד לכיוון שאליו הוא פונה (בפנייה חדה – מסתובב במקום)
+        const sp = this.Hd.steer(dx, dy, dt);
+        ds = Math.min(d, 9 * dt * Math.min(1, d / 10 + .3) * sp); this.x += Math.cos(this.Hd.h) * ds; this.y += Math.sin(this.Hd.h) * ds;
+        if (A) { this.x = clamp(this.x, A.x0 + 30, A.x1 - 26); this.y = clamp(this.y, A.y0 + 54, A.y1 - 4); }
+      }
     }
+    const turnStep = this.Hd.turned * 14 * this.scale; this.Hd.turned = 0;
     this.amp += ((this.state === 'move' ? 1 : 0) - this.amp) * Math.min(1, dt * 3);
-    this.phase += ds / (this.scale * this.Q.cycle);
-    this.flip += (this.face - this.flip) * Math.min(1, dt * 10);   // סיבוב מהיר: באמצע הסיבוב הסוס נראה צר
+    this.phase += (ds + turnStep) / (this.scale * this.Q.cycle);
     this.a += ((this.graze ? 112 : 0) - this.a) * Math.min(1, dt * 2.2);
     if (!inView(this.x, this.y - 30, 60)) return;
-    const bob = this.Q.pose(this.phase, this.amp), nod = Math.sin(this.phase * Math.PI * 4) * 2.4 * this.amp, T = performance.now() / 1000;
+    const v = this.Hd.view, T = performance.now() / 1000;
+    if (v !== this.shownView) { this.shownView = v; show(this.f, v === 'side'); show(this.fw, v === 'front'); show(this.bw, v === 'back'); }
+    const hoofs = (L: any[], H: any[]) => L.forEach((l: any, j: number) => { const y = +l.getAttribute('d').split('L')[1].split(',')[1]; H[j].setAttribute('d', `M${this.fBase[j][0]},${n2(y - 3)}V${n2(y)}`); });
+    if (v === 'front') { liftLegs(this.fLegs, this.fBase, this.phase, this.amp, 4, n2); hoofs(this.fLegs, this.fHoofs); this.fHead.setAttribute('transform', `translate(0,${n2(this.a / 112 * 14)})`); }
+    if (v === 'back') { liftLegs(this.bLegs, this.bBase, this.phase, this.amp, 4, n2); hoofs(this.bLegs, this.bHoofs); this.bTail.setAttribute('transform', `rotate(${(Math.sin(T * 2.4 + this.ph) * 8).toFixed(1)} 0 -46)`); }
+    const bob = this.Q.pose(this.phase, this.amp), nod = Math.sin(this.phase * Math.PI * 4) * 2.4 * this.amp;
     this.body.setAttribute('transform', `translate(0,${n2(bob)})`);
     this.neck.setAttribute('transform', `translate(16,${n2(-40 + bob)}) rotate(${(this.a + nod).toFixed(1)})`);
     this.tail.setAttribute('transform', `rotate(${(1 - 9 * Math.cos(T * 2.4 + this.ph) + Math.sin(this.phase * Math.PI * 4) * 4 * this.amp).toFixed(1)})`);
     this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y)}) scale(${this.scale},${this.scale})`);
-    this.f.setAttribute('transform', `scale(${this.flip.toFixed(3)},1)`);
+    this.f.setAttribute('transform', `scale(${this.Hd.sx.toFixed(3)},1)`);
   }
 }
 
@@ -99,29 +145,62 @@ export class Sheep {
     const spec = (hx: number, front: boolean, isFar: boolean): LegSpec => ({ hip: [hx, -6.4], l1: 3.2, l2: 3.4, front, far: isFar, w: isFar ? 1.6 : 1.8, color: isFar ? '#2b2724' : ink });
     this.Q = new Legs([spec(-6, false, false), spec(6, true, false), spec(-4.4, false, true), spec(7.6, true, true)], { far, near }, 'walk', 1.6, 1.4);
     this.Q.pose(0, 0);
+    // מבט מלפנים ומאחור; מתחלפים מיד לפי הכיוון
+    const woolD = circ(-4, -10, 4.6) + circ(4, -10, 4.6) + circ(0, -13.4, 5) + circ(0, -7.8, 4.6) + circ(-5.4, -7, 3.4) + circ(5.4, -7, 3.4);
+    this.fw = el('g', { display: 'none' }, this.g); this.bw = el('g', { display: 'none' }, this.g);
+    for (const [gg, front] of [[this.fw, true], [this.bw, false]] as [any, boolean][]) {
+      const legs = ['#2b2724', '#2b2724', ink, ink].map(c => el('path', { stroke: c, 'stroke-width': 1.7, 'stroke-linecap': 'round', fill: 'none' }, gg)), base = [[-4.2, -5], [4.2, -5], [-2.4, -5], [2.4, -5]];
+      if (front) { this.fLegs = legs; this.fBase = base; } else { this.bLegs = legs; this.bBase = base; }
+      if (!front) el('path', { d: 'M-2.6,-15.4C-2.6,-18 2.6,-18 2.6,-15.4Z', fill: ink }, gg);   // קודקוד הראש מאחורי הצמר
+      el('path', { d: woolD, fill: wool, stroke: edge, 'stroke-width': .9 }, gg);
+      el('path', { d: woolD, fill: wool }, gg);
+      el('path', { d: 'M-3,-11q1.2,-1.4 2.4,0M1,-9q1.2,-1.4 2.4,0M-2,-6.6q1.2,-1.4 2.4,0', fill: 'none', stroke: edge, 'stroke-width': .6, 'stroke-linecap': 'round' }, gg);
+      if (front) {
+        this.fHead = el('g', null, gg);
+        el('path', { d: 'M-5.6,-14.6C-4.6,-15.8 -3.2,-15.6 -2.4,-14.6L-3,-13.6C-4,-13.4 -5,-13.6 -5.6,-14.6ZM5.6,-14.6C4.6,-15.8 3.2,-15.6 2.4,-14.6L3,-13.6C4,-13.4 5,-13.6 5.6,-14.6Z', fill: ink }, this.fHead);   // אוזניים לצדדים
+        el('path', { d: 'M-2.6,-14.4C-2.8,-17.4 2.8,-17.4 2.6,-14.4L1.6,-9C1,-8 -1,-8 -1.6,-9Z', fill: ink }, this.fHead);
+        el('path', { d: circ(-1.2, -17, 1.5) + circ(1.2, -17, 1.5), fill: wool }, this.fHead);   // תלתל על המצח
+        el('path', { d: circ(-1.3, -13.4, .62) + circ(1.3, -13.4, .62), fill: '#fff' }, this.fHead);
+        el('path', { d: circ(-1.3, -13.4, .32) + circ(1.3, -13.4, .32), fill: '#1f1a17' }, this.fHead);
+      } else {
+        el('path', { d: 'M-5,-15.4c.8,-.9 2,-.8 2.4,0ZM5,-15.4c-.8,-.9 -2,-.8 -2.4,0Z', fill: ink }, gg);   // קצות אוזניים
+        el('circle', { cx: 0, cy: -8.4, r: 1.6, fill: wool, stroke: edge, 'stroke-width': .6 }, gg);   // זנב קטן
+      }
+    }
+    this.Hd = new Heading(0, 1.6); this.shownView = 'side';
   }
   update(dt: number) {
     this.timer -= dt; let ds = 0; const A = this.area;
     if (this.state === 'graze' && this.timer <= 0) {
-      const dx = rand(30, 80) * (rand(0, 1) < .5 ? -1 : 1);
-      this.state = 'walk'; this.tx = clamp(this.x + dx, A.x0 + 40, A.x1 - 40); this.ty = clamp(this.y + rand(-.4, .4) * Math.abs(dx), A.y0 + 50, A.y1 - 30);
+      // הולכת למקום אחר במכלאה, לכל כיוון
+      this.tx = rand(A.x0 + 40, A.x1 - 40); this.ty = rand(A.y0 + 50, A.y1 - 30);
+      if (Math.hypot(this.tx - this.x, this.ty - this.y) > 16) { this.state = 'walk'; this.moveT = 0; } else this.timer = rand(1, 3);
     }
     if (this.state === 'walk') {
       const dx = this.tx - this.x, dy = this.ty - this.y, d = Math.hypot(dx, dy);
-      if (d < 1) { this.state = 'graze'; this.timer = rand(2, 6); }
-      else { ds = Math.min(d, 9 * dt); this.x += dx / d * ds; this.y += dy / d * ds; if (Math.abs(dx) > 2) this.fd = dx > 0 ? 1 : -1; }
+      this.moveT += dt;
+      if (d < 2 || this.moveT > 30) { this.state = 'graze'; this.timer = rand(2, 6); }
+      else {
+        const sp = this.Hd.steer(dx, dy, dt);
+        ds = Math.min(d, 9 * dt * sp); this.x += Math.cos(this.Hd.h) * ds; this.y += Math.sin(this.Hd.h) * ds;
+        this.x = clamp(this.x, A.x0 + 32, A.x1 - 32); this.y = clamp(this.y, A.y0 + 44, A.y1 - 24);
+      }
     }
-    if (this.fd) this.flip += (this.fd - this.flip) * Math.min(1, dt * 10);
-    this.amp += ((this.state === 'walk' ? 1 : 0) - this.amp) * Math.min(1, dt * 5);
-    this.phase += ds / (this.scale * this.Q.cycle);
+    const turnStep = this.Hd.turned * 6 * this.scale; this.Hd.turned = 0;
+    this.amp += ((this.state === 'walk' || turnStep > 0 ? 1 : 0) - this.amp) * Math.min(1, dt * 5);
+    this.phase += (ds + turnStep) / (this.scale * this.Q.cycle);
     this.head += ((this.state === 'graze' ? 1 : 0) - this.head) * Math.min(1, dt * 3);
     const on = inView(this.x, this.y - 8, 30); show(this.g, on);
     if (!on) return;
+    const v = this.Hd.view;
+    if (v !== this.shownView) { this.shownView = v; show(this.b, v === 'side'); show(this.fw, v === 'front'); show(this.bw, v === 'back'); }
+    if (v === 'front') { liftLegs(this.fLegs, this.fBase, this.phase, this.amp, 1.4, n2); this.fHead.setAttribute('transform', `translate(0,${n2(this.head * 3)})`); }
+    if (v === 'back') liftLegs(this.bLegs, this.bBase, this.phase, this.amp, 1.4, n2);
     const bob = this.Q.pose(this.phase, this.amp), chew = this.head > .8 ? Math.sin(performance.now() / 160) * 1.5 : 0;
     this.body.setAttribute('transform', `translate(0,${n2(bob)})`);
     this.hg.setAttribute('transform', `translate(0,${n2(bob + this.head * 3)}) rotate(${(this.head * 40 + chew).toFixed(1)} 9 -11)`);
     this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y)}) scale(${this.scale})`);
-    this.b.setAttribute('transform', `scale(${this.flip.toFixed(3)},1)`);
+    this.b.setAttribute('transform', `scale(${this.Hd.sx.toFixed(3)},1)`);
   }
 }
 
@@ -159,7 +238,7 @@ export function ducks(o: any) {
       // הברווזונים מפגרים ומדביקים בגלים קטנים
       const catchUp = i ? Math.sin(T * .9 + d.ph) * .02 : 0;
       const th = T * o.speed - i * .2 - (i ? .06 : 0) + catchUp, p = path(th), q = path(th + .01), f = q[0] >= p[0] ? 1 : -1;
-      d.flip += (f - d.flip) * Math.min(1, dt * 6);
+      d.flip = f;   // מתהפך מיד (בלי להתכווץ על הציר), ברגע שהברווז שט כמעט אנכית
       const on = inView(p[0], p[1], 15); show(d.g, on);
       if (!on) return;
       const bob = Math.sin(T * (i ? 4.2 : 2.6) + d.ph) * (i ? .5 : .7);

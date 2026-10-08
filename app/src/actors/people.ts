@@ -9,6 +9,7 @@ import { ripple } from '../world/context';
 import { plotOfDoor } from '../prefabs/village';
 import { STATION } from './station';
 import { Legs, type LegSpec } from './quad';
+import { Heading } from './heading';
 import { lakeShore } from '../scene/terrain';
 let LAKE: ReturnType<typeof lakeShore> | undefined;
 import { walkable } from '../world/walk';
@@ -283,7 +284,7 @@ export class Dog {
     el('path', { d: 'M-2.6,-12.4h5.2', stroke: '#e2574c', 'stroke-width': 1.4, 'stroke-linecap': 'round' }, this.back);
     el('ellipse', { cx: 0, cy: -8.5, rx: 5.6, ry: 5, fill: color }, this.back);
     this.tailBack = el('path', { d: 'M0,0q1.5,-3.5 0,-7', stroke: color, 'stroke-width': 2.2, 'stroke-linecap': 'round', fill: 'none' }, this.back);
-    this.vis = { side: 1, front: 0, back: 0 }; this.view = 'side';
+    this.view = 'side'; this.Hd = new Heading(0, 7); this.shownView = '';
     el('rect', { x: -14, y: -22, width: 30, height: 24, fill: 'transparent' }, this.g);
     owner.cullR = 90;   // הכלב והרצועה נראים יחד עם הבעלים
     const p = owner.pointBack(24); this.x = p[0]; this.y = p[1]; this.flip = 1; this.phase = 0; this.amp = 1; this.hx = 1;
@@ -307,21 +308,17 @@ export class Dog {
       const push = 18 - od, px = -o.hy, py = o.hx, side = ox * px + oy * py >= 0 ? 1 : -1;
       tgt = [tgt[0] + (ox / od + px * side) * push, tgt[1] + (oy / od + py * side) * push * .6];
     }
-    const nx = this.x + (tgt[0] - this.x) * k, ny = this.y + (tgt[1] - this.y) * k, dx = nx - this.x, ds = Math.hypot(dx, ny - this.y);
-    this.x = nx; this.y = ny;
-    const moving = dt > 0 && ds / dt > 3;
-    // לאן פונים: בזמן תנועה – לכיוון התנועה; בעמידה – אל הבעלים. לרוחב: מבט צד; למטה (אל הצופה): מלפנים; למעלה: מאחור.
-    // מחליפים מבט רק כשהכיוון השתנה בבירור (פי 1.4), כדי שלא יהבהב באלכסון
-    const dy = ny - (this.py ?? ny); this.py = ny;
-    const vx = moving ? dx : o.x - this.x, vy = moving ? dy : o.y - this.y;
-    if (moving || Math.hypot(vx, vy) > 6) {
-      if (Math.abs(vx) > Math.abs(vy) * 1.4) this.view = 'side';
-      else if (Math.abs(vy) > Math.abs(vx) * 1.4) this.view = vy > 0 ? 'front' : 'back';
-    }
-    if (Math.abs(vx) > 2) this.face = vx > 0 ? 1 : -1;
-    this.flip += ((this.face ?? 1) - this.flip) * Math.min(1, dt * 9);
-    this.amp += ((moving ? 1 : 0) - this.amp) * Math.min(1, dt * 5);
-    this.phase += ds / (this.k * this.Q.cycle);
+    // הכלב הולך תמיד בדיוק לכיוון שהוא פונה אליו (כמו כל החיות, actors/heading.ts): פונה בהדרגה אל הנקודה מאחורי הבעלים,
+    // בפנייה חדה מסתובב כמעט במקום, ובעמידה מסתובב אל הבעלים. בלי החלקה ובלי היפוך על הציר
+    const ex = (tgt[0] - this.x) * k, ey = (tgt[1] - this.y) * k, want = Math.hypot(ex, ey);
+    const moving = dt > 0 && want / dt > 3;
+    let ds = 0;
+    if (moving) { const sp = this.Hd.steer(ex, ey, dt); ds = want * Math.max(sp, .15); this.x += Math.cos(this.Hd.h) * ds; this.y += Math.sin(this.Hd.h) * ds; }
+    else if (Math.hypot(o.x - this.x, o.y - this.y) > 6) this.Hd.turnTo(Math.atan2(o.y - this.y, o.x - this.x), dt * .5);
+    const turnStep = this.Hd.turned * 4 * this.k; this.Hd.turned = 0;
+    this.view = this.Hd.view; this.flip = this.Hd.flip;
+    this.amp += ((moving || turnStep > 0 ? 1 : 0) - this.amp) * Math.min(1, dt * 5);
+    this.phase += (ds + turnStep) / (this.k * this.Q.cycle);
     const sk = this.k;
     this.collar = this.view === 'side' ? [this.x + 5.6 * this.flip * sk, this.y - 10.5 * sk] : [this.x, this.y - (this.view === 'front' ? 11 : 12.4) * sk];
     const vis = this.waiting ? this.alpha > 0 && inView(this.x, this.y - 10, 30) : this.owner.shown && this.alpha > 0;
@@ -343,13 +340,15 @@ export class Dog {
       lift(L[2], -2.6, 0, -5.5); lift(L[3], 2.6, .5, -5.5);  // הזוג הקרוב
     }
     this.tailBack.setAttribute('transform', `translate(0,-11) rotate(${(Math.sin(t * (moving ? 7 : 4)) * 22).toFixed(1)})`);
-    // דהייה קצרה בין המבטים
-    for (const v of ['side', 'front', 'back']) this.vis[v] += ((this.view === v ? 1 : 0) - this.vis[v]) * Math.min(1, dt * 12);
-    this.b.setAttribute('opacity', this.vis.side.toFixed(2)); this.front.setAttribute('opacity', this.vis.front.toFixed(2)); this.back.setAttribute('opacity', this.vis.back.toFixed(2));
+    // המבט מתחלף מיד (בלי דהייה), לפי הכיוון
+    if (this.view !== this.shownView) {
+      this.shownView = this.view;
+      this.b.setAttribute('opacity', this.view === 'side' ? '1' : '0'); this.front.setAttribute('opacity', this.view === 'front' ? '1' : '0'); this.back.setAttribute('opacity', this.view === 'back' ? '1' : '0');
+    }
     this.tail.setAttribute('transform', `translate(-8,-10) rotate(${(Math.sin(t * (moving ? 7 : 4)) * 16).toFixed(1)})`);
     this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y)}) scale(${sk.toFixed(3)})`);
     this.g.setAttribute('opacity', this.alpha.toFixed(2));
-    this.b.setAttribute('transform', `scale(${this.flip.toFixed(3)},1)`);
+    this.b.setAttribute('transform', `scale(${this.Hd.sx.toFixed(3)},1)`);
   }
 }
 

@@ -217,6 +217,9 @@ export function bear(g: any, v: LocalRng): Parts {
   el('path', { d: 'M18.2,-23.2q1.4,-.7 2.6,.1', fill: 'none', stroke: d, 'stroke-width': .5, 'stroke-linecap': 'round' }, head);   // גבה
   el('circle', { cx: 19.6, cy: -21.9, r: .62, fill: '#1f1a17' }, head);
   el('circle', { cx: 19.8, cy: -22.1, r: .2, fill: '#fff' }, head);
+  const lids = el('g', { opacity: 0 }, head);   // עין עצומה (בהנאה, כשמתגרד)
+  el('circle', { cx: 19.6, cy: -21.9, r: .9, fill: c }, lids);
+  el('path', { d: 'M18.8,-21.8q.8,.6 1.6,0', fill: 'none', stroke: '#1f1a17', 'stroke-width': .45, 'stroke-linecap': 'round' }, lids);
   const pad = shade(c, -.45);
   const specs: LegSpec[] = [
     { hip: [-12, -15], l1: 8, l2: 7.8, front: false, far: false, w: 5, color: c, hoof: pad, shape: [8.4, 5.6, 4.4], paw: 3.4, bend: 1 },
@@ -224,41 +227,7 @@ export function bear(g: any, v: LocalRng): Parts {
     { hip: [-9.4, -15.2], l1: 8, l2: 7.8, front: false, far: true, w: 4.6, color: d, hoof: shade(pad, -.2), shape: [7.4, 5, 4], paw: 3.2, bend: 1 },
     { hip: [10.6, -15.6], l1: 8.2, l2: 8.2, front: true, far: true, w: 4.6, color: d, hoof: shade(pad, -.2), shape: [6.8, 5, 4.2], paw: 2 },
   ];
-  return { body: b, head, legs: [], legBase: [], size: 20 * s, c, s, quad: { specs, far, near, gait: 'walk', A: 4.2, lift: 3, bodyG: body } };
-}
-
-/** דוב עומד על הרגליים האחוריות, הגב אל גזע עץ (מתגרד). פונה ימינה, הגב בצד שמאל (x≈-6).
- *  מחזיר את הקבוצה שמתנדנדת למעלה ולמטה, את הראש, את הכפות הקדמיות ואת העפעפיים */
-export function bearStand(g: any, c: string, s: number) {
-  const d = shade(c, -.28), tip = shade(c, .38), pad = shade(c, -.45);
-  const b = el('g', { transform: `scale(${n2(s)})` }, g);
-  shadow(b, 11);
-  // רגל אחורית רחוקה, וכף רגל שטוחה על הקרקע
-  el('path', { d: 'M-5.4,-11C-6,-6 -5.4,-2.4 -4.6,0H1.4C1,-3 1.6,-7 1.2,-11Z', fill: d }, b);
-  el('path', { d: 'M-5.4,0v-2.2q0,-.8 1,-.8h4.6q1.4,.2 1.4,1.6V0Z', fill: shade(pad, -.15) }, b);
-  const rub = el('g', null, b);
-  // הגוף זקוף: גב ישר אל הגזע, בטן מעוגלת, כתפיים רחבות
-  el('path', { d: 'M-7.2,-8C-8.8,-16 -8.6,-26 -6.6,-32.6C-4.6,-37.4 3.4,-37.8 6.4,-33.2C9.2,-29 10.6,-22 10.2,-15.6C9.8,-10 6.8,-6.8 1,-6.6C-3,-6.4 -6.6,-6.6 -7.2,-8Z', fill: c }, rub);
-  el('path', { d: 'M3.8,-30C7,-26 7.8,-19 6.8,-13.4C6,-10.6 4,-9.4 2,-9.6C4,-15 4.2,-23 2.6,-29Z', fill: shade(c, .14), opacity: .6 }, rub);   // בטן בהירה מעט
-  el('path', { d: 'M-7.2,-31C-7.9,-24 -7.9,-15 -7.2,-9.6', fill: 'none', stroke: tip, 'stroke-width': 1, 'stroke-linecap': 'round', opacity: .7 }, rub);
-  el('path', { d: 'M-6.4,-9.4C-6.4,-14 -1,-15.4 3,-12.6C6.4,-10.2 7.2,-4 6,0H-1C-1.2,-1.6 -3,-3 -5,-4.4C-6.2,-5.6 -6.4,-7.6 -6.4,-9.4Z', fill: c }, rub);   // ירך ורגל קרובה
-  el('path', { d: 'M-2,-11.4c2.6,-.6 4.6,.6 5.4,2.6', fill: 'none', stroke: d, 'stroke-width': .5, 'stroke-linecap': 'round', opacity: .6 }, rub);
-  el('path', { d: 'M-1.6,0v-2.4q0,-.8 1,-.8h5.2q1.6,.2 1.6,1.8V0Z', fill: pad }, b);
-  el('path', { d: 'M6.4,-1.2l1.1,.5l-1.1,.3ZM6.4,-2.1l1.1,.5l-1.1,.3Z', fill: pad }, b);
-  // ראש מוטה מעט למעלה: לוע ארוך, אוזניים, עין שנעצמת בהנאה
-  const head = el('g', { transform: 'translate(1.4,-36) scale(1.15) translate(-1.4,36)' }, rub);
-  el('path', { d: circ(-2.6, -40.6, 1.7) + circ(1, -41.6, 1.9), fill: c }, head);
-  el('path', { d: circ(1, -41.6, .9), fill: d }, head);
-  el('path', { d: 'M-4.4,-36.4C-4.6,-39.6 -1.6,-41.4 1.4,-40.6C3.4,-40 4.4,-38.6 6.6,-38.4C8.2,-38.2 8.6,-36 7.2,-35.2C5,-34 1.4,-33.4 -.8,-33.6C-3,-33.8 -4.4,-34.8 -4.4,-36.4Z', fill: c }, head);
-  el('path', { d: 'M3.4,-38.2C5.4,-38 8,-37.8 7.6,-35.8C6.8,-34.8 4.8,-34.6 3.2,-35.2C2.8,-36.2 2.8,-37.4 3.4,-38.2Z', fill: tip }, head);
-  el('ellipse', { cx: 7.8, cy: -37.2, rx: 1.05, ry: .8, fill: '#1f1a17' }, head);
-  const eye = el('circle', { cx: 2.2, cy: -38.4, r: .6, fill: '#1f1a17' }, head);
-  const lid = el('path', { d: 'M1.4,-38.4q.8,.6 1.6,0', fill: 'none', stroke: '#1f1a17', 'stroke-width': .5, 'stroke-linecap': 'round', opacity: 0 }, head);
-  // כפה קדמית מונחת על הבטן
-  const arm = el('g', null, rub);
-  el('path', { d: 'M2.4,-31C6,-29.4 8.6,-26 9.8,-22.2', fill: 'none', stroke: shade(c, -.06), 'stroke-width': 5, 'stroke-linecap': 'round' }, arm);
-  el('path', { d: 'M7.8,-23.6q3,-.6 3.6,1.8q-.4,1.8 -3,1.6ZM11.2,-22.4l1.1,.2l-.9,.6ZM11.2,-21.3l1.1,.3l-1,.5Z', fill: pad }, arm);
-  return { g: b, rub, head, arm, eye, lid };
+  return { body: b, head, lids, legs: [], legBase: [], size: 20 * s, c, s, quad: { specs, far, near, gait: 'walk', A: 4.2, lift: 3, bodyG: body } };
 }
 
 export const WILD = { rabbit, squirrel, owl, fox, bear, deer };

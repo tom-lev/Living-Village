@@ -135,7 +135,7 @@ class Bluebird {
         this.actT = 0; this.act = 'idle';
       }
     }
-    this.flip += (this.face - this.flip) * Math.min(1, dt * 14);
+    this.flip = this.face;   // ציפור מסתובבת בקפיצה מהירה: היפוך מיידי, בלי להתכווץ על הציר
     const on = inView(this.x, this.alt, 30); show(this.g, on);
     if (!on) return;
     // נשימה קטנה בגוף, ראש, מקור, זנב וכנפיים

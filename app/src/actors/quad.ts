@@ -46,13 +46,30 @@ export class Legs {
   /** אורך מחזור צעדים במרחק: במחצית המחזור הרגל על הקרקע וזזה אחורה 2A, בדיוק כמו הגוף */
   get cycle() { return 4 * this.A; }
   /** מציב את הרגליים. phase: שלב (מתקדם לפי המרחק), amp: 0 בעמידה עד 1 בהליכה. מחזיר את התנודה האנכית של הגוף */
+  /** rear (0..1): התרוממות על הרגליים האחוריות (דוב). הגוף מסתובב סביב pivot בזווית rearA, הירכיים עולות מעט,
+   *  הרגליים האחוריות מתיישרות מתחת לגוף והקדמיות עוזבות את הקרקע בהדרגה ונתלות לפני הבטן. בלי שום קפיצה בין תנוחות */
+  rear = 0; rearA = 0; pivot: number[] = [0, 0]; rearLift = 0;
+  /** נקודה בגוף אחרי ההתרוממות (סיבוב סביב הציר והרמה) */
+  reared(p: number[]) {
+    const a = this.rearA * Math.PI / 180, x = p[0] - this.pivot[0], y = p[1] - this.pivot[1];
+    return [this.pivot[0] + x * Math.cos(a) - y * Math.sin(a), this.pivot[1] - this.rearLift + x * Math.sin(a) + y * Math.cos(a)];
+  }
   pose(phase: number, amp: number, bodyDy = 0) {
+    const R = this.rear, e = R * R * (3 - 2 * R);
     this.specs.forEach((s, i) => {
       const q = ((phase + this.off[i]) % 1 + 1) % 1, A = this.A * amp;
       let fx: number, fy: number;
       if (q < .5) { fx = A - 4 * A * q; fy = 0; }                       // על הקרקע: זזה אחורה בקצב הגוף
       else { const u = (q - .5) / .5; fx = -A + 2 * A * (1 - Math.cos(Math.PI * u)) / 2; fy = -this.lift * amp * Math.sin(Math.PI * u); }   // באוויר: קשת קדימה
-      const hip = [s.hip[0], s.hip[1] + bodyDy], foot = [s.hip[0] + fx + (s.front ? .4 : -.4), fy];
+      let hip = [s.hip[0], s.hip[1] + bodyDy], foot = [s.hip[0] + fx + (s.front ? .4 : -.4), fy];
+      if (R > 0) {
+        if (s.front) {
+          // הכתף עולה עם הגוף; הכף עוזבת את הקרקע ונתלית לפני הבטן
+          hip = this.reared(hip);
+          const hang = [hip[0] + 4.5, hip[1] + (s.l1 + s.l2) * .62];
+          foot = [foot[0] + (hang[0] - foot[0]) * e, foot[1] + (hang[1] - foot[1]) * e];
+        } else { hip = [hip[0], hip[1] - this.rearLift]; foot = [foot[0] + (hip[0] + 1.6 - foot[0]) * e, foot[1]]; }
+      }
       // כמו אצל בעלי חיים אמיתיים: ברגל הקדמית המפרק הנראה (ה"ברך", שורש כף היד) בולט קדימה,
       // ברגל האחורית המפרק הנראה (העקב) בולט אחורה. הפוך מזה – כל צעד נראה כאילו הוא הולך אחורה
       const knee = ik2(hip, foot, s.l1, s.l2, s.bend ?? (s.front ? 1 : -1));

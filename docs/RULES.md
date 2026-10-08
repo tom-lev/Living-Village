@@ -21,6 +21,8 @@ Every rule says where in the code it is enforced and how it is verified: **check
 | **animals-apart**: People never enter the paddock; the dog never enters shops | `scene/build.ts paddock SOLID, actors/people.ts Dog.waiting` | built |
 | **on-ground**: Everyone stays on the ground and fades in or out at doors | `actors/people.ts Walker states` | motion (jump) |
 | **calm**: Calm movement: personal space, step aside when meeting, slow down behind a slower walker; no sudden jumps or flicker | `actors/people.ts update` | motion (jump, flicker, stuck) |
+| **animals-360**: Animals walk in any direction (360°), always exactly where they face, and turn gradually in an arc or in place; never flipped on an axis, never sliding like on a conveyor belt | `actors/heading.ts Heading (wildlife, dog, horses, sheep); birds and ducks turn with an instant flip` | built |
+| **no-animal-fades**: No fades in animal behaviour: views change instantly like animation frames, every change of pose is continuous motion (a bear rears up step by step), and animals disappear only by really going somewhere (a lizard into its burrow) | `actors/heading.ts views; actors/quad.ts rear; actors/lizards.ts burrow` | built |
 | **wild-apart**: Forest animals stay in the forest, far from houses, off paths and water, and never behind trees or buildings | `actors/wildlife.ts spotOk, pathClear, hidden` | check `wildlife` |
 
 ## Layout (how the world is built)

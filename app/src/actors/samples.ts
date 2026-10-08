@@ -5,7 +5,7 @@ import { rngAt } from '../core/rng';
 import { ctx } from '../world/context';
 import { animateTo } from '../camera/camera';
 import { view } from '../camera/view';
-import { WILD, setLeg, frontBack, bearStand, type WildKind } from './wildlife-art';
+import { WILD, setLeg, frontBack, type WildKind } from './wildlife-art';
 import { Legs } from './quad';
 import { hopPose } from './wildlife';
 import { loco, car, LOCOS } from './train-art';
@@ -38,8 +38,14 @@ export function showSample(kind: string) {
       const V = frontBack('bear', el('g', { transform: `translate(${X + dx},${Y + 90})` }, L), p.c!, p.s!, front);
       V.legs.forEach((l: any, j: number) => l.setAttribute('d', `M${V.base[j][0]},${V.base[j][1]}L${V.base[j][0]},0`));
     }
-    el('rect', { x: X + 62, y: Y + 30, width: 5, height: 60, fill: '#7a5a3a' }, L);
-    bearStand(el('g', { transform: `translate(${X + 71},${Y + 90})` }, L), p.c!, p.s!);
+    // מתרומם (באמצע) ועומד על שתיים עם הגב לגזע
+    el('rect', { x: X + 108, y: Y + 30, width: 5, height: 60, fill: '#7a5a3a' }, L);
+    for (const [dx, r] of [[70, .5], [130, 1]]) {
+      const q = WILD.bear(el('g', { transform: `translate(${X + dx},${Y + 90})` }, L), rngAt(X, Y, 81)), Q = new Legs(q.quad!.specs, { far: q.quad!.far, near: q.quad!.near }, 'walk', q.quad!.A, q.quad!.lift);
+      const e = r * r * (3 - 2 * r); Q.pivot = [-10.7, -15]; Q.rear = r; Q.rearA = -74 * e; Q.rearLift = 2.2 * e; Q.pose(0, 0);
+      const T = `translate(0,${n2(-Q.rearLift)}) rotate(${Q.rearA} -10.7 -15) `;
+      q.quad!.bodyG.setAttribute('transform', T); q.head!.setAttribute('transform', `${T}rotate(${r * 48} 12 -19)`);
+    }
     animateTo(view.fitK * 9, X + 60, Y + 50, 1);
   } else if (kind === 'trains') {
     LOCOS.forEach((k, row) => {

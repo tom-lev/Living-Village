@@ -7,6 +7,8 @@ import { ctx, prop, block } from '../world/context';
 import { register } from './registry';
 
 export const GRASS_RX = 30, GRASS_RY = 11;
+/** המחילה של הלטאה: חור קטן בשולי העשב, בצד הנגדי לאבן */
+export const holeOf = (o: any) => { const rk = o.rock ?? [26, 22]; return [o.x + (rk[0] > 0 ? -14 : 14), o.y + GRASS_RY + 3]; };
 
 function tallGrass(o: any) {
   const { x, y, rock = [26, 22] } = o, rg = rngAt(x, y, 61), G = ctx.L.groundProps;
@@ -28,6 +30,10 @@ function tallGrass(o: any) {
   }
   d.forEach((p, i) => el('path', { d: p, fill: cols[i] }, g));
   el('path', { d: seeds, fill: '#d9c47a' }, g);
+  // מחילה: חור כהה עם תלולית עפר קטנה
+  const [hx, hy] = holeOf(o);
+  el('ellipse', { cx: hx, cy: hy + .6, rx: 4.6, ry: 1.9, fill: '#b89a6a', opacity: .8 }, G);
+  el('ellipse', { cx: hx, cy: hy, rx: 2.4, ry: 1.1, fill: '#3b2b1d' }, G);
   // אבן שטוחה להשתזפות
   const rx = x + rock[0], ry = y + rock[1], s = prop(ry);
   el('ellipse', { cx: rx + 1, cy: ry + 1, rx: 10.5, ry: 3.8, fill: 'rgba(40,60,20,.2)' }, s);

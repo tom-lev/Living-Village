@@ -33,6 +33,8 @@ export const RULES: Rule[] = [
   { id: 'animals-apart', group: 'walking', title: 'People never enter the paddock; the dog never enters shops', where: 'scene/build.ts paddock SOLID, actors/people.ts Dog.waiting', built: true },
   { id: 'on-ground', group: 'walking', title: 'Everyone stays on the ground and fades in or out at doors', where: 'actors/people.ts Walker states', motion: 'jump' },
   { id: 'calm', group: 'walking', title: 'Calm movement: personal space, step aside when meeting, slow down behind a slower walker; no sudden jumps or flicker', where: 'actors/people.ts update', motion: 'jump, flicker, stuck' },
+  { id: 'animals-360', group: 'walking', title: 'Animals walk in any direction (360°), always exactly where they face, and turn gradually in an arc or in place; never flipped on an axis, never sliding like on a conveyor belt', why: 'Owner rule 2026-10-08', where: 'actors/heading.ts Heading (wildlife, dog, horses, sheep); birds and ducks turn with an instant flip', built: true },
+  { id: 'no-animal-fades', group: 'walking', title: 'No fades in animal behaviour: views change instantly like animation frames, every change of pose is continuous motion (a bear rears up step by step), and animals disappear only by really going somewhere (a lizard into its burrow)', why: 'Owner rule 2026-10-08', where: 'actors/heading.ts views; actors/quad.ts rear; actors/lizards.ts burrow', built: true },
   { id: 'wild-apart', group: 'walking', title: 'Forest animals stay in the forest, far from houses, off paths and water, and never behind trees or buildings', where: 'actors/wildlife.ts spotOk, pathClear, hidden', check: 'wildlife' },
 
   // ── פריסה: איך העולם נבנה ──

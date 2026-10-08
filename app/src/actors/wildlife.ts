@@ -10,7 +10,8 @@ import { ctx, statics, bboxOf } from '../world/context';
 import { inView } from '../camera/view';
 import { walkable, flagsAt, clearLine, PATH, WATER } from '../world/walk';
 import { places } from '../world/places';
-import { WILD, setLeg, frontBack, bearStand, type WildKind, type Parts } from './wildlife-art';
+import { WILD, setLeg, frontBack, type WildKind, type Parts } from './wildlife-art';
+import { Heading, wrapA } from './heading';
 import { TREES } from '../scene/generators';
 import { Legs } from './quad';
 import { dynamics } from './people';
@@ -22,6 +23,8 @@ const NATURAL_H: Record<WildKind, number> = { rabbit: 14.6, squirrel: 15, owl: 1
 const SPAWN_BOX: Record<WildKind, number[]> = { rabbit: [8, 14], squirrel: [8, 14], owl: [9, 16], fox: [15, 19], bear: [27, 30], deer: [16, 38] };
 
 /** מהירות, מרחק שיטוט, זמני מנוחה ומרחק מינימלי מבתים, לכל סוג */
+/** כמה מהר כל חיה מסתובבת (רדיאנים לשנייה), ורדיוס הצעדים בסיבוב במקום (כדי שהרגליים יצעדו גם כשמסתובבים) */
+const TURN: Record<WildKind, [number, number]> = { rabbit: [3.2, 3], squirrel: [4, 2.4], owl: [0, 0], fox: [2.4, 5], bear: [1.3, 10], deer: [1.4, 9] };
 const KIND: Record<WildKind, { speed: number; roam: number; rest: [number, number]; homeGap: number; stride: number; hop?: boolean; still?: boolean }> = {
   rabbit: { speed: 13, roam: 90, rest: [2, 6], homeGap: 260, stride: 1.4, hop: true },     // רגועים: קפיצות ארוכות ואיטיות, עם עצירות
   squirrel: { speed: 14, roam: 70, rest: [1.5, 5], homeGap: 240, stride: 1.2, hop: true },
@@ -82,17 +85,17 @@ class Animal {
     this.g = el('g', null, ctx.L.actors); this.el = this.g; this.sc = el('g', { transform: `scale(${this.k.toFixed(3)})` }, this.g); this.f = el('g', null, this.sc);
     this.p = WILD[kind](this.f, rngAt(x, y, 81)) as Parts;
     this.W = this.p.size * 1.2 * this.k; this.H = this.p.size * (kind === 'bear' ? 1.3 : 2) * this.k;   // השטח שהחיה תופסת (לבדיקת הסתרה)
-    // מבט מלפנים ומאחור (לא לינשוף, שיושב פנים אל הצופה): נבחרים לפי כיוון התנועה, עם דהייה קצרה
+    // כיוון ב-360 מעלות ומבט מלפנים ומאחור (לא לינשוף, שיושב פנים אל הצופה). המבט מתחלף מיד לפי הכיוון, בלי דהייה
     if (kind !== 'owl') {
-      this.frontW = el('g', { opacity: 0 }, this.sc); this.backW = el('g', { opacity: 0 }, this.sc);
+      this.Hd = new Heading(this.flip > 0 ? 0 : Math.PI, TURN[kind][0]);
+      this.frontW = el('g', { display: 'none' }, this.sc); this.backW = el('g', { display: 'none' }, this.sc);
       this.front = frontBack(kind, this.frontW, this.p.c!, this.p.s!, true);
       this.back = frontBack(kind, this.backW, this.p.c!, this.p.s!, false);
     }
-    // דוב: גם תנוחת עמידה על שתיים (מתגרד בגב בעץ)
-    if (kind === 'bear') { this.standW = el('g', { opacity: 0 }, this.sc); this.stand = bearStand(this.standW, this.p.c!, this.p.s!); }
-    this.view = 'side'; this.vis = { side: 1, front: 0, back: 0, stand: 0 };
+    this.shownView = 'side';
     // רגליים עם מפרקים (שועל, דוב): צעדים לפי מרחק (actors/quad.ts)
     if (this.p.quad) { const q = this.p.quad; this.Q = new Legs(q.specs, { far: q.far, near: q.near }, q.gait, q.A, q.lift); this.Q.pose(0, 0); }
+    if (kind === 'bear') this.Q.pivot = [-10.7, -15];   // הדוב מתרומם סביב הירכיים האחוריות
     this.hopH = 0; this.sit = 0; this.sitWant = 0;
     this.legsStill();
     dynamics.push(this);   // נכנסים למיון העומק יחד עם האנשים
@@ -115,7 +118,7 @@ class Animal {
     const c: any[] = [];
     for (const tr of TREES) if (Math.hypot(tr.x - this.hx, tr.y - this.hy) < this.K.roam && Math.hypot(tr.x - this.x, tr.y - this.y) < 180) c.push(tr);
     for (let i = 0; i < 12 && c.length; i++) {
-      const tr = c[Math.floor(this.rg.r() * c.length)], side = this.rg.chance(.5) ? 1 : -1, tx = tr.x + side * 7.5, ty = tr.y + 2.5;
+      const tr = c[Math.floor(this.rg.r() * c.length)], side = this.rg.chance(.5) ? 1 : -1, tx = tr.x + side * 20 * this.k, ty = tr.y + 2.5;
       if (spotOk(tx, ty, this.K.homeGap, this.homes, this.W, this.H * 1.8) && pathClear([this.x, this.y], [tx, ty], this.W, this.H)) return { at: [tx, ty], side };
     }
     return null;
@@ -127,39 +130,48 @@ class Animal {
     if (!K.still) {
       // מישהו עובר קרוב (פחות מ-60): בורחים קצת הלאה ממנו
       const near = dynamics.find(o => o !== this && !o.kind && o.alpha > 0 && Math.hypot(o.x - this.x, o.y - this.y) < 60);
-      if (near && (this.state === 'rest' || this.state === 'scratch')) {
+      if (near && (this.state === 'rest' || this.state === 'scratch' || this.state === 'orient' || this.state === 'down')) {
         const dx = this.x - near.x, dy = this.y - near.y, d = Math.hypot(dx, dy) || 1, tx = this.x + dx / d * 50, ty = this.y + dy / d * 35;
-        if (spotOk(tx, ty, K.homeGap * .8, this.homes, this.W, this.H) && pathClear([this.x, this.y], [tx, ty], this.W, this.H)) { this.tx = tx; this.ty = ty; this.state = 'move'; this.flee = 1.3; this.then = null; this.view = 'side'; }
+        if (spotOk(tx, ty, K.homeGap * .8, this.homes, this.W, this.H) && pathClear([this.x, this.y], [tx, ty], this.W, this.H)) { this.tx = tx; this.ty = ty; this.state = 'move'; this.flee = 1.3; this.then = null; this.moveT = 0; }
       }
       // דוב: מדי פעם הולך לעץ ומתגרד בגב
       if (this.state === 'rest' && this.timer <= 0 && this.kind === 'bear' && this.rg.chance(.3)) {
         const tr = this.pickTree();
-        if (tr) { [this.tx, this.ty] = tr.at; this.state = 'move'; this.flee = 1; this.then = 'scratch'; this.scratchSide = tr.side; }
+        if (tr) { [this.tx, this.ty] = tr.at; this.state = 'move'; this.flee = 1; this.then = 'scratch'; this.scratchSide = tr.side; this.moveT = 0; }
       }
-      if (this.state === 'scratch' && this.timer <= 0) { this.state = 'rest'; this.timer = this.rg.rand(1, 3); this.view = 'side'; }
+      // מתגרד: עומד על שתיים; בסוף יורד לאט חזרה על ארבע
+      if (this.state === 'scratch' && this.timer <= 0) this.state = 'down';
+      if (this.state === 'down' && this.Q.rear <= .001) { this.state = 'rest'; this.timer = this.rg.rand(1, 3); }
+      // מסתובב במקום עד שהגב אל הגזע, ורק אז מתחיל להתרומם
+      if (this.state === 'orient') {
+        const want = this.scratchSide > 0 ? 0 : Math.PI;
+        this.Hd.turnTo(want, dt);
+        if (Math.abs(wrapA(want - this.Hd.h)) < .02) { this.state = 'scratch'; this.timer = this.rg.rand(7, 13); this.scratchT = t; }
+      }
       if (this.state === 'rest' && this.timer <= 0) {
         const tg = this.pick();
-        if (tg) { [this.tx, this.ty] = tg; this.state = 'move'; this.flee = 1; this.sitWant = 0; } else this.timer = this.rg.rand(.4, 1.2);   // לא נמצא יעד: מנסים שוב בקרוב
+        if (tg) { [this.tx, this.ty] = tg; this.state = 'move'; this.flee = 1; this.sitWant = 0; this.moveT = 0; } else this.timer = this.rg.rand(.4, 1.2);   // לא נמצא יעד: מנסים שוב בקרוב
       }
-      if (this.state === 'move') {
+      if (this.state === 'move' && this.Q?.rear > .001) { /* דוב שעומד על שתיים: קודם יורד על ארבע */ }
+      else if (this.state === 'move') {
         const dx = this.tx - this.x, dy = this.ty - this.y, d = Math.hypot(dx, dy);
-        if (d < 1 && this.then === 'scratch') {
-          // הגיע לעץ: נעמד על הרגליים האחוריות, הגב אל הגזע
-          this.then = null; this.state = 'scratch'; this.timer = this.rg.rand(7, 13); this.face = this.scratchSide; this.view = 'stand'; this.scratchT = t;
-        } else if (d < 1) {
+        this.moveT = (this.moveT ?? 0) + dt;
+        const arrived = d < 2 || this.moveT > 40;   // (ביטחון: לא מסתובבים סביב היעד לנצח)
+        if (arrived && this.then === 'scratch') {
+          // הגיע לעץ: עוצר, מסתובב עם הגב לגזע, ואז מתרומם
+          this.then = null; this.state = 'orient';
+        } else if (arrived) {
           // לפעמים ממשיכים מיד הלאה (טיול), אחרת עוצרים לנוח
           this.state = 'rest'; this.timer = this.rg.chance(.35) ? this.rg.rand(.3, 1) : this.rg.rand(...K.rest);
           // ארנבת וסנאי: לפעמים מתיישבים על הרגליים האחוריות (ארנבת מסתכלת סביב, סנאי מכרסם אגוז)
           if (K.hop) this.sitWant = this.rg.chance(.45) ? 1 : 0;
         }
         else {
+          // פונים בהדרגה אל היעד והולכים תמיד בדיוק לכיוון שאליו פונים (בפנייה חדה – מסתובבים במקום)
           this.pauseT = (this.pauseT ?? 0) - dt;
-          ds = this.pauseT > 0 ? 0 : Math.min(d, K.speed * this.flee * dt);
-          this.x += dx / d * ds; this.y += dy / d * ds;
-          if (Math.abs(dx) > 1) this.face = dx > 0 ? 1 : -1;
-          // לאן פונים: לרוחב – מהצד; כשהולכים בעיקר למטה (אל הצופה) – מלפנים, למעלה – מאחור. מחליפים רק כשהכיוון ברור
-          if (Math.abs(dx) > Math.abs(dy) * 1.3) this.view = 'side';
-          else if (Math.abs(dy) > Math.abs(dx) * 1.3) this.view = dy > 0 ? 'front' : 'back';
+          const sp = this.pauseT > 0 ? 0 : this.Hd.steer(dx, dy, dt);
+          ds = Math.min(d, K.speed * this.flee * dt * sp);
+          this.x += Math.cos(this.Hd.h) * ds; this.y += Math.sin(this.Hd.h) * ds;
         }
       }
     } else {
@@ -172,13 +184,21 @@ class Animal {
       if (this.flyIn <= 0 && this.fly === undefined) this.fly = 0;
       if (this.fly !== undefined) { this.fly += dt; if (this.fly > 7) { this.fly = undefined; this.flyIn = this.rg.rand(30, 60); } }
     }
-    this.flip += (this.face - this.flip) * Math.min(1, dt * 8);
-    this.amp += ((this.state === 'move' ? 1 : 0) - this.amp) * Math.min(1, dt * 6);
+    // סיבוב במקום הוא גם צעדים: הרגליים זזות לפי הסיבוב
+    const turnStep = this.Hd ? this.Hd.turned * TURN[this.kind as WildKind][1] * this.k : 0;
+    if (this.Hd) this.Hd.turned = 0;
+    const stepping = (this.state === 'move' && this.Q?.rear <= .001) || turnStep > 0;
+    this.amp += ((stepping ? 1 : 0) - this.amp) * Math.min(1, dt * 6);
     const unit = this.k * (this.p.s ?? 1);   // יחידת ציור אחת בעולם
-    if (this.Q) this.phase += ds / (unit * this.Q.cycle);
+    if (this.Q && this.kind === 'bear') {
+      // התרוממות והורדה הדרגתיות (כשנייה וחצי), בלי שום קפיצה בין תנוחות
+      const want = this.state === 'scratch' ? 1 : 0;
+      this.Q.rear += Math.max(-dt * .7, Math.min(dt * .7, want - this.Q.rear));
+    }
+    if (this.Q) this.phase += (ds + turnStep) / (unit * this.Q.cycle);
     else this.phase += ds / ((K.hop ? 7 : 9) * this.k);
     if (K.hop) {
-      this.hopH += ds / (unit * (this.kind === 'rabbit' ? 13 : 10));
+      this.hopH += (ds + turnStep) / (unit * (this.kind === 'rabbit' ? 13 : 10));
       if (this.state !== 'move') this.hopH = Math.ceil(this.hopH - .02);   // עומדים: מסיימים את הקפיצה
       // אחרי קפיצה, לפעמים עוצרים לרגע ומסתכלים סביב (רגוע, לא קופצים ברצף)
       if (Math.floor(this.hopH) !== this.lastHop) { this.lastHop = Math.floor(this.hopH); if (this.state === 'move' && this.rg.chance(.4)) this.pauseT = this.rg.rand(.5, 1.6); }
@@ -189,35 +209,33 @@ class Animal {
     // קפיצה של ארנבת או סנאי: דחיפה ברגליים האחוריות, תעופה בקשת, נחיתה על הכפות הקדמיות
     const lift = K.hop ? hopPose(this.p.hop, this.kind, this.hopH, this.amp, this.sit, t, this.hx) * unit : 0;
     if (this.front) {
-      for (const v of this.stand ? ['side', 'front', 'back', 'stand'] : ['side', 'front', 'back']) this.vis[v] += ((this.view === v ? 1 : 0) - this.vis[v]) * Math.min(1, dt * (v === 'stand' || this.view === 'stand' ? 4 : 10));
-      this.f.setAttribute('opacity', this.vis.side.toFixed(2));
-      for (const [V, Wr, o] of [[this.front, this.frontW, this.vis.front], [this.back, this.backW, this.vis.back]] as [any, any, number][]) {
-        Wr.setAttribute('opacity', o.toFixed(2));
-        if (o > .01) V.legs.forEach((l: any, j: number) => {   // מלפנים ומאחור: הרגליים מתרוממות לסירוגין
+      // המבט מתחלף מיד (כמו פריים באנימציה), לפי הכיוון; ההיפוך מתחלף רק כשהמבט לא מהצד
+      const v = this.Hd.view;
+      if (v !== this.shownView) {
+        show(this.f, v === 'side'); show(this.frontW, v === 'front'); show(this.backW, v === 'back'); this.shownView = v;
+      }
+      for (const [V, on] of [[this.front, v === 'front'], [this.back, v === 'back']] as [any, boolean][]) {
+        if (on) V.legs.forEach((l: any, j: number) => {   // מלפנים ומאחור: הרגליים מתרוממות לסירוגין
           const q = (this.phase + j * .5) * Math.PI * 2, fy = -Math.max(0, Math.cos(q)) * K.stride * .7 * this.amp;
           l.setAttribute('d', `M${n2(V.base[j][0])},${V.base[j][1]}L${n2(V.base[j][0])},${n2(fy)}`);
         });
       }
     }
-    if (this.stand) {
-      // עומד ומתגרד: הגוף עולה ויורד לאורך הגזע ומתנדנד קצת, הראש מוטה למעלה, העיניים נעצמות בהנאה
-      this.standW.setAttribute('opacity', this.vis.stand.toFixed(2));
-      if (this.vis.stand > .01) {
-        const u = t - (this.scratchT ?? 0), r = Math.sin(u * 2.6), S = this.stand;
-        this.standW.setAttribute('transform', `scale(${this.flip.toFixed(3)},1)`);
-        S.rub.setAttribute('transform', `translate(0,${n2(-1.3 - r * 1.3)}) rotate(${(r * 2.2).toFixed(1)} -2 -6)`);
-        S.head.setAttribute('transform', `translate(1.4,-36) scale(1.15) translate(-1.4,36) rotate(${(-8 + Math.sin(u * 1.3) * 6).toFixed(1)} 0 -34)`);
-        const bliss = Math.sin(u * .9) > -.2;
-        S.eye.setAttribute('opacity', bliss ? '0' : '1'); S.lid.setAttribute('opacity', bliss ? '1' : '0');
-        S.arm.setAttribute('transform', `rotate(${(Math.sin(u * 2.6 + 1) * 4).toFixed(1)} 2.4 -31)`);
-      }
-    }
     let bob = 0;
     if (this.Q) {
       // רגליים עם מפרקים; הגוף עולה ויורד עם הצעדים, הדוב מגלגל את הכתפיים, הראש מהנהן בהליכה
+      let rearT = '';
+      if (this.kind === 'bear') {
+        // עומד על שתיים: הגוף מסתובב סביב הירכיים; כשהוא למעלה – מתחכך בגזע (עולה ויורד ומתנדנד מעט)
+        const R = this.Q.rear, e = R * R * (3 - 2 * R), rub = R > .97 ? Math.sin((t - (this.scratchT ?? 0)) * 2.6) : 0;
+        this.Q.rearA = -74 * e + rub * 2.5; this.Q.rearLift = 2.2 * e + rub * 1.2;
+        if (R > 0) rearT = `translate(0,${n2(-this.Q.rearLift)}) rotate(${this.Q.rearA.toFixed(2)} ${this.Q.pivot[0]} ${this.Q.pivot[1]}) `;
+        this.p.lids!.setAttribute('opacity', R > .97 && Math.sin((t - (this.scratchT ?? 0)) * .9) > -.3 ? '1' : '0');   // עיניים עצומות בהנאה
+      }
       bob = this.Q.pose(this.phase, this.amp);
       const roll = this.kind === 'bear' ? Math.sin(this.phase * Math.PI * 2) * 1.6 * this.amp : 0;
-      this.p.quad!.bodyG.setAttribute('transform', `translate(0,${n2(bob)}) rotate(${roll.toFixed(2)} 0 -14)`);
+      this.p.quad!.bodyG.setAttribute('transform', `${rearT}translate(0,${n2(bob)}) rotate(${roll.toFixed(2)} 0 -14)`);
+      this.rearT = rearT;
       this.p.quad!.near.setAttribute('transform', '');
     }
     if (this.p.tail && this.kind !== 'squirrel' && this.kind !== 'deer') this.p.tail.setAttribute('transform', `translate(0,${n2(bob)}) rotate(${(Math.sin(t * 2 + this.hx) * 6 + Math.sin(this.phase * Math.PI * 4) * 4 * this.amp).toFixed(1)} -8 -8)`);
@@ -233,7 +251,8 @@ class Animal {
       // בהליכה הראש נמוך ומתנדנד עם כל צעד קדמי; בעמידה מדי פעם מוריד את האף לקרקע ומרחרח
       this.sniff = (this.sniff ?? 0) + (((this.state === 'rest' && Math.sin(t * .31 + this.hx) > .2) ? 1 : 0) - (this.sniff ?? 0)) * Math.min(1, dt * 1.5);
       const step = Math.sin(this.phase * Math.PI * 4), sway = this.amp * (4 + step * 3), sn = this.sniff * (24 + Math.sin(t * 6) * 2);
-      this.p.head.setAttribute('transform', `translate(0,${n2(bob + this.amp * (.6 + step * .5))}) rotate(${(sway + sn).toFixed(1)} 12 -19)`);
+      const up = this.Q.rear * 48;   // כשעומד – הראש מתיישר קדימה ומעט למעלה
+      this.p.head.setAttribute('transform', `${this.rearT}translate(0,${n2(bob + this.amp * (.6 + step * .5))}) rotate(${(sway + sn * (1 - this.Q.rear) + up).toFixed(1)} 12 -19)`);
     } else if (this.p.head && !K.still && !K.hop) {
       const a = this.state === 'rest' ? Math.sin(t * 1.3 + this.hy) * 6 : 0, nod = Math.sin(this.phase * Math.PI * 4) * .5 * this.amp;   // מרחרחים, ומהנהנים בהליכה
       this.p.head.setAttribute('transform', `translate(0,${n2(bob + nod)}) rotate(${a.toFixed(1)} 10 -12)`);
@@ -255,7 +274,7 @@ class Animal {
       }
     }
     this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y - lift)})`);
-    this.f.setAttribute('transform', `scale(${this.flip.toFixed(3)},1)`);
+    this.f.setAttribute('transform', `scale(${(this.Hd ? this.Hd.sx : this.flip).toFixed(3)},1)`);
   }
 }
 
