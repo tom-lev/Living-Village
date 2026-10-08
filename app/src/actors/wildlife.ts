@@ -3,6 +3,7 @@
    הן לא דורכות על שבילים, מים או מבנים, לא מתקרבות לבתים, ומתרחקות מעוברים ושבים.
    ארנבת מקפצת, סנאי זריז, שועל בטרוט, דוב הולך לאט. ינשוף יושב על גדם ומסובב את הראש.
    ההיגיון רץ תמיד (זול), הציור רק כשהחיה על המסך. אין שתי חיות זהות (הגוון והגודל לפי המיקום). */
+import { REAL_DYN, fitScale } from '../world/scale';
 import { el, n2, show } from '../core/util';
 import { rngAt } from '../core/rng';
 import { ctx, statics } from '../world/context';
@@ -11,6 +12,9 @@ import { walkable, flagsAt, clearLine, PATH, WATER } from '../world/walk';
 import { places } from '../world/places';
 import { WILD, setLeg, frontBack, type WildKind, type Parts } from './wildlife-art';
 import { dynamics } from './people';
+
+/** הגובה הטבעי של כל ציור (יחידות, בלי הגדלה): ממנו ומהגובה האמיתי נקבע הגודל */
+const NATURAL_H: Record<WildKind, number> = { rabbit: 14.6, squirrel: 15, owl: 11, fox: 18, bear: 25 };
 
 /** מהירות, מרחק שיטוט, זמני מנוחה ומרחק מינימלי מבתים, לכל סוג */
 const KIND: Record<WildKind, { speed: number; roam: number; rest: [number, number]; homeGap: number; stride: number; hop?: boolean; still?: boolean }> = {
@@ -67,12 +71,14 @@ class Animal {
     this.kind = kind; this.K = KIND[kind]; this.x = this.hx = x; this.y = this.hy = y; this.homes = homes;
     this.rg = rngAt(x, y, 83); this.flip = this.rg.chance(.5) ? 1 : -1; this.face = this.flip;
     this.state = 'rest'; this.timer = this.rg.rand(...this.K.rest); this.phase = 0; this.amp = 0; this.look = 0;
-    this.g = el('g', null, ctx.L.actors); this.el = this.g; this.f = el('g', null, this.g);
+    // גודל לפי טבלת הפרופורציות (world/scale.ts): הגובה הטבעי של הציור מול הגובה האמיתי של החיה
+    this.k = fitScale(NATURAL_H[kind], REAL_DYN[kind]);
+    this.g = el('g', null, ctx.L.actors); this.el = this.g; this.sc = el('g', { transform: `scale(${this.k.toFixed(3)})` }, this.g); this.f = el('g', null, this.sc);
     this.p = WILD[kind](this.f, rngAt(x, y, 81)) as Parts;
-    this.W = this.p.size * 1.2; this.H = this.p.size * (kind === 'bear' ? 1.3 : 2);   // השטח שהחיה תופסת (לבדיקת הסתרה)
+    this.W = this.p.size * 1.2 * this.k; this.H = this.p.size * (kind === 'bear' ? 1.3 : 2) * this.k;   // השטח שהחיה תופסת (לבדיקת הסתרה)
     // מבט מלפנים ומאחור (לא לינשוף, שיושב פנים אל הצופה): נבחרים לפי כיוון התנועה, עם דהייה קצרה
     if (kind !== 'owl') {
-      this.frontW = el('g', { opacity: 0 }, this.g); this.backW = el('g', { opacity: 0 }, this.g);
+      this.frontW = el('g', { opacity: 0 }, this.sc); this.backW = el('g', { opacity: 0 }, this.sc);
       this.front = frontBack(kind, this.frontW, this.p.c!, this.p.s!, true);
       this.back = frontBack(kind, this.backW, this.p.c!, this.p.s!, false);
     }
@@ -128,11 +134,11 @@ class Animal {
     }
     this.flip += (this.face - this.flip) * Math.min(1, dt * 8);
     this.amp += ((this.state === 'move' ? 1 : 0) - this.amp) * Math.min(1, dt * 6);
-    this.phase += ds / (K.hop ? 7 : 9);
+    this.phase += ds / ((K.hop ? 7 : 9) * this.k);
     this.shown = inView(this.x, this.y - 10, 40); show(this.g, this.shown);
     if (!this.shown) return;
     // קפיצה של ארנבת או סנאי: קשת קטנה מעל הקרקע בכל צעד
-    const lift = K.hop ? Math.abs(Math.sin(this.phase * Math.PI)) * 3.2 * this.amp : 0;
+    const lift = K.hop ? Math.abs(Math.sin(this.phase * Math.PI)) * 3.2 * this.amp * this.k : 0;
     if (this.front) {
       for (const v of ['side', 'front', 'back']) this.vis[v] += ((this.view === v ? 1 : 0) - this.vis[v]) * Math.min(1, dt * 10);
       this.f.setAttribute('opacity', this.vis.side.toFixed(2));

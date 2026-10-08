@@ -1,5 +1,7 @@
 /* בניית הסצנה מקובץ העולם: גאומטריה → פני שטח → אובייקטים → מחוללים */
 import { declOf } from '../world/decl';
+import { n2 } from '../core/util';
+import { REAL_H, fitScale } from '../world/scale';
 import { finish, need, note, resetStages } from '../world/issues';
 import { setSeed } from '../core/rng';
 import { setPalette } from '../core/palette';
@@ -51,6 +53,21 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
     const n0 = NO_TREE.length, s0 = statics.length, p0 = places.length;
     f(o);
     if (places.length === p0) autoPlace(o);   // כל אובייקט (גם עתידי) הוא יעד, אלא אם הוא נוף בלבד
+    // לבדיקת הפרופורציות: המלבן שהאובייקט צייר (איחוד כל מה שנוסף לסצנה בציור שלו)
+    { let bb: number[] | null = null; for (const st of statics.slice(s0)) { try { const b = st.el.getBBox(); if (b.width > 0) bb = bb ? [Math.min(bb[0], b.x), Math.min(bb[1], b.y), Math.max(bb[2], b.x + b.width), Math.max(bb[3], b.y + b.height)] : [b.x, b.y, b.x + b.width, b.y + b.height]; } catch {} } if (bb) Object.defineProperty(o, '_bb', { value: bb, enumerable: false, writable: true }); }
+    // פרופורציות (world/scale.ts): דבר בגודל אמיתי שהציור שלו סוטה ביותר מ-30% מהגובה האמיתי – מוקטן או מוגדל סביב נקודת הקרקע שלו
+    const realH = REAL_H[o.type], bb0 = o._bb;
+    if (realH && bb0 && o.x !== undefined) {
+      const k = fitScale(bb0[3] - bb0[1] - 2, realH), ax = o.x, ay = bb0[3] - 2;
+      if (k !== 1) {
+        const T = `translate(${n2(ax)},${n2(ay)}) scale(${k.toFixed(3)}) translate(${n2(-ax)},${n2(-ay)})`;
+        for (const st of statics.slice(s0)) st.el.setAttribute('transform', `${T} ${st.el.getAttribute('transform') || ''}`.trim());
+        const sc = (x: number, y: number) => [ax + (x - ax) * k, ay + (y - ay) * k];
+        for (let i = n0; i < NO_TREE.length; i++) { const r = NO_TREE[i], a = sc(r[0], r[1]), b = sc(r[2], r[3]); NO_TREE[i] = [a[0], a[1], b[0], b[1]]; }
+        const a = sc(bb0[0], bb0[1]), b = sc(bb0[2], bb0[3]); o._bb = [a[0], a[1], b[0], b[1]];
+        Object.defineProperty(o, '_k', { value: [k, ax, ay], enumerable: false });
+      }
+    }
     markObject(o, s0);                         // ומה אסור לדרוך עליו (מבנה, שדה, מבוך...)
     // התווית יושבת ממש מעל האובייקט: הקצה העליון של החלק הגדול שצויר (גג, ארובה). אם אין ציור גבוה, השטח שהאובייקט חסם
     let top: number | undefined;
@@ -59,6 +76,7 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
       let area = 0;
       for (const st of statics.slice(s0)) { try { const bb = st.el.getBBox(); if (bb.width * bb.height > area) { area = bb.width * bb.height; top = bb.y; } } catch {} }
       if (top === undefined && NO_TREE.length > n0) top = Math.min(...NO_TREE.slice(n0).map(r => r[1])) + 8;
+      if (o._k && o._bb) top = o._bb[1];   // הציור הוקטן או הוגדל (פרופורציות): התווית מעל הגובה החדש
     }
     if (o.name && !declOf(o.type).noLabel) addLabel(o, top);   // לחנות ולתחנה כבר יש שלט עם השם (noLabel בהצהרה)
   }
@@ -192,6 +210,7 @@ function markObject(o: any, s0: number) {
     // החלק הגדול שצויר הוא המבנה עצמו; הבסיס שלו חוסם (הדלת בקו הקרקע נשארת פתוחה)
     let best: any = null, area = 0;
     for (const st of statics.slice(s0)) { try { const bb = st.el.getBBox(); if (bb.width * bb.height > area) { area = bb.width * bb.height; best = { bb, y: st.y }; } } catch {} }
+    if (best && o._k) { const [k, ax] = o._k; best.bb = { x: ax + (best.bb.x - ax) * k, width: best.bb.width * k }; }   // הוקטן או הוגדל (פרופורציות)
     if (best) markRect(best.bb.x + 3, best.y - 30, best.bb.x + best.bb.width - 3, best.y - 3, SOLID);
     return;
   }

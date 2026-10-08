@@ -3,7 +3,7 @@
    התיקון שייך לחוק עצמו, כדי שבדיקה לא תשנה את העולם בשקט.
    רצה רק עם ?debug (תג בפינה, ולחיצה על שורה מטיסה את המצלמה למקום) או מהכלי tools/check.mjs לפני דחיפה.
    חריג מכוון: allow: ['rule'] על האובייקט בנתונים.
-   הכללים: water, trail-end, prop, bench, plot-path, overlap, labels, reach, undeclared, order. */
+   הכללים: water, trail-end, prop, bench, plot-path, overlap, labels, reach, undeclared, order, scale. */
 import { ctx } from './context';
 import { geo, ROAD_W } from './geometry';
 import { curvePts, curveWithSegs } from './curve';
@@ -15,6 +15,7 @@ import { places } from './places';
 import { reachable } from '../actors/agenda';
 import { plotOfDoor } from '../prefabs/village';
 import { issues, type Issue } from './issues';
+import { REAL_H, M, TOL } from './scale';
 
 const near = (P: number[][], p: number[]) => {
   let d = Infinity;
@@ -66,6 +67,12 @@ export function runChecks(): Issue[] {
     // prop: חפץ קטן על שביל, מים, מבנה או מגרש
     const f = D.foot?.(o);
     if (f && !placeOk(f[0], f[1], f[2], f[3])) add('prop', `A ${o.type} stands on a path, water, a building or a private plot`, o.x, o.y, o);
+    // scale: חפץ בגודל אמיתי (world/scale.ts) שהגובה המצויר שלו רחוק מהגובה האמיתי
+    const realH = REAL_H[o.type];
+    if (realH && o._bb) {
+      const m = (o._bb[3] - o._bb[1] - 2) / M;
+      if (Math.abs(m / realH - 1) > TOL + .02) add('scale', `A ${o.type} is ${m.toFixed(1)} m tall instead of about ${realH} m`, o.x ?? o._bb[0], o._bb[3], o);
+    }
     // plot-path: השביל המרוצף מהדלת נוגע בדרך או בשביל
     if (o.type === 'plot' && o._pathEnd) {
       const [x, y, dir] = o._pathEnd;

@@ -29,6 +29,12 @@ This file is the complete handoff. Work on this project so far happened in one l
 - Everything **calm, pleasant, no stress and no jitter**: slow, soft motion; soft colors; no flashing; static grain only (no animated noise).
 - A mix of old and modern: **no cars**, but electricity exists (street lamps, power lines, solar panels, wind turbines), and modern houses stand next to old ones.
 - **Walking is slow.** It was lowered 40% at their request. Per-character `speed` in `world.json`: 8.4–14.4 world units/s.
+- **Proportions are a rule (owner's request, 2026-10-08): `world/scale.ts`.** An adult is 33 units = 1.70 m, so 1 m ≈ 19.4 units.
+  - Real-size things declare their real height in metres: stationary types in `REAL_H` (picnic table, mailbox, bike, signpost, haybale, scarecrow, snowman, igloo, ice hut, tent, sailboat, buoy, deer, skater, well, street lamp), moving ones in `REAL_DYN` (dog, rabbit, squirrel, owl, fox, bear, train carriage).
+  - Stationary: after a prefab draws, `buildScene` measures it (`o._bb`) and, if it is more than 30% off, scales its drawing around its ground point (`o._k`), together with its tree blocks, walk-map base and label. Moving: animals, the dog, lamps and trains compute their size with `fitScale(naturalDrawnHeight, realHeight)`.
+  - The world check reports any real-size object that is still off (`scale`). **Any new real-size thing gets a line in `REAL_H` or `REAL_DYN`.**
+  - The first pass fixed: trains (×2.4, they were toy-sized next to the bear), rabbits and squirrels (were twice too big), fox, dog, street lamps (were person-height), sailboats, igloos, ice huts, tent, snowman, scarecrow, signposts, bikes, buoys.
+  - Buildings and trees are drawn at "map scale" and are not in the table yet (open proposal to the owner: trees at least about 2× a person, landmarks clearly taller than houses).
 - **Proportions matter.** People are about 33 units tall (child 24):
   - Horse `scale` 0.62: back ≈ 28, head ≈ 42.
   - Sheep `scale` 0.8.

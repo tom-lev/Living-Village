@@ -1,4 +1,5 @@
 /* אנשים ובני לוויה: הולכים על רשת הדרכים, כלב עם רצועה, בלון, יושבים */
+import { REAL_DYN, fitScale } from '../world/scale';
 import { el, n2, P, clamp, shade, show, circ } from '../core/util';
 import { inView, view } from '../camera/view';
 import { R, rngAt } from '../core/rng';
@@ -240,6 +241,7 @@ export class Dog {
     el('rect', { x: -14, y: -22, width: 30, height: 24, fill: 'transparent' }, this.g);
     owner.cullR = 90;   // הכלב והרצועה נראים יחד עם הבעלים
     const p = owner.pointBack(24); this.x = p[0]; this.y = p[1]; this.flip = 1; this.phase = 0; this.amp = 1; this.hx = 1;
+    this.k = fitScale(17.8, REAL_DYN.dog);   // גודל לפי טבלת הפרופורציות (הציור גבוה 17.8 עד קצה הראש)
     dynamics.push(this); followable(this, this.g);
   }
   get name() { return `${this.dogName} (${this.owner.name}'s dog)`; }
@@ -270,8 +272,9 @@ export class Dog {
     if (Math.abs(vx) > 2) this.face = vx > 0 ? 1 : -1;
     this.flip += ((this.face ?? 1) - this.flip) * Math.min(1, dt * 9);
     this.amp += ((moving ? 1 : 0) - this.amp) * Math.min(1, dt * 5);
-    this.phase += ds / 13;
-    this.collar = this.view === 'side' ? [this.x + 5.6 * this.flip, this.y - 10.5] : [this.x, this.y - (this.view === 'front' ? 11 : 12.4)];
+    this.phase += ds / (13 * this.k);
+    const sk = this.k;
+    this.collar = this.view === 'side' ? [this.x + 5.6 * this.flip * sk, this.y - 10.5 * sk] : [this.x, this.y - (this.view === 'front' ? 11 : 12.4) * sk];
     const vis = this.waiting ? this.alpha > 0 && inView(this.x, this.y - 10, 30) : this.owner.shown && this.alpha > 0;
     show(this.g, vis);
     if (!vis) return;
@@ -295,7 +298,7 @@ export class Dog {
     for (const v of ['side', 'front', 'back']) this.vis[v] += ((this.view === v ? 1 : 0) - this.vis[v]) * Math.min(1, dt * 12);
     this.b.setAttribute('opacity', this.vis.side.toFixed(2)); this.front.setAttribute('opacity', this.vis.front.toFixed(2)); this.back.setAttribute('opacity', this.vis.back.toFixed(2));
     this.tail.setAttribute('transform', `translate(-8,-10) rotate(${(Math.sin(t * (moving ? 7 : 4)) * 16).toFixed(1)})`);
-    this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y)})`);
+    this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y)}) scale(${sk.toFixed(3)})`);
     this.g.setAttribute('opacity', this.alpha.toFixed(2));
     this.b.setAttribute('transform', `scale(${this.flip.toFixed(3)},1)`);
   }

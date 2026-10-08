@@ -43,7 +43,7 @@ export function bench(o: any) {
 
 /** פנס רחוב עם אור חם */
 export function lamp(o: any) {
-  const { x, y, flip: f = 1 } = o, g = prop(y), b = el('g', { transform: `translate(${n2(x)},${n2(y)}) scale(${f},1)` }, g);
+  const { x, y, flip: f = 1, k = 1 } = o, g = prop(y), b = el('g', { transform: `translate(${n2(x)},${n2(y)}) scale(${f * k},${k})` }, g);
   el('ellipse', { cx: 0, cy: 0, rx: 4, ry: 1.4, fill: 'rgba(40,70,20,.25)' }, b);
   el('path', { d: 'M0,0v-30q0,-4 5,-4h4', stroke: '#3b3b46', 'stroke-width': 1.8, fill: 'none', 'stroke-linecap': 'round' }, b);
   el('path', { d: 'M6,-34h7l-1.5,3h-4z', fill: '#3b3b46' }, b);

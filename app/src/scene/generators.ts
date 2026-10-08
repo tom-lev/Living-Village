@@ -7,8 +7,12 @@ import { pine, roundTree } from '../prefabs/nature';
 import { winter } from './terrain';
 import { PREFABS } from '../prefabs/registry';
 import { placeOk } from '../world/walk';
+import { REAL_H, fitScale } from '../world/scale';
 
 const inRects = (x: number, y: number, rects: number[][]) => rects.some(([x0, y0, x1, y1]) => x > x0 && x < x1 && y > y0 && y < y1);
+
+/** גובה הפנס לפי טבלת הפרופורציות (הציור הבסיסי גבוה 36 יחידות) */
+const LAMP_K = fitScale(36, REAL_H.lamp);
 
 export const GENERATORS: Record<string, (o: any) => void> = {
   /** אבנים פזורות בפס */
@@ -32,7 +36,7 @@ export const GENERATORS: Record<string, (o: any) => void> = {
         if (!placeOk(x - 3, y - 3, x + 3, y + 1) || lamps.some(q => Math.hypot(q[0] - x, q[1] - y) < spacing * .55)) continue;
         lamps.push([x, y]);
         // הזרוע של הפנס פונה אל הדרך, כדי שהאור ייפול עליה (ליד דרך אופקית, שהפנס מעליה או מתחתיה: לכיוון ההמשך של הדרך)
-        PREFABS.lamp({ type: 'lamp', x, y, flip: Math.abs(p.x - x) > 4 ? (p.x > x ? 1 : -1) : (p.tx >= 0 ? 1 : -1) });
+        PREFABS.lamp({ type: 'lamp', x, y, k: LAMP_K, flip: Math.abs(p.x - x) > 4 ? (p.x > x ? 1 : -1) : (p.tx >= 0 ? 1 : -1) });
       }
     }
   },
