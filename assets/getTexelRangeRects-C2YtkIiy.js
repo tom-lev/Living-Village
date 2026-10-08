@@ -1,4 +1,4 @@
-import{w as _,x as g,y as d,z as U,B as y,A as p,E as I,C as x}from"./index-HohRTdoI.js";const h={name:"local-uniform-bit",vertex:{header:`
+import{y as _,z as g,A as d,B as U,C as y,E as p,F as I,H as h}from"./index-Clm4ySjp.js";const x={name:"local-uniform-bit",vertex:{header:`
 
             struct LocalUniforms {
                 uTransformMatrix:mat3x3<f32>,
@@ -15,7 +15,7 @@ import{w as _,x as g,y as d,z as U,B as y,A as p,E as I,C as x}from"./index-HohR
             {
                 vPosition = vec4(roundPixels(vPosition.xy, globalUniforms.uResolution), vPosition.zw);
             }
-        `}},T={...h,vertex:{...h.vertex,header:h.vertex.header.replace("group(1)","group(2)")}},E={name:"local-uniform-bit",vertex:{header:`
+        `}},T={...x,vertex:{...x.vertex,header:x.vertex.header.replace("group(1)","group(2)")}},E={name:"local-uniform-bit",vertex:{header:`
 
             uniform mat3 uTransformMatrix;
             uniform vec4 uColor;
@@ -192,4 +192,4 @@ import{w as _,x as g,y as d,z as U,B as y,A as p,E as I,C as x}from"./index-HohR
         data[offset + 1] = v[1];
         data[offset + 2] = v[2];
         data[offset + 3] = v[3];
-    `};class w extends I{constructor({buffer:t,offset:a,size:s}){super(),this.uid=x("buffer"),this._resourceType="bufferResource",this._resourceId=x("resource"),this._bufferResource=!0,this.destroyed=!1,this.buffer=t,this.offset=a|0,this.size=s,this.buffer.on("change",this.onBufferChange,this)}get _gcLastUsed(){return this.buffer?._gcLastUsed??-1}set _gcLastUsed(t){this.buffer&&(this.buffer._gcLastUsed=t)}onBufferChange(){this._resourceId=x("resource"),this.emit("change",this)}destroy(t=!1){this.destroyed=!0,t&&this.buffer.destroy(),this.emit("change",this),this.buffer=null,this.removeAllListeners()}}function P(e,t,a,s,r){if(e=Math.max(0,e),t=Math.min(t,a*s),e>=t)return 0;const o=Math.floor(e/a),f=e-o*a,n=Math.floor(t/a),v=t-n*a;if(o===n)return r[0].set(f,o,v-f,1),1;let u=0,i=o;return f>0&&(r[u++].set(f,o,a-f,1),i++),n>i&&r[u++].set(0,i,a,n-i),v>0&&r[u++].set(0,n,v,1),u}export{w as B,m as G,D as U,h as a,M as b,O as c,b as d,B as e,E as f,P as g,A as h,T as l,C as t,k as u};
+    `};class P extends I{constructor({buffer:t,offset:a,size:s}){super(),this.uid=h("buffer"),this._resourceType="bufferResource",this._resourceId=h("resource"),this._bufferResource=!0,this.destroyed=!1,this.buffer=t,this.offset=a|0,this.size=s,this.buffer.on("change",this.onBufferChange,this)}get _gcLastUsed(){return this.buffer?._gcLastUsed??-1}set _gcLastUsed(t){this.buffer&&(this.buffer._gcLastUsed=t)}onBufferChange(){this._resourceId=h("resource"),this.emit("change",this)}destroy(t=!1){this.destroyed=!0,t&&this.buffer.destroy(),this.emit("change",this),this.buffer=null,this.removeAllListeners()}}function w(e,t,a,s,r){if(e=Math.max(0,e),t=Math.min(t,a*s),e>=t)return 0;const o=Math.floor(e/a),f=e-o*a,n=Math.floor(t/a),v=t-n*a;if(o===n)return r[0].set(f,o,v-f,1),1;let u=0,i=o;return f>0&&(r[u++].set(f,o,a-f,1),i++),n>i&&r[u++].set(0,i,a,n-i),v>0&&r[u++].set(0,n,v,1),u}export{P as B,m as G,D as U,x as a,M as b,O as c,b as d,B as e,E as f,w as g,A as h,T as l,C as t,k as u};
