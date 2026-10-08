@@ -99,8 +99,9 @@ export function treeOk(x: number, y: number, noBands: number[][]) {
   if (x < B.x0 + 12 || x > B.x1 - 12) return false;
   for (const [a, b] of noBands) if (y > a && y < b) return false;   // הרים, חוף
   if (occ(x, y, O_RIVER | O_TRAIL) || inWater(x, y, 30)) return false;
-  for (const [x0, y0, x1, y1] of NO_TREE) if (x > x0 - 8 && x < x1 + 8 && y > y0 && y - 34 < y1) return false;
-  return !occ(x, y, O_ROAD) && !occ(x, y - 30, O_ROAD);
+  // הצמרת גבוהה (עד כ-90 מעל הבסיס): לא מסתירה מבנה או דרך שמאחורי העץ
+  for (const [x0, y0, x1, y1] of NO_TREE) if (x > x0 - 10 && x < x1 + 10 && y > y0 && y - 60 < y1) return false;
+  return !occ(x, y, O_ROAD) && !occ(x, y - 30, O_ROAD) && !occ(x, y - 60, O_ROAD);
 }
 
 /* ───────── חיבורי שבילים: כלל כללי לכל שביל, גם לשבילים עתידיים ─────────

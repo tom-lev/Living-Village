@@ -15,7 +15,7 @@ import { places } from './places';
 import { reachable } from '../actors/agenda';
 import { plotOfDoor } from '../prefabs/village';
 import { issues, type Issue } from './issues';
-import { REAL_H, M, TOL } from './scale';
+import { REAL_H, M, TOL, MAP_MIN, HOUSE_H, TREE_MIN } from './scale';
 
 const near = (P: number[][], p: number[]) => {
   let d = Infinity;
@@ -73,6 +73,9 @@ export function runChecks(): Issue[] {
       const m = (o._bb[3] - o._bb[1] - 2) / M;
       if (Math.abs(m / realH - 1) > TOL + .02) add('scale', `A ${o.type} is ${m.toFixed(1)} m tall instead of about ${realH} m`, o.x ?? o._bb[0], o._bb[3], o);
     }
+    const minH = MAP_MIN[o.type];
+    if (minH && o._bb && o._bb[3] - o._bb[1] - 2 < minH * HOUSE_H - 2) add('scale', `A ${o.type} is not clearly taller than a house (needs ${minH}× a house)`, o.x ?? o._bb[0], o._bb[3], o);
+    if (o.type === 'roundTree' || o.type === 'pine') if (o._bb && o._bb[3] - o._bb[1] < TREE_MIN - 4) add('scale', `A tree is shorter than twice a person`, o.x, o.y, o);
     // plot-path: השביל המרוצף מהדלת נוגע בדרך או בשביל
     if (o.type === 'plot' && o._pathEnd) {
       const [x, y, dir] = o._pathEnd;

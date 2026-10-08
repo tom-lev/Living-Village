@@ -8,6 +8,15 @@
 export const PERSON = 33, PERSON_M = 1.7, M = PERSON / PERSON_M;   // יחידות במטר
 export const TOL = .3;
 
+/* ───── קנה מידה של מפה (מבנים ועצים): לא גודל אמיתי מלא, אבל יחסים נכונים ─────
+   בית רגיל בכפר גבוה בערך 83 יחידות (4.3 מטר). מבני ציון גבוהים ממנו בבירור, ועצים לפחות פי 2 מאדם */
+export const HOUSE_H = 83;
+export const TREE_MIN = 2 * PERSON;
+/** גובה מינימלי של מבני ציון, ביחס לבית רגיל */
+export const MAP_MIN: Record<string, number> = {
+  chapel: 1.5, lookoutTower: 1.5, church: 2, windmill: 2, waterTower: 2, lighthouse: 2.5, turbine: 3,
+};
+
 /** גובה אמיתי במטרים של חפצים נייחים בגודל אמיתי (לפי סוג האובייקט ב-world.json) */
 export const REAL_H: Record<string, number> = {
   picnicTable: .8, mailbox: 1.2, bike: 1.0, signpost: 1.9, haybale: 1.2,

@@ -1,7 +1,7 @@
 /* בניית הסצנה מקובץ העולם: גאומטריה → פני שטח → אובייקטים → מחוללים */
 import { declOf } from '../world/decl';
 import { n2 } from '../core/util';
-import { REAL_H, fitScale } from '../world/scale';
+import { REAL_H, MAP_MIN, HOUSE_H, fitScale } from '../world/scale';
 import { finish, need, note, resetStages } from '../world/issues';
 import { setSeed } from '../core/rng';
 import { setPalette } from '../core/palette';
@@ -56,9 +56,10 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
     // לבדיקת הפרופורציות: המלבן שהאובייקט צייר (איחוד כל מה שנוסף לסצנה בציור שלו)
     { let bb: number[] | null = null; for (const st of statics.slice(s0)) { try { const b = st.el.getBBox(); if (b.width > 0) bb = bb ? [Math.min(bb[0], b.x), Math.min(bb[1], b.y), Math.max(bb[2], b.x + b.width), Math.max(bb[3], b.y + b.height)] : [b.x, b.y, b.x + b.width, b.y + b.height]; } catch {} } if (bb) Object.defineProperty(o, '_bb', { value: bb, enumerable: false, writable: true }); }
     // פרופורציות (world/scale.ts): דבר בגודל אמיתי שהציור שלו סוטה ביותר מ-30% מהגובה האמיתי – מוקטן או מוגדל סביב נקודת הקרקע שלו
-    const realH = REAL_H[o.type], bb0 = o._bb;
-    if (realH && bb0 && o.x !== undefined) {
-      const k = fitScale(bb0[3] - bb0[1] - 2, realH), ax = o.x, ay = bb0[3] - 2;
+    const realH = REAL_H[o.type], minH = MAP_MIN[o.type], bb0 = o._bb;
+    if ((realH || minH) && bb0 && o.x !== undefined) {
+      // גודל אמיתי: מתאימים לגובה האמיתי. מבנה ציון: רק מגדילים, עד הגובה המינימלי ביחס לבית רגיל
+      const h = bb0[3] - bb0[1] - 2, k = realH ? fitScale(h, realH) : Math.max(1, minH * HOUSE_H / h), ax = o.x, ay = bb0[3] - 2;
       if (k !== 1) {
         const T = `translate(${n2(ax)},${n2(ay)}) scale(${k.toFixed(3)}) translate(${n2(-ax)},${n2(-ay)})`;
         for (const st of statics.slice(s0)) st.el.setAttribute('transform', `${T} ${st.el.getAttribute('transform') || ''}`.trim());

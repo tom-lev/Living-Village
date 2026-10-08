@@ -1,10 +1,12 @@
 /* טבע: עצים, דקלים, צבאים */
+import { TREE_MIN } from '../world/scale';
 import { el, n2, circ, shade } from '../core/util';
 import { rand, pick, R, rngAt } from '../core/rng';
 import { prop, block } from '../world/context';
 import { register } from './registry';
 
 export function pine(x: number, y: number, s: number, snowy = false) {
+  s = Math.max(s * 1.35, TREE_MIN / 29);   // פרופורציות: עץ לפחות פי 2 מגובה אדם (הציור גבוה כ-29·s)
   // מעט צורות לכל עץ (גוף אחד והדגשה אחת לכל שלוש הקומות)
   // כל עץ קצת אחר (אקראיות מקומית, כדי לא להזיז את שאר העולם): רוחב, גובה, הטיה, גוון, גזע
   const v = rngAt(x, y, 3), wf = v.rand(.88, 1.12), hf = v.rand(.9, 1.12), lean = v.rand(-.06, .06) * s, trunk = v.rand(5, 7.5);
@@ -32,6 +34,7 @@ export function pine(x: number, y: number, s: number, snowy = false) {
 }
 
 export function roundTree(x: number, y: number, s: number, fruit = false) {
+  s = Math.max(s * 1.4, TREE_MIN / 33);   // פרופורציות (world/scale.ts): עץ לפחות פי 2 מגובה אדם (הציור גבוה כ-33·s עד 37·s)
   // כל עץ קצת אחר: גובה הגזע, גודל ומיקום הגושים בצמרת, וגוון
   const v = rngAt(x, y, 5), tk = v.rand(12.5, 15.5), cr = v.rand(.9, 1.1), sx = v.rand(-1.2, 1.2) * s;
   const g = prop(y);
