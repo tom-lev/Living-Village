@@ -21,6 +21,8 @@ function ik(a: number[], b: number[], l1: number, l2: number, sgn: number) {
 }
 const rot = (o: number[], th: number, x: number, y: number) => [o[0] + x * Math.cos(th) - y * Math.sin(th), o[1] + x * Math.sin(th) + y * Math.cos(th)];
 
+/** מחזור של שחיית חזה, בשניות */
+export const SWIM_PERIOD = 2.2;
 export type View = 'side' | 'front' | 'back';
 export interface Pose { view: View; h: number; legs: any[]; arms: any[]; torso?: number[][]; head?: number[]; skirt?: number[][] }
 
@@ -108,13 +110,12 @@ export function actPose(look: Look, act: string, t: number, ph: number): Pose {
   const out: Pose = { view: 'side', h, legs: [], arms: [] };
   const breath = Math.sin(t * 1.6 + ph) * .008 * h;
   if (act === 'swim') {
-    // ראש מעל המים וידיים שחותרות לסירוגין (את השאר השלד מסתיר במצב שחייה)
+    // שחיית חזה רגועה: רק הראש מעל המים. הוא עולה מעט בכל חתירה ונוטה קדימה בגלישה.
+    // הידיים, הגוף והרגליים מתחת למים מצוירים בנפרד, שקופים למחצה (swimOverlay ב-people.ts)
+    const q = ((t / SWIM_PERIOD + ph / 6.28) % 1 + 1) % 1, rise = Math.sin(Math.PI * Math.min(1, q / .45)) * .03 * h;
     const sh = [0, -.07 * h];
-    out.torso = [[0, 0], sh]; out.head = [.02 * h, -.17 * h + Math.sin(t * 1.8 + ph) * .01 * h];
-    for (let k = 0; k < 2; k++) {
-      const q = t * 2.2 + ph + k * Math.PI, hand = [Math.cos(q) * .24 * h, -.06 * h + Math.sin(q) * .07 * h];
-      out.arms.push({ sh, elb: ik(sh, hand, PR.ua * h, PR.fa * h, -1), hand });
-    }
+    out.torso = [[0, 0], sh]; out.head = [.04 * h, -.14 * h - rise];
+    for (let k = 0; k < 2; k++) out.arms.push({ sh, elb: sh, hand: sh });
     out.legs = [0, 1].map(() => ({ hip: [0, 0], knee: [0, 0], ank: [0, 0], heel: [0, 0], toe: [.01, 0] }));
     return out;
   }
@@ -240,7 +241,7 @@ export class Figure {
   /** מצב שחייה: רואים רק ראש וידיים */
   setSwim(on: boolean) {
     if (this.swim === on) return; this.swim = on;
-    for (const e of [this.shadow, this.legA1, this.legA2, this.legB1, this.legB2, this.shoeA, this.shoeB, this.hips, this.torso, this.skirt]) if (e) e.setAttribute('display', on ? 'none' : 'inline');
+    for (const e of [this.shadow, this.legA1, this.legA2, this.legB1, this.legB2, this.shoeA, this.shoeB, this.hips, this.torso, this.skirt, this.armAu, this.armAf1, this.armAf2, this.armBu, this.armBf1, this.armBf2]) if (e) e.setAttribute('display', on ? 'none' : 'inline');
   }
   render(p: Pose, x: number, y: number, flip: number, opacity?: number) {
     const { look } = this, h = look.h;

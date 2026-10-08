@@ -14,7 +14,7 @@ let LAKE: ReturnType<typeof lakeShore> | undefined;
 import { walkable } from '../world/walk';
 import { ctx } from '../world/context';
 import type { Look } from '../world/types';
-import { Figure, PR, walkPose, sitPose, actPose, type View } from './figure';
+import { Figure, PR, walkPose, sitPose, actPose, SWIM_PERIOD, type View } from './figure';
 
 /* כל מה שזז ונמיין לפי עומק, וכל מה שאפשר ללחוץ עליו כדי לעקוב */
 export const dynamics: any[] = [];
@@ -214,12 +214,13 @@ export class Walker {
     this.phase += this.view === 'side' ? ds * Math.abs(this.hx) / (4 * A) : ds * Math.abs(this.hy) / (4 * A * PR.KF);
     // מחוץ למסך (או בפנים) ממשיכים לחיות, רק לא מציירים את השלד
     this.shown = this.alpha > 0 && inView(this.x, this.y - 16, this.cullR); show(this.el, this.shown);
-    if (!this.shown) return;
+    if (!this.shown) { if (this.swimG) show(this.swimG, false); return; }
     // דמות קטנה על המסך (פחות מ-30 פיקסלים): התנוחה מתעדכנת בכל פריים שני, וההזזה בכל פריים. ההבדל לא נראה, והחיסכון כפול
     this.tick = (this.tick || 0) + 1;
     if (this.look.h * view.cam.k < 30 && this.alpha >= 1 && (this.tick & 1)) { this.fig.move(this.x, this.y); return; }
     const swimming = this.act === 'swim' && this.y > ctx.world.terrain.sea.y + 6;
     this.fig.setSwim(swimming);
+    swimOverlay(this, swimming, t);
     const settled = this.state === 'stay' && ds < .08;   // הגיעו למקום ולא זזים: תנוחת הפעילות
     const pose = swimming ? actPose(this.look, 'swim', t, this.actPh)
       : settled && this.act === 'sit' ? sitPose(this.look, .3 * this.look.h, [[.2 * this.look.h, -.33 * this.look.h], [.17 * this.look.h, -.32 * this.look.h]], t)
@@ -418,4 +419,42 @@ export class Leash {
     this.p.setAttribute('d', `M${P(a)}Q${n2((a[0] + b[0]) / 2)},${n2((a[1] + b[1]) / 2 + sag)} ${P(b)}`);
     this.p.setAttribute('opacity', this.owner.alpha.toFixed(2));
   }
+}
+
+/* ───── שחייה: מה שמתחת למים ─────
+   מעל הראש של השחיין (שמצויר בשלד), מתחת לו בשכבת המים: צללית חצי־שקופה של הגוף והרגליים שמתנועעות,
+   ידיים בשחיית חזה (נשלחות קדימה בגלישה, נפתחות לצדדים ונאספות לחזה), טבעת קצף סביב הצוואר ושובל מאחור.
+   הכול בצבעים מהולים בכחול, כדי שייראה מתחת לפני המים */
+function swimOverlay(w: any, on: boolean, t: number) {
+  if (!on) { if (w.swimG) show(w.swimG, false); return; }
+  const h = w.look.h;
+  if (!w.swimG) {
+    const g = w.swimG = el('g', null, ctx.L.waterFx), skin = w.look.skin, shirt = w.look.shirt;
+    w.swimBody = el('path', { fill: shirt, opacity: .32 }, g);
+    w.swimLegs = el('path', { fill: 'none', stroke: w.look.pants, 'stroke-width': .07 * h, 'stroke-linecap': 'round', opacity: .28 }, g);
+    w.swimArms = el('path', { fill: 'none', stroke: skin, 'stroke-width': .055 * h, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: .5 }, g);
+    w.swimWake = el('path', { fill: 'none', stroke: '#e8f8fd', 'stroke-width': .7, 'stroke-linecap': 'round', opacity: .75 }, g);
+    w.swimFoam = el('ellipse', { fill: 'none', stroke: '#f4fbfe', 'stroke-width': 1.1, opacity: .85 }, g);
+  }
+  show(w.swimG, true);
+  const f = w.flip >= 0 ? 1 : -1, x = w.x, y = w.y, q = ((t / SWIM_PERIOD + w.actPh / 6.28) % 1 + 1) % 1;
+  const P = (dx: number, dy: number) => `${n2(x + dx * f)},${n2(y + dy)}`;
+  // גוף אופקי מתחת לפני המים, מאחורי הראש
+  w.swimBody.setAttribute('d', `M${P(.02 * h, -.06 * h)}C${P(-.1 * h, -.09 * h)} ${P(-.34 * h, -.06 * h)} ${P(-.38 * h, -.02 * h)}C${P(-.34 * h, .01 * h)} ${P(-.1 * h, .02 * h)} ${P(.02 * h, -.02 * h)}Z`);
+  // רגליים: בעיטת צפרדע איטית (נפתחות ונסגרות)
+  const kick = Math.sin(q * Math.PI * 2) * .06 * h;
+  w.swimLegs.setAttribute('d', `M${P(-.36 * h, -.04 * h)}L${P(-.56 * h, -.06 * h - kick)}M${P(-.36 * h, -.02 * h)}L${P(-.56 * h, 0 + kick)}`);
+  // ידיים: גלישה (ישרות קדימה) → פתיחה לצדדים ומשיכה → איסוף לחזה → שליחה קדימה
+  let reach: number, spread: number;
+  if (q < .35) { reach = 1; spread = 0; }
+  else if (q < .65) { const u = (q - .35) / .3; reach = 1 - u * .7; spread = Math.sin(u * Math.PI) * 1; }
+  else { const u = (q - .65) / .35; reach = .3 + u * .7; spread = 0; }
+  const sx = .05 * h, sy = -.07 * h, hx = sx + .32 * h * reach, hy = sy + .02 * h;
+  const ex = sx + .16 * h * reach, ey = sy + .07 * h * spread;
+  w.swimArms.setAttribute('d', `M${P(sx, sy)}L${P(ex, ey)}L${P(hx, hy)}M${P(sx, sy + .02 * h)}L${P(ex - .02 * h, ey + .05 * h * spread + .02 * h)}L${P(hx - .02 * h, hy + .02 * h)}`);
+  // קצף סביב הצוואר ושובל V מאחור
+  w.swimFoam.setAttribute('cx', n2(x + .04 * h * f)); w.swimFoam.setAttribute('cy', n2(y - .1 * h));
+  w.swimFoam.setAttribute('rx', n2(.11 * h + Math.sin(t * 3) * .5)); w.swimFoam.setAttribute('ry', n2(.035 * h));
+  const L = .2 * h + Math.sin(q * Math.PI * 2) * 1.5;
+  w.swimWake.setAttribute('d', `M${P(-.06 * h, -.11 * h)}l${n2(-L * f)},${n2(-.06 * h)}M${P(-.06 * h, -.09 * h)}l${n2(-L * f)},${n2(.05 * h)}`);
 }
