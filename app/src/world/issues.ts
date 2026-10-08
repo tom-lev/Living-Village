@@ -17,8 +17,11 @@ export function note(rule: string, msg: string, x: number, y: number, o?: any) {
 export const STAGES = ['setup', 'geometry', 'terrain', 'water', 'bridges', 'objects', 'generators', 'obstacles', 'ready'] as const;
 export type Stage = typeof STAGES[number];
 const done = new Set<Stage>();
-export function finish(stage: Stage) { done.add(stage); }
+/** כמה זמן לקח כל שלב בבנייה (window.__stages, למדידת הטעינה) */
+export const stageMs: Record<string, number> = {};
+let last = 0;
+export function finish(stage: Stage) { const n = performance.now(); stageMs[stage] = Math.round(n - (last || n)); last = n; done.add(stage); (window as any).__stages = stageMs; }
 export function need(stage: Stage, who: string) {
   if (!done.has(stage)) note('order', `${who} ran before stage "${stage}" was finished`, 0, 0);
 }
-export function resetStages() { done.clear(); issues.length = 0; }
+export function resetStages() { done.clear(); issues.length = 0; last = performance.now(); }

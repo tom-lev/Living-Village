@@ -14,7 +14,7 @@ import { labelOverlaps } from './labels';
 import { places } from './places';
 import { reachable } from '../actors/agenda';
 import { plotOfDoor } from '../prefabs/village';
-import { issues, type Issue } from './issues';
+import { issues, stageMs, type Issue } from './issues';
 import { REAL_H, M, TOL, MAP_MIN, HOUSE_H, TREE_MIN } from './scale';
 import { RULES, ruleOfCheck } from './rules';
 import { LAMPS, LAMPS_SPACING } from '../scene/generators';
@@ -182,6 +182,8 @@ export function runChecks(): Issue[] {
   (window as any).__budget = { static: { ...STATIC_COST }, frameMs: +FRAME.avg().toFixed(2), movers: dynamics.length, budget: BUDGET };   // לבדיקות
   if (STATIC_COST.pts > BUDGET.totalPts) add('perf', `The static map has ${STATIC_COST.pts} points (budget ${BUDGET.totalPts})`, 0, 0);
   if (FRAME.ms.length > 30 && FRAME.avg() > BUDGET.frameMs) add('perf', `Moving things take ${FRAME.avg().toFixed(1)} ms per frame (budget ${BUDGET.frameMs})`, 0, 0);
+  const build = Object.values(stageMs).reduce((a, b) => a + b, 0);
+  if (build > BUDGET.buildMs) add('perf', `Building the world takes ${Math.round(build)} ms (budget ${BUDGET.buildMs})`, 0, 0);
   if (dynamics.length > BUDGET.movers) add('perf', `${dynamics.length} moving things (budget ${BUDGET.movers})`, 0, 0);
 
   // wildlife: חיות היער במקום טבעי

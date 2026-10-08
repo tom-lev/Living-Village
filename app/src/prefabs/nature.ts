@@ -2,7 +2,7 @@
 import { TREE_MIN } from '../world/scale';
 import { el, n2, circ, shade } from '../core/util';
 import { rand, pick, R, rngAt } from '../core/rng';
-import { prop, block } from '../world/context';
+import { prop, block, statics } from '../world/context';
 import { register } from './registry';
 
 export function pine(x: number, y: number, s: number, snowy = false) {
@@ -23,6 +23,10 @@ export function pine(x: number, y: number, s: number, snowy = false) {
   }
   el('path', { d: body, fill: c, 'stroke-linejoin': 'round', stroke: c, 'stroke-width': 1.5 }, g);
   el('path', { d: hl, fill: shade(c, .12) }, g);
+  // המלבן המצויר, מחושב מהצורה (בלי למדוד את הציור: מדידה מכריחה את הדפדפן לחשב פריסה, וזה האט את הטעינה)
+  { const hw = Math.max(...tiers.map(q => q[1])) * s, top = Math.min(...tiers.map(q => y - q[0] * s - q[2] * s)) - 1;
+    const x0 = Math.min(x - hw, x + 2 * s - 9 * s * wf) - 1, x1 = Math.max(x + hw, x + 2 * s + 9 * s * wf) + 1;
+    statics[statics.length - 1].bb = [x0, top, x1 - x0, y + 2.6 * s - top]; }
   if (snowy) {
     let sn = '';
     for (const [dy, hw, th, lx] of tiers) {
@@ -42,7 +46,12 @@ export function roundTree(x: number, y: number, s: number, fruit = false) {
   el('path', { d: `M${n2(x - 1.6 * s)},${n2(y)}L${n2(x - 1 + sx * .3)},${n2(y - tk * s)}L${n2(x + 1 + sx * .3)},${n2(y - tk * s)}L${n2(x + 1.6 * s)},${n2(y)}Z`, fill: shade('#8b5a2b', v.rand(-.08, .08)) }, g);
   const c = shade(pick(['#5db85a', '#63bd5c', '#55ad55', '#7cc35a']), v.rand(-.05, .05)), dy = (tk - 14) * s;
   let crown = circ(x + sx, y - 22 * s - dy, 10.5 * s * cr) + circ(x - 6.5 * s * cr + sx, y - 16.5 * s - dy + v.rand(-1, 1) * s, 7 * s * v.rand(.88, 1.1)) + circ(x + 6.5 * s * cr + sx, y - 17 * s - dy + v.rand(-1, 1) * s, 7.5 * s * v.rand(.88, 1.1));
-  if (v.chance(.35)) crown += circ(x + sx + v.rand(-4, 4) * s, y - 29 * s - dy, 5.5 * s * v.rand(.8, 1.1));   // לפעמים גוש נוסף למעלה
+  const extra = v.chance(.35);
+  if (extra) crown += circ(x + sx + v.rand(-4, 4) * s, y - 29 * s - dy, 5.5 * s * v.rand(.8, 1.1));   // לפעמים גוש נוסף למעלה
+  // המלבן המצויר, מחושב מהצורה (בלי למדוד את הציור)
+  { const top = Math.min(y - 22 * s - dy - 10.5 * s * cr, extra ? y - 29 * s - dy - 6.1 * s : Infinity) - 1, side = 6.5 * s * cr + 8.3 * s;
+    const x0 = Math.min(x + sx - side - 4 * s, x + 2 * s - 10 * s * cr), x1 = Math.max(x + sx + side + 4 * s, x + 2 * s + 10 * s * cr);
+    statics[statics.length - 1].bb = [x0, top, x1 - x0, y + 3 * s - top]; }
   el('path', { d: crown, fill: c }, g);
   el('path', { d: circ(x - 3 * s + sx, y - 26 * s - dy, 4.2 * s), fill: shade(c, .2) }, g);
   let ticks = '';

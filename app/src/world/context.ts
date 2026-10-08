@@ -33,7 +33,13 @@ export function initLayers(svgS: SVGSVGElement, svgD: SVGSVGElement) {
 }
 
 /* ───────── אובייקטים נייחים: ממוינים לפי y (מה שלמטה במסך מצויר מעל) ───────── */
-export const statics: { el: any; y: number }[] = [];
+export const statics: { el: any; y: number; bb?: number[] }[] = [];
+/** המלבן המצויר של דבר עומד: [x, y, רוחב, גובה]. נמדד פעם אחת וזוכרים אותו (כל מדידה מכריחה את הדפדפן לחשב פריסה מחדש,
+ *  ומדידות לסירוגין עם ציור עלו שניות בטעינה). קוראים לזה רק אחרי שהציור של הדבר סופי */
+export function bboxOf(st: { el: any; bb?: number[] }) {
+  if (!st.bb) { try { const b = st.el.getBBox(); st.bb = [b.x, b.y, b.width, b.height]; } catch { st.bb = [0, 0, 0, 0]; } }
+  return st.bb;
+}
 export function prop(y: number, parent?: any) {
   const g = el('g', null, parent || ctx.L.props);
   if (!parent) statics.push({ el: g, y });

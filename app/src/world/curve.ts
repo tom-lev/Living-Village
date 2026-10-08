@@ -25,7 +25,23 @@ export function curveWithSegs(P: number[][], step = 4) {
   return { out, segs };
 }
 /** העקומה המצוירת, דגומה בערך כל step יחידות */
-export const curvePts = (P: number[][], step = 4) => curveWithSegs(P, step).out;
+export const curvePts = (P: number[][], step = 4) => cachedCurve(P, step).out.slice();   // עותק: מי שמשנה את המערך לא מקלקל את המטמון
+
+/* מטמון: אותה עקומה מחושבת פעם אחת לכל צורה של שביל. המפתח הוא כל הנקודות (שינוי של נקודה אחת = עקומה חדשה) */
+const CACHE = new WeakMap<number[][], Map<number, { key: string; out: number[][]; segs: number[]; bb: number[] }>>();
+export function cachedCurve(P: number[][], step = 4) {
+  let m = CACHE.get(P); if (!m) CACHE.set(P, m = new Map());
+  let key = '';
+  for (const p of P) key += p[0].toFixed(2) + ',' + p[1].toFixed(2) + ';';
+  const hit = m.get(step);
+  if (hit && hit.key === key) return hit;
+  const { out, segs } = curveWithSegs(P, step), bb = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const q of out) { bb[0] = Math.min(bb[0], q[0]); bb[1] = Math.min(bb[1], q[1]); bb[2] = Math.max(bb[2], q[0]); bb[3] = Math.max(bb[3], q[1]); }
+  const r = { key, out, segs, bb }; m.set(step, r);
+  return r;
+}
+/** המרחק מנקודה אל המלבן החוסם (0 אם בפנים): אם הוא כבר גדול מהמרחק הטוב ביותר, אין טעם לבדוק את העקומה */
+export const bbDist = (bb: number[], x: number, y: number) => Math.hypot(Math.max(bb[0] - x, 0, x - bb[2]), Math.max(bb[1] - y, 0, y - bb[3]));
 /** אותה עקומה עם מספר קבוע של דגימות לכל קטע (לנהר: מספר הדגימות קובע כמה מספרים אקראיים נצרכים, אז הוא לא משתנה) */
 export function curveFixed(P: number[][], perSeg: number, last = false) {
   const out: number[][] = [];

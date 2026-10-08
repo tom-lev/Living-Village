@@ -6,7 +6,7 @@
 import { REAL_DYN, fitScale } from '../world/scale';
 import { el, n2, show } from '../core/util';
 import { rngAt } from '../core/rng';
-import { ctx, statics } from '../world/context';
+import { ctx, statics, bboxOf } from '../world/context';
 import { inView } from '../camera/view';
 import { walkable, flagsAt, clearLine, PATH, WATER } from '../world/walk';
 import { places } from '../world/places';
@@ -37,8 +37,8 @@ const key = (i: number, j: number) => i * 100003 + j;
 function buildOcc() {
   occ = new Map();
   for (const st of statics) {
-    let bb: any; try { bb = st.el.getBBox(); } catch { continue; }
-    if (!bb || bb.width <= 0) continue;
+    const q = bboxOf(st), bb = { x: q[0], y: q[1], width: q[2], height: q[3] };
+    if (bb.width <= 0) continue;
     const r = [bb.x - 3, bb.y - 3, bb.x + bb.width + 3, Math.max(st.y, bb.y + bb.height) + 2, st.y];
     for (let i = Math.floor(r[0] / CELL); i <= Math.floor(r[2] / CELL); i++) for (let j = Math.floor(r[1] / CELL); j <= Math.floor(r[3] / CELL); j++)
       (occ.get(key(i, j)) || occ.set(key(i, j), []).get(key(i, j))!).push(r);

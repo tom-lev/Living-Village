@@ -137,8 +137,16 @@ function bridgeName(x: number, y: number, pool: string[]) {
 
 export function autoBridges(C: Pt[], trails: Pt[][], half: number, existing: Pt[], snow = false) {
   const L = ctx.L, hits: { x: number; y: number; a: number; road: boolean }[] = [];
+  // רשת חיפוש של קטעי המים (תא 80): כל קטע של דרך או שביל נבדק רק מול קטעי מים באותו תא ובתאים שלידו
+  const G = new Map<number, number[]>(), key = (x: number, y: number) => Math.floor(x / 80) * 100003 + Math.floor(y / 80);
+  for (let j = 0; j < C.length - 1; j++) for (const q of [C[j], C[j + 1]]) { const k = key(q[0], q[1]), L = G.get(k) || G.set(k, []).get(k)!; if (!L.includes(j)) L.push(j); }
+  const nearJ = (a: Pt, b: Pt) => {
+    const out = new Set<number>();
+    for (const q of [a, b]) for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const j of G.get(key(q[0] + dx * 80, q[1] + dy * 80)) || []) out.add(j);
+    return out;
+  };
   const cross = (P: Pt[], road: boolean) => {
-    for (let i = 0; i < P.length - 1; i++) for (let j = 0; j < C.length - 1; j++) {
+    for (let i = 0; i < P.length - 1; i++) for (const j of nearJ(P[i], P[i + 1])) {
       const [ax, ay] = P[i], [bx, by] = P[i + 1], [cx, cy] = C[j], [dx, dy] = C[j + 1];
       const den = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx); if (!den) continue;
       const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / den, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / den;

@@ -2,7 +2,7 @@
 import { clamp, P } from '../core/util';
 import { ctx, NO_TREE, inWater } from './context';
 import type { Pt, WorldData } from './types';
-import { curveFixed, curvePts, curveWithSegs } from './curve';
+import { curveFixed, curvePts, curveWithSegs, cachedCurve, bbDist } from './curve';
 import { declOf, doorX } from './decl';
 export { doorX } from './decl';
 
@@ -154,13 +154,14 @@ function joinTrails(T: number[][][]) {
      אחרת הקצה נוחת לידה, בולט ממנה עם כיפה עגולה, ונראה כמו איקס. הוא נכנס בזווית נעימה (כמו לדרך),
      והפינות בין השבילים מתעגלות בהתרחבות רכה */
   const TRAIL_HW = 6;
-  const curve = (o: number[][]) => { const c = curveWithSegs(o, 3); return { out: c.out, seg: c.segs }; };
+  const curve = (o: number[][]) => { const c = cachedCurve(o, 3); return { out: c.out, seg: c.segs, bb: c.bb }; };
   // הנקודה הקרובה על העקומה המצוירת של שביל אחר (או של אותו שביל, רחוק מהקצה הזה), והכיוון שם
   const nearTrail = (p: number[], i: number, start: boolean) => {
     let d = Infinity, c: number[] = [], tg: number[] = [1, 0], host: number[][] = [], hj = 0;
     T.forEach((o, oi) => {
       if (o.length < 2) return;
-      const { out, seg } = curve(o);
+      const { out, seg, bb } = curve(o);
+      if (bbDist(bb, p[0], p[1]) >= d) return;   // כל השביל רחוק יותר מהטוב שנמצא
       // אותו שביל: רק לולאה אמיתית מתחברת לעצמה – מדלגים על 400 היחידות הראשונות מהקצה הזה (לפי אורך, לא לפי מספר נקודות – אחרי כללי המים
       // יכולות להיות הרבה נקודות קרובות לקצה), כדי ששביל לא "יתחבר לעצמו"
       let arc: number[] | null = null;
@@ -346,7 +347,7 @@ function trailRules(w: WorldData) {
     const dx = doorX(o), door = [dx, o.y - 3], step = [dx, o.y + 22];
     let best = { d: Infinity, c: [] as number[], tx: 1, ty: 0, hw: 0 };
     for (const E of roads) { const r = nearOn(E.pts, step); if (r.d - ROAD_W / 2 < best.d) best = { d: r.d - ROAD_W / 2, c: r.c, tx: r.tx, ty: r.ty, hw: ROAD_W / 2 }; }
-    for (const t of T) { const r = nearOn(curvePts(t), step); if (r.d - 6 < best.d) best = { d: r.d - 6, c: r.c, tx: r.tx, ty: r.ty, hw: 6 }; }
+    for (const t of T) { const cc = cachedCurve(t); if (bbDist(cc.bb, step[0], step[1]) - 6 >= best.d) continue; const r = nearOn(cc.out, step); if (r.d - 6 < best.d) best = { d: r.d - 6, c: r.c, tx: r.tx, ty: r.ty, hw: 6 }; }
     if (best.d < 14 || best.d > 320) continue;   // כבר ליד הרשת, או רחוק מדי לשביל גינה
     if (waters.some(W => crossAt(step, best.c, W.P))) continue;   // לא בונים גשר בשביל שביל גינה
     /* שביל גינה: עקומה אחת חלקה. יוצא מהדלת ישר קדימה (דרומה), ומגיע לשביל או לדרך בזווית נעימה (בערך 60°),
@@ -418,7 +419,9 @@ function trailRules(w: WorldData) {
   const SIDE = 30, FAR = 44;
   for (let i = 0; i < T.length; i++) for (let j = 0; j < T.length; j++) {
     if (i === j || geo.DOOR_TRAILS.has(i)) continue;
-    const Pi = curvePts(T[i]), Pj = curvePts(T[j]), ends = [T[i][0], T[i][T[i].length - 1], T[j][0], T[j][T[j].length - 1]];
+    const ci = cachedCurve(T[i]), cj = cachedCurve(T[j]);
+    if (ci.bb[0] > cj.bb[2] + SIDE || cj.bb[0] > ci.bb[2] + SIDE || ci.bb[1] > cj.bb[3] + SIDE || cj.bb[1] > ci.bb[3] + SIDE) continue;   // רחוקים זה מזה
+    const Pi = ci.out, Pj = cj.out, ends = [T[i][0], T[i][T[i].length - 1], T[j][0], T[j][T[j].length - 1]];
     const nearEnd = (p: number[]) => ends.some(e => Math.hypot(e[0] - p[0], e[1] - p[1]) < 90);
     let run = 0;
     for (let k = 1; k < Pi.length; k++) {

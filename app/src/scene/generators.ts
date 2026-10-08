@@ -1,7 +1,7 @@
 /* מחוללים: רצים אחרי שכל האובייקטים הונחו (כי הם צריכים לדעת איפה כבר יש מבנים) */
 import { el, n2, circ, blob } from '../core/util';
 import { rand, pick, R, rngAt } from '../core/rng';
-import { ctx, prop, NO_TREE, inWater, statics } from '../world/context';
+import { ctx, prop, NO_TREE, inWater, statics, bboxOf } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
 import { pine, roundTree } from '../prefabs/nature';
 import { winter, prairie, lakeShore } from './terrain';
@@ -100,6 +100,7 @@ export const GENERATORS: Record<string, (o: any) => void> = {
     }
     // סוג העץ וגודלו נקבעים לפי המיקום שלו (rngAt), לא לפי הסדר: כך הוספה או הסרה של עצים (קרחת, אובייקט חדש) לא משנה את שאר היער
     const cold = winter(ctx.world.terrain);
+    const planted: number[][] = [];
     for (const [x, y] of trees) {
       const v = rngAt(x, y, 7);
       // שלג על העצים בהדרגה: ככל שמצפינים בעמק, יותר עצים מושלגים (משימה 10א)
@@ -109,8 +110,9 @@ export const GENERATORS: Record<string, (o: any) => void> = {
       if (pr(y) > .4) { v.r(); roundTree(x, y, v.rand(1.4, 1.9)); }
       else if (inRects(x, y, o.pineZones) || v.r() < o.pineChance) pine(x, y, v.rand(1.5, 2.1), snowy);
       else roundTree(x, y, v.rand(1.3, 1.75));
-      // לציפורים (actors/bluebirds.ts): איפה העץ, וקופסת הצמרת שלו
-      try { const bb = statics[s0].el.getBBox(); TREES.push({ x, y, x0: bb.x, x1: bb.x + bb.width, top: bb.y, pine: statics.length > s0 && bb.height > 0 && bb.width < bb.height * .62 }); } catch {}
+      if (statics.length > s0) planted.push([x, y, s0]);
     }
+    // לציפורים (actors/bluebirds.ts): איפה כל עץ וקופסת הצמרת שלו. נמדד אחרי שכל העצים צוירו – מדידה אחת של הפריסה
+    for (const [x, y, s0] of planted) { const bb = bboxOf(statics[s0]); TREES.push({ x, y, x0: bb[0], x1: bb[0] + bb[2], top: bb[1], pine: bb[3] > 0 && bb[2] < bb[3] * .62 }); }
   },
 };

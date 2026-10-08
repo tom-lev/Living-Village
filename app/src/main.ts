@@ -32,9 +32,11 @@ async function boot() {
   // קודם הכרטיס הגרפי: אם הוא זמין, גם הדמויות והאפקטים יחיו בו
   const canvas = await prepareGpu(document.getElementById('mapC') as HTMLCanvasElement);
   view.gpu = ctx.gpuDyn = tileStats.mode === 'gpu';
-  buildScene(world, svgS, svgD);
-  const actors = buildActors(world.actors);
-  const items = initTiles(canvas);
+  const tm: Record<string, number> = {}, t0 = performance.now();   // זמני הטעינה (window.__boot), למדידה
+  buildScene(world, svgS, svgD); tm.scene = performance.now() - t0;
+  const actors = buildActors(world.actors); tm.actors = performance.now() - t0 - tm.scene;
+  const items = initTiles(canvas); tm.tiles = performance.now() - t0 - tm.scene - tm.actors;
+  (window as any).__boot = tm;
   if (view.gpu) { gpuOverlay(ctx.worldD.c); document.getElementById('dWrap').style.display = 'none'; }
   const { startFollow } = initCamera(followables);
 
