@@ -14,7 +14,7 @@ import { WILD, setLeg, frontBack, type WildKind, type Parts } from './wildlife-a
 import { dynamics } from './people';
 
 /** הגובה הטבעי של כל ציור (יחידות, בלי הגדלה): ממנו ומהגובה האמיתי נקבע הגודל */
-const NATURAL_H: Record<WildKind, number> = { rabbit: 14.6, squirrel: 15, owl: 11, fox: 18, bear: 25 };
+const NATURAL_H: Record<WildKind, number> = { rabbit: 14.6, squirrel: 15, owl: 12.4, fox: 18, bear: 25 };
 
 /** מהירות, מרחק שיטוט, זמני מנוחה ומרחק מינימלי מבתים, לכל סוג */
 const KIND: Record<WildKind, { speed: number; roam: number; rest: [number, number]; homeGap: number; stride: number; hop?: boolean; still?: boolean }> = {
@@ -165,10 +165,12 @@ class Animal {
         const u = this.fly / 7, R = 46, up = Math.sin(Math.PI * Math.min(1, u * 1.15)) * 34;
         const fx = Math.sin(2 * Math.PI * u) * R, fy = -(1 - Math.cos(2 * Math.PI * u)) * R * .35 - up, flap = Math.sin(t * 14) * .5 + .5;
         this.p.body.setAttribute('transform', `translate(${n2(fx)},${n2(fy)})`);
+        this.p.folded.setAttribute('opacity', '0');
         this.p.wings.forEach((wg: any, i: number) => { wg.setAttribute('opacity', '1'); wg.setAttribute('transform', `translate(0,-13) scale(1,${(.4 + .8 * flap).toFixed(2)}) translate(0,13)`); void i; });
       } else {
         this.p.body.setAttribute('transform', '');
         this.p.wings.forEach((wg: any) => wg.setAttribute('opacity', '0'));
+        this.p.folded.setAttribute('opacity', '1');
       }
     }
     this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y - lift)})`);

@@ -4,7 +4,7 @@
 import { el, n2, circ, shade } from '../core/util';
 import type { LocalRng } from '../core/rng';
 
-export interface Parts { body: any; head?: any; tail?: any; legs: any[]; legBase: number[][]; size: number; c?: string; s?: number; wings?: any[]; lids?: any }
+export interface Parts { body: any; head?: any; tail?: any; legs: any[]; legBase: number[][]; size: number; c?: string; s?: number; wings?: any[]; lids?: any; folded?: any }
 const shadow = (g: any, rx: number) => el('ellipse', { cx: 0, cy: .8, rx, ry: rx * .22, fill: 'rgba(40,70,20,.22)' }, g);
 const leg = (g: any, c: string, w: number) => el('path', { stroke: c, 'stroke-width': w, 'stroke-linecap': 'round', fill: 'none' }, g);
 
@@ -41,26 +41,61 @@ export function squirrel(g: any, v: LocalRng): Parts {
   return { body: b, head, tail, legs, legBase: [[-2, -2], [2, -2]], size: 5 * s, c, s };
 }
 
-/** ינשוף: יושב על גדם, עיניים גדולות, גוף עגול עם נקודות */
+/** ינשוף: יושב על גדם. גוף בצורת אגס, פני לב בהירים, עיניים כתומות גדולות, ציציות אוזניים, כנפיים מקופלות עם פסי נוצות,
+ *  חזה מנוקד, טפרים על הגדם ונוצות זנב. במעוף: הכנפיים המקופלות נעלמות והכנפיים הפרושות (מעוגלות, עם שפת נוצות) מופיעות */
 export function owl(g: any, v: LocalRng): Parts {
-  const c = v.pick(['#9a7a58', '#8a6c4c', '#b0926e', '#7d7468']), s = v.rand(.9, 1.1);
+  const [c, face, mark] = v.pick([
+    ['#8f6c4a', '#efdcc0', '#5e4430'],   // חום (ינשוף יער)
+    ['#b58350', '#f6e6c8', '#7a5332'],   // אדמדם
+    ['#8a8580', '#ece6dc', '#56524e'],   // אפור
+    ['#e9e4da', '#fbf8f2', '#8a8378'],   // לבן מנוקד (ינשוף שלג)
+  ]), s = v.rand(.92, 1.08), dk = shade(c, -.22), lt = shade(c, .28);
   const b = el('g', { transform: `scale(${n2(s)})` }, g);
   shadow(b, 6);
-  el('path', { d: 'M-5,0v-6q0,-1.4 1.4,-1.4h7.2q1.4,0 1.4,1.4v6z', fill: '#8a5f39' }, b);   // הגדם
+  // הגדם: קליפה עם פסים וטבעות בחיתוך העליון
+  el('path', { d: 'M-5,0v-6.2q0,-1.4 1.4,-1.4h7.2q1.4,0 1.4,1.4v6.2z', fill: '#8a5f39' }, b);
+  el('path', { d: 'M-3,-.4v-5.6M.4,-.4v-6M3,-.4v-5.4', stroke: '#6e4a2c', 'stroke-width': .5 }, b);
   el('ellipse', { cx: 0, cy: -7.6, rx: 4.6, ry: 1.2, fill: '#c9a77d' }, b);
+  el('ellipse', { cx: 0, cy: -7.6, rx: 2.4, ry: .6, fill: 'none', stroke: '#a8865e', 'stroke-width': .4 }, b);
   const body = el('g', null, b);
-  // כנפיים (מוסתרות כשהינשוף יושב): נפרשות ומנופפות במעוף
-  const wings = [-1, 1].map(sd => el('path', { d: `M${sd * 3},-14q${sd * 9},-6 ${sd * 13},-1q${sd * -5},-1 ${sd * -6},3q${sd * -3},-1 ${sd * -7},1z`, fill: shade(c, -.08), stroke: shade(c, -.25), 'stroke-width': .4, opacity: 0 }, body));
-  el('ellipse', { cx: 0, cy: -12.6, rx: 4.4, ry: 5.2, fill: c }, body);
-  el('ellipse', { cx: 0, cy: -11.4, rx: 2.8, ry: 3.4, fill: shade(c, .3) }, body);
-  el('path', { d: circ(-1.2, -11, .35) + circ(1, -10, .35) + circ(-.4, -9, .35) + circ(1.3, -12.2, .35), fill: shade(c, -.2) }, body);
+  // כנפיים פרושות (מעוף): מאחורי הגוף
+  const wing = (sd: number) => {
+    const P = (x: number, y: number) => `${n2(x * sd)},${n2(y)}`;
+    return `M${P(2.6, -16)}C${P(7, -20.6)} ${P(14, -19.6)} ${P(16, -14.6)}Q${P(16.6, -11.6)} ${P(13.8, -11.4)}Q${P(13, -9.2)} ${P(10.8, -9.9)}Q${P(9.8, -8)} ${P(7.6, -9.1)}Q${P(5.8, -7.8)} ${P(3.2, -10.6)}Z`;
+  };
+  const wings = [-1, 1].map(sd => {
+    const wg = el('g', { opacity: 0 }, body);
+    el('path', { d: wing(sd), fill: c, stroke: dk, 'stroke-width': .4 }, wg);
+    el('path', { d: `M${n2(4.6 * sd)},-15.2Q${n2(9.6 * sd)},-17.2 ${n2(14.2 * sd)},-14.6M${n2(5.4 * sd)},-12.8Q${n2(9.6 * sd)},-14 ${n2(13.4 * sd)},-12.2`, fill: 'none', stroke: mark, 'stroke-width': .5, opacity: .6 }, wg);
+    return wg;
+  });
+  // נוצות זנב וטפרים
+  el('path', { d: 'M-1.6,-8.4l-.6,1.6h1.4l.8,-1.4l.8,1.4h1.4l-.6,-1.6z', fill: dk }, body);
+  el('path', { d: 'M-2.4,-7.9v.8M-1.6,-7.9v.9M1.6,-7.9v.9M2.4,-7.9v.8', stroke: '#c79a3a', 'stroke-width': .5, 'stroke-linecap': 'round' }, body);
+  // הגוף: אגס, בלי צוואר
+  el('path', { d: 'M0,-19.4C3.6,-19.4 5.1,-16.2 5.1,-12.8C5.1,-9.6 3,-8 0,-8C-3,-8 -5.1,-9.6 -5.1,-12.8C-5.1,-16.2 -3.6,-19.4 0,-19.4Z', fill: c, stroke: dk, 'stroke-width': .35 }, body);
+  // חזה בהיר עם סימני V
+  el('ellipse', { cx: 0, cy: -11, rx: 3, ry: 3.1, fill: lt }, body);
+  let ch = '';
+  for (const [x, y] of [[-1.3, -12.4], [1.2, -12.2], [0, -11.2], [-1.4, -10], [1.3, -9.9], [0, -9]]) ch += `M${n2(x - .5)},${n2(y)}l.5,.45l.5,-.45`;
+  el('path', { d: ch, fill: 'none', stroke: mark, 'stroke-width': .4, 'stroke-linecap': 'round' }, body);
+  // כנפיים מקופלות בצדדים, עם פסי נוצות
+  const folded = el('g', null, body);
+  for (const sd of [-1, 1]) {
+    el('path', { d: `M${n2(4.9 * sd)},-14.6C${n2(5.6 * sd)},-11.4 ${n2(4.6 * sd)},-9 ${n2(2.4 * sd)},-8.2C${n2(3.3 * sd)},-10.6 ${n2(3.6 * sd)},-12.6 ${n2(3.4 * sd)},-14.8Z`, fill: dk }, folded);
+    el('path', { d: `M${n2(4.1 * sd)},-13.2l${n2(.9 * sd)},.6M${n2(4.1 * sd)},-11.6l${n2(.9 * sd)},.6M${n2(3.7 * sd)},-10.1l${n2(.8 * sd)},.6`, stroke: lt, 'stroke-width': .35, 'stroke-linecap': 'round' }, folded);
+  }
+  // הראש (מסתובב): פני לב, גבות, ציציות אוזניים, עיניים, מקור ועפעפיים
   const head = el('g', null, body);
-  el('path', { d: 'M-3.8,-16.6l-.8,-2.4l2,1.4zM3.8,-16.6l.8,-2.4l-2,1.4z', fill: c }, head);
-  el('path', { d: circ(-1.6, -15.2, 1.5) + circ(1.6, -15.2, 1.5), fill: '#fff3c4' }, head);
-  el('path', { d: circ(-1.5, -15.1, .7) + circ(1.5, -15.1, .7), fill: '#2b2220' }, head);
-  el('path', { d: 'M-.5,-14l.5,1.2l.5,-1.2z', fill: '#e2a13a' }, head);
-  const lids = el('path', { d: circ(-1.6, -15.2, 1.6) + circ(1.6, -15.2, 1.6), fill: c, opacity: 0 }, head);   // עפעפיים (מצמוץ)
-  return { body, head, legs: [], legBase: [], size: 6 * s, c, s, wings, lids };
+  el('path', { d: 'M-3.6,-18.4l-1.1,-2.6l2.4,1.5zM3.6,-18.4l1.1,-2.6l-2.4,1.5z', fill: c, stroke: dk, 'stroke-width': .3 }, head);
+  el('path', { d: 'M0,-13.2C-2.6,-12.8 -4.1,-14.2 -4.1,-16C-4.1,-17.6 -2.6,-18.6 -1.3,-18.1Q0,-17.6 0,-16.8Q0,-17.6 1.3,-18.1C2.6,-18.6 4.1,-17.6 4.1,-16C4.1,-14.2 2.6,-12.8 0,-13.2Z', fill: face, stroke: shade(face, -.2), 'stroke-width': .35 }, head);
+  el('path', { d: 'M-3.3,-17.4Q-1.6,-16.3 0,-16.6Q1.6,-16.3 3.3,-17.4', fill: 'none', stroke: dk, 'stroke-width': .45 }, head);
+  el('path', { d: circ(-1.65, -15.5, 1.25) + circ(1.65, -15.5, 1.25), fill: '#f2a43a' }, head);
+  el('path', { d: circ(-1.65, -15.5, .62) + circ(1.65, -15.5, .62), fill: '#1f1a17' }, head);
+  el('path', { d: circ(-1.35, -15.85, .22) + circ(1.95, -15.85, .22), fill: '#fff' }, head);
+  el('path', { d: 'M-.55,-14.6l.55,1.3l.55,-1.3z', fill: '#c99232' }, head);
+  const lids = el('path', { d: circ(-1.65, -15.5, 1.35) + circ(1.65, -15.5, 1.35), fill: face, opacity: 0 }, head);   // מצמוץ
+  return { body, head, legs: [], legBase: [], size: 6 * s, c, s, wings, lids, folded };
 }
 
 /** שועל: כתום עם חזה ושפיץ זנב לבנים, רגליים כהות */
