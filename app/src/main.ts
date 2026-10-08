@@ -6,6 +6,7 @@ import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
 import { initTiles, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame } from './render/tiles';
 import { ctx } from './world/context';
+import { FRAME } from './world/budget';
 import { vstats } from './render/vnode';
 import { setPalette, regrade, grade, currentPalette } from './core/palette';
 import { buildActors, followables } from './actors';
@@ -44,7 +45,9 @@ async function boot() {
     if (!loopState.running) return;
     // חותמת הזמן של הפריים יכולה להיות מוקדמת מרגע ההפעלה: זמן שלילי מותח את הצעדים, אז מתייחסים אליו כאפס
     const raw = (now - last) / 1000, dt = raw > 0 ? Math.min(.05, raw) : 0; last = Math.max(last, now); T += dt;
+    const u0 = performance.now();
     actors.update(dt, T);
+    FRAME.add(performance.now() - u0);   // תקציב ביצועים: זמן העדכון של כל מה שזז
     cameraTick(now, dt);
     if (view.gpu) renderNow();   // פריים אחד משותף: אריחים ודמויות
     drawGrid();

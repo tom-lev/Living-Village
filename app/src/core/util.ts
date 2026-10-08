@@ -5,9 +5,13 @@ import { VNode } from '../render/vnode';
 export const NS = 'http://www.w3.org/2000/svg';
 
 /** יוצר אלמנט SVG עם תכונות, ומוסיף אותו להורה (אם ניתן) */
+/** מונה עלות ציור (לתקציב הביצועים, world/budget.ts): כמה אלמנטים נוצרו וכמה נקודות יש בצורות שלהם */
+export const drawCost = { els: 0, pts: 0 };
 export function el(tag: string, a?: Record<string, any> | null, parent?: Element | null): any {
   // הורה בכרטיס הגרפי → גם הילד שם; אחרת אלמנט SVG רגיל
   const e: any = parent instanceof VNode ? new VNode(tag) : document.createElementNS(NS, tag);
+  drawCost.els++;
+  if (a?.d) drawCost.pts += (String(a.d).match(/[-\d.]+/g)?.length ?? 0) / 2;
   if (a) for (const k in a) {
     if (COLOR_ATTRS.has(k)) { rememberColor(e, k, a[k]); e.setAttribute(k, grade(a[k])); }
     else e.setAttribute(k, a[k]);

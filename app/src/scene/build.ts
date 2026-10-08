@@ -1,6 +1,7 @@
 /* בניית הסצנה מקובץ העולם: גאומטריה → פני שטח → אובייקטים → מחוללים */
 import { declOf } from '../world/decl';
-import { n2 } from '../core/util';
+import { n2, drawCost } from '../core/util';
+import { STATIC_COST } from '../world/budget';
 import { REAL_H, MAP_MIN, HOUSE_H, fitScale } from '../world/scale';
 import { finish, need, note, resetStages } from '../world/issues';
 import { setSeed } from '../core/rng';
@@ -50,8 +51,9 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
     if (o.removed) { drawAway(o, f); continue; }   // אובייקט שהוסר: לא מצויר, אבל צורך את אותם מספרים אקראיים (היער לא זז)
     if (o.id) ctx.named[o.id] = o;
     placeSmall(o);                             // כלל המיקום: חפץ לא עומד על שביל, על מים או על שפת רחבה
-    const n0 = NO_TREE.length, s0 = statics.length, p0 = places.length;
+    const n0 = NO_TREE.length, s0 = statics.length, p0 = places.length, c0 = { ...drawCost };
     f(o);
+    Object.defineProperty(o, '_cost', { value: [drawCost.els - c0.els, Math.round(drawCost.pts - c0.pts)], enumerable: false });   // תקציב ביצועים
     if (places.length === p0) autoPlace(o);   // כל אובייקט (גם עתידי) הוא יעד, אלא אם הוא נוף בלבד
     // לבדיקת הפרופורציות: המלבן שהאובייקט צייר (איחוד כל מה שנוסף לסצנה בציור שלו)
     { let bb: number[] | null = null; for (const st of statics.slice(s0)) { try { const b = st.el.getBBox(); if (b.width > 0) bb = bb ? [Math.min(bb[0], b.x), Math.min(bb[1], b.y), Math.max(bb[2], b.x + b.width), Math.max(bb[3], b.y + b.height)] : [b.x, b.y, b.x + b.width, b.y + b.height]; } catch {} } if (bb) Object.defineProperty(o, '_bb', { value: bb, enumerable: false, writable: true }); }
@@ -96,6 +98,7 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   autoBridges(geo.RIVER_SAMPLES, w.trails.map(t => catmull(t)), 34, w.objects.filter(o => o.type === 'stoneBridge' || o.type === 'footbridge').map(o => [o.x, o.y]));
   for (const W of WATERS) clearPathIn(W.cx, W.cy, W.rx, W.ry);   // אגם: הדרך או השביל לא חוצים אותו (חוץ מגשר)
   finish('obstacles');
+  STATIC_COST.els = drawCost.els; STATIC_COST.pts = Math.round(drawCost.pts);   // תקציב ביצועים: כל הציור הנייח
   finish('ready');
 }
 

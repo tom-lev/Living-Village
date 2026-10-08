@@ -20,10 +20,12 @@ import { RULES, ruleOfCheck } from './rules';
 import { LAMPS, LAMPS_SPACING } from '../scene/generators';
 import { wildIssues } from '../actors/wildlife';
 import { lakeShore } from '../scene/terrain';
+import { BUDGET, STATIC_COST, FRAME } from './budget';
+import { dynamics } from '../actors/people';
 
 /** הבדיקות שממומשות כאן (כל אחת שייכת לכלל ב-RULES) */
 const IMPLEMENTED = ['water', 'trail-end', 'prop', 'bench', 'plot-path', 'overlap', 'labels', 'reach', 'undeclared', 'order', 'scale',
-  'trail-water', 'parallel', 'junctions', 'curves', 'lamps', 'gardens', 'wildlife'];
+  'trail-water', 'parallel', 'junctions', 'curves', 'lamps', 'gardens', 'wildlife', 'perf'];
 
 const near = (P: number[][], p: number[]) => {
   let d = Infinity;
@@ -171,6 +173,16 @@ export function runChecks(): Issue[] {
     const front = p.y1 - p.door[1];
     if (front < 12 || front > 34) add('gardens', 'A house has no proper front yard', p.door[0], p.door[1], p);
   }
+
+  // perf: תקציב ביצועים (world/budget.ts)
+  for (const o of objs) {
+    const c = o._cost; if (!c) continue;
+    if (c[0] > BUDGET.objEls || c[1] > BUDGET.objPts) add('perf', `A ${o.type} is heavy to draw (${c[0]} elements, ${c[1]} points; budget ${BUDGET.objEls} / ${BUDGET.objPts})`, o.x ?? o.x0 ?? o.cx ?? 0, o.y ?? o.y0 ?? o.cy ?? 0, o);
+  }
+  (window as any).__budget = { static: { ...STATIC_COST }, frameMs: +FRAME.avg().toFixed(2), movers: dynamics.length, budget: BUDGET };   // לבדיקות
+  if (STATIC_COST.pts > BUDGET.totalPts) add('perf', `The static map has ${STATIC_COST.pts} points (budget ${BUDGET.totalPts})`, 0, 0);
+  if (FRAME.ms.length > 30 && FRAME.avg() > BUDGET.frameMs) add('perf', `Moving things take ${FRAME.avg().toFixed(1)} ms per frame (budget ${BUDGET.frameMs})`, 0, 0);
+  if (dynamics.length > BUDGET.movers) add('perf', `${dynamics.length} moving things (budget ${BUDGET.movers})`, 0, 0);
 
   // wildlife: חיות היער במקום טבעי
   for (const it of wildIssues()) add('wildlife', it.msg, it.x, it.y);

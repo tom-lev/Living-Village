@@ -182,6 +182,7 @@ Order:
 
 ### World rules: the code is the source of truth
 **All world rules live in `app/src/world/rules.ts` (`RULES`)**: id, title, where in the code it is enforced, and how it is verified (`check` = a world-check id, `motion` = the motion check, `built` = holds by construction). `docs/RULES.md` is generated from it (`npm run rules`); `npm run build` fails if it is out of date. Read `rules.ts` (or `docs/RULES.md`) for the rule list; do not keep a second copy here.
+- **Performance budget** (`world/budget.ts`): per object ≤ 300 drawn elements and ≤ 20k path points (measured in `buildScene` via `drawCost` in `core/util.ts`, stored as `o._cost`); whole static map ≤ 450k points (2026-10-08: about 247k); moving things ≤ 4 ms per frame on average (`FRAME`, measured around `actors.update`; about 2.3 ms) and ≤ 120 at once (46). The world check reports `perf`. A new heavy object should be simplified, not the budget raised. `window.__budget` shows the current numbers.
 - **Adding or changing a rule:** add or edit its entry in `rules.ts`, enforce it in code, add its check to `world/check.ts` (and its id to `IMPLEMENTED`) or mark it `motion`/`built`, then `npm run rules`. The world check itself reports a rule without a check, a check without a rule, and a rule that is not verified (`rules`).
 - Implementation notes that are not rules (how things work) stay below and in the code comments.
 
