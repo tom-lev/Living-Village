@@ -3,6 +3,8 @@ import { el, n2, circ, shade, wrap1, blob, rrect, at, ST } from '../core/util';
 import { rand, pick, R } from '../core/rng';
 import { ctx, prop, block, fxAt, WATERS, smokeFx } from '../world/context';
 import { register } from './registry';
+import { geo, ROAD_W } from '../world/geometry';
+import { curvePts } from '../world/curve';
 import { palm, roundTree } from './nature';
 import { house } from './buildings';
 
@@ -174,7 +176,7 @@ function orchard(o: any) {
 
 /** מסילת רכבת לרוחב העולם, עם גשר מעל הנהר ומעבר מפלסי */
 function railway(o: any) {
-  const { y, crossingX, bridgeX } = o, { B } = ctx, G = ctx.L.groundProps;
+  const { y, bridgeX } = o, { B } = ctx, G = ctx.L.groundProps;
   let sl = '';
   for (let x = B.x0; x <= B.x1; x += 14) sl += rrect(x - 2.5, y - 11, 5, 22, 1);
   el('path', { d: sl, fill: '#8a5f39' }, G);
@@ -183,7 +185,27 @@ function railway(o: any) {
     el('rect', { x: bridgeX, y: y - 16, width: 82, height: 4, fill: '#6b4a2f' }, G);
     el('rect', { x: bridgeX, y: y + 12, width: 82, height: 4, fill: '#6b4a2f' }, G);
   }
-  if (crossingX !== undefined) el('path', { d: `M${crossingX - 30},${y - 22}h60M${crossingX - 30},${y + 22}h60`, stroke: '#fffaf0', 'stroke-width': 4, 'stroke-dasharray': '6 5' }, G);
+  /* מעבר מסילה (כלל: שביל או דרך לא עוברים "מתחת" למסילה): בכל מקום שבו העקומה המצוירת של דרך או שביל חוצה את המסילה,
+     משטח קרשים בצבע הדרך בין הפסים ומעבר להם, והפסים נשארים גלויים מעליו. מחושב אוטומטית, גם לשבילים עתידיים */
+  const cross: { x: number; a: number; hw: number; road: boolean }[] = [];
+  const scan = (P: number[][], hw: number, road: boolean) => {
+    for (let i = 0; i < P.length - 1; i++) {
+      const p = P[i], q = P[i + 1];
+      if ((p[1] - y) * (q[1] - y) > 0 || p[1] === q[1]) continue;
+      const x = p[0] + (q[0] - p[0]) * (y - p[1]) / (q[1] - p[1]);
+      if (!cross.some(c => Math.abs(c.x - x) < 20)) cross.push({ x, a: Math.atan2(q[1] - p[1], q[0] - p[0]), hw, road });
+    }
+  };
+  for (const E of [...geo.EDGES, ...geo.OUTER]) scan(E.pts, ROAD_W / 2, true);
+  for (const t of ctx.world.trails) scan(curvePts(t), 6, false);
+  for (const c of cross) {
+    // משטח מקביל למסילה, ברוחב הדרך כפי שהיא חותכת את המסילה (גם כשהיא חוצה באלכסון)
+    const w = (c.hw + 3) / Math.max(.35, Math.abs(Math.sin(c.a))), sk = Math.cos(c.a) / (Math.sin(c.a) || 1) * 13;
+    el('path', { d: `M${n2(c.x - w - sk)},${y - 13}h${n2(2 * w)}l${n2(2 * sk)},26h${n2(-2 * w)}z`, fill: c.road ? '#e7cfa8' : '#e3c9a2', stroke: '#b98a5c', 'stroke-width': .8 }, G);
+    let pl = ''; for (let k = -10; k <= 10; k += 5) pl += `M${n2(c.x - w - sk * k / -13)},${y + k}h${n2(2 * w)}`;
+    el('path', { d: pl, stroke: '#c9a77d', 'stroke-width': .6 }, G);
+    el('path', { d: `M${n2(c.x - w - sk * 6 / 13 - 2)},${y - 6}h${n2(2 * w + 4)}M${n2(c.x - w + sk * 6 / 13 - 2)},${y + 6}h${n2(2 * w + 4)}`, stroke: '#7d868b', 'stroke-width': 2.4 }, G);   // הפסים מעל המשטח
+  }
   block(B.x0, y - 30, B.x1, y + 26);
 }
 
