@@ -30,7 +30,8 @@ export const GENERATORS: Record<string, (o: any) => void> = {
         if (x < home.x0 - M || x > home.x1 + M || y < home.y0 - M || y > home.y1 + M) continue;
         if (!placeOk(x - 3, y - 3, x + 3, y + 1) || lamps.some(q => Math.hypot(q[0] - x, q[1] - y) < spacing * .55)) continue;
         lamps.push([x, y]);
-        PREFABS.lamp({ type: 'lamp', x, y, flip: side * (p.ty > 0 ? -1 : 1) >= 0 ? 1 : -1 });
+        // הזרוע של הפנס פונה אל הדרך, כדי שהאור ייפול עליה (ליד דרך אופקית, שהפנס מעליה או מתחתיה: לכיוון ההמשך של הדרך)
+        PREFABS.lamp({ type: 'lamp', x, y, flip: Math.abs(p.x - x) > 4 ? (p.x > x ? 1 : -1) : (p.tx >= 0 ? 1 : -1) });
       }
     }
   },

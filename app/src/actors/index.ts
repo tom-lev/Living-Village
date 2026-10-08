@@ -37,8 +37,10 @@ export function buildActors(A: Record<string, any>) {
   for (const st of sitters) { const b = places.find(p => p.kind === 'sit' && p.seat && Math.hypot(p.seat[0] - st.x, p.seat[1] - st.y) < 25); if (b) b.busy = st; }   // הספסל של משה תפוס
   const horses = (A.horses || []).map((h: any) => new Horse(h));
   updates.push(dt => { for (const h of horses) h.update(dt); });
+  (window as any).__horses = horses;   // לבדיקת התנועה (tools/motion.mjs)
   if (A.sheep) {
     const area = ctx.named[A.sheep.area], flockS = A.sheep.positions.map(([x, y]: number[]) => new Sheep(x, y, area, A.sheep.scale ?? 1));
+    (window as any).__sheep = flockS;   // לבדיקת התנועה (tools/motion.mjs)
     let f = 0;
     updates.push(dt => {
       for (const s of flockS) s.update(dt);

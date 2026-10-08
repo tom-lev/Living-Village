@@ -142,7 +142,12 @@ export class Walker {
       if ((px || py) && walkable(tx + px, ty + py, this.rules)) { tx += px; ty += py; }
     }
     const k = 1 - Math.exp(-dt * 7);
-    const nx = this.x + (tx - this.x) * k, ny = this.y + (ty - this.y) * k;
+    let nx = this.x + (tx - this.x) * k, ny = this.y + (ty - this.y) * k;
+    // במקום (אל הספסל, אל המים): הולכים במהירות ההליכה הרגילה, לא "מחליקים" מהר כשהיעד רחוק
+    if (this.state === 'stay' && walking) {
+      const st = Math.hypot(nx - this.x, ny - this.y), mx = this.speed * dt * 1.1;
+      if (st > mx) { nx = this.x + (nx - this.x) * mx / st; ny = this.y + (ny - this.y) * mx / st; }
+    }
     const dx = nx - this.x, dy = ny - this.y, ds = Math.hypot(dx, dy);
     this.x = nx; this.y = ny;
     if (ds > 1e-4) {

@@ -119,7 +119,7 @@ export function actPose(look: Look, act: string, t: number, ph: number): Pose {
     return out;
   }
   let crouch = 0, lean = .04, lift = 0;
-  if (act === 'work') { crouch = .1 * h; lean = .78 + .07 * Math.sin(t * 2.2 + ph); }
+  if (act === 'work') { crouch = .23 * h; lean = .9 + .06 * Math.sin(t * 2.2 + ph); }   // כורעים (ברכיים כפופות עמוק) ומתכופפים קדימה: הידיים מגיעות לקרקע בלי להימתח
   if (act === 'play') lift = Math.max(0, Math.sin(t * 4.6 + ph)) * .09 * h;
   const hip = [-.03 * h * lean, -(.985 * (Lt + Ls) - crouch + gap) - lift];
   for (const ax of [.05 * h, -.04 * h]) {
@@ -132,8 +132,9 @@ export function actPose(look: Look, act: string, t: number, ph: number): Pose {
   const rest = (dx: number) => [sh[0] + dx, sh[1] + .29 * h];
   let hands: number[][];
   if (act === 'work') {
-    const w = Math.sin(t * 2.2 + ph) * .04 * h;
-    hands = [[hip[0] + .36 * h + w, -gap - .04 * h], [hip[0] + .3 * h - w, -gap - .03 * h]];
+    // שתי הידיים עוקרות עשבים לסירוגין: אחת יורדת לקרקע לפני כפות הרגליים, השנייה עולה מעט עם העשב
+    const u = Math.sin(t * 2.2 + ph), d0 = Math.max(0, u), d1 = Math.max(0, -u);
+    hands = [[sh[0] + .1 * h + .02 * h * u, -gap - .05 * h - .07 * h * d1], [sh[0] + .05 * h - .02 * h * u, -gap - .05 * h - .07 * h * d0]];
   } else if (act === 'feed') {
     const toss = Math.max(0, Math.sin(t * .9 + ph)) ** 6;
     hands = [[sh[0] + .17 * h + toss * .14 * h, sh[1] + .14 * h - toss * .2 * h], rest(-.02 * h)];
@@ -145,7 +146,12 @@ export function actPose(look: Look, act: string, t: number, ph: number): Pose {
     const shade = Math.sin(t * .35 + ph) > .55;
     hands = [shade ? [out.head[0] + .07 * h, out.head[1] + .03 * h] : rest(.03 * h), rest(-.02 * h)];
   }
-  for (const hd of hands) out.arms.push({ sh, elb: ik(sh, hd, PR.ua * h, PR.fa * h, -1), hand: hd });
+  for (let hd of hands) {
+    // יד לא נמתחת מעבר לאורך הזרוע (אחרת הזרוע נראית כמו מקל ישר)
+    const L = (PR.ua + PR.fa) * h * .96, dx = hd[0] - sh[0], dy = hd[1] - sh[1], d = Math.hypot(dx, dy);
+    if (d > L) hd = [sh[0] + dx * L / d, sh[1] + dy * L / d];
+    out.arms.push({ sh, elb: ik(sh, hd, PR.ua * h, PR.fa * h, -1), hand: hd });
+  }
   if (look.skirt) {
     const ky = Math.max(out.legs[0].knee[1], out.legs[1].knee[1]) - .02 * h;
     out.skirt = [[hip[0] - .07 * h, hip[1] - .07 * h], [hip[0] + .08 * h, hip[1] - .07 * h], [Math.max(out.legs[0].knee[0], out.legs[1].knee[0]) + .05 * h, ky], [Math.min(out.legs[0].knee[0], out.legs[1].knee[0]) - .06 * h, ky]];
