@@ -3714,6 +3714,11 @@
     "color": "#e8413b"
    }
   ],
+  "birds": {
+   "sparrows": 10,
+   "herons": 4,
+   "larks": 7
+  },
   "bluebirds": {
    "count": 7
   },

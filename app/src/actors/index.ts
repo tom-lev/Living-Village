@@ -6,6 +6,7 @@ import { clouds, flock } from './ambient';
 import { wildlife } from './wildlife';
 import { trains } from './trains';
 import { bluebirds } from './bluebirds';
+import { birds } from './birds';
 import { updateSeen } from '../camera/view';
 import { updateLabels } from '../world/labels';
 import { assignHomes } from './agenda';
@@ -58,7 +59,8 @@ export function buildActors(A: Record<string, any>) {
   }
   if (A.wildlife) updates.push(wildlife(A.wildlife));   // חיות היער
   if (A.trains) updates.push(trains(A.trains));   // רכבות קיטור
-  if (A.bluebirds) updates.push(bluebirds(A.bluebirds));   // ציפורי כחלי סביב Bluebird Pond
+  if (A.bluebirds) updates.push(bluebirds(A.bluebirds));
+  if (A.birds) updates.push(birds(A.birds));   // דרורים, אנפות ועפרונים   // ציפורי כחלי סביב Bluebird Pond
   if (A.ducks) updates.push(ducks(A.ducks));
   if (A.fish) updates.push(fish(A.fish));
   if (A.butterflies) updates.push(butterflies(A.butterflies));

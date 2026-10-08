@@ -248,6 +248,7 @@ Order:
   - **Deer are living animals** (wildlife kind `deer`, 7 of them; the static `deer` objects were removed): they graze most of their rest time (neck down, chewing), look up, flick ears and the white tail; some are bucks with antlers.
   - **Horses** walk around the paddock (mostly sideways, so the side view fits), graze, swish tails and nod; **sheep** have curly fleece and jointed legs; horses and sheep are depth-sorted together.
   - **Ducks**: teardrop body, raised tail, folded wing, waterline, V wake; the mother sometimes dabbles (tail up, head under water); ducklings follow in a line. **Butterflies**: fore and hind wings with spots, flutter bursts and glides, and land on flowers with slowly opening wings.
+  - `birds.ts`: 10 house sparrows on the church plaza and the roundabout (hop, peck, look, preen; fly off together when someone comes within 34), 4 grey herons on the shores of Duck Lake, Bluebird Pond and Silverwater Lake (slow wading with alternating long legs, freeze, strike with the bill, slow flight with the neck tucked and legs trailing), 7 skylarks in the prairie (hop, and song flights: rise to 80, hover fluttering, descend). Sizes in `REAL_DYN` (sparrow and lark at map scale 0.4 m, heron real 0.95 m). Data `actors.birds`; test hook `window.__birds`.
   - `ambient.ts`: clouds (with shadows; they fade out at deep zoom) and a bird flock.
 - **Camera** (`camera/camera.ts`):
   - `cam {k,x,y}`, screen = world×k + (x,y).
