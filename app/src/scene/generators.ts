@@ -1,6 +1,6 @@
 /* מחוללים: רצים אחרי שכל האובייקטים הונחו (כי הם צריכים לדעת איפה כבר יש מבנים) */
 import { el, n2, circ, blob } from '../core/util';
-import { rand, pick, R } from '../core/rng';
+import { rand, pick, R, rngAt } from '../core/rng';
 import { ctx, prop, NO_TREE, inWater } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
 import { pine, roundTree } from '../prefabs/nature';
@@ -72,7 +72,10 @@ export const GENERATORS: Record<string, (o: any) => void> = {
       trees.push([x, y]);
       const k = Math.floor(x / cell) + ',' + Math.floor(y / cell); (grid.get(k) || grid.set(k, []).get(k)).push([x, y]);
     }
-    for (const [x, y] of trees)
-      inRects(x, y, o.pineZones) || R() < o.pineChance ? pine(x, y, rand(1.5, 2.1), y < o.snowLine) : roundTree(x, y, rand(1.3, 1.75));
+    // סוג העץ וגודלו נקבעים לפי המיקום שלו (rngAt), לא לפי הסדר: כך הוספה או הסרה של עצים (קרחת, אובייקט חדש) לא משנה את שאר היער
+    for (const [x, y] of trees) {
+      const v = rngAt(x, y, 7);
+      inRects(x, y, o.pineZones) || v.r() < o.pineChance ? pine(x, y, v.rand(1.5, 2.1), y < o.snowLine) : roundTree(x, y, v.rand(1.3, 1.75));
+    }
   },
 };

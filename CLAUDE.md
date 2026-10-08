@@ -137,6 +137,8 @@ Order:
     - **village:** plot `{x0,y0,x1,y1,door:[x,y],street: top|bottom}` (no fence), roundabout `{x,y,r}`.
   - A house on a plot is a `plot`, a `house` whose door sits about 28 above the plot's bottom edge (less on a shallow plot, so the whole house fits), and optionally a small `roundTree` (s 0.7–0.9) in the back corner. See rules 28–29.
   - Buildings call `block()` so the forest generator doesn't plant trees over them.
+  - **Removing an object:** objects whose drawing uses the global RNG (maze, ruins…) are not deleted but get `removed: true`; `drawAway` in `scene/build.ts` draws them into detached layers, so the RNG sequence and the forest stay put, and their tree block stays as a clearing. Objects that use no global RNG (ship) can simply be deleted.
+  - **Forest stability:** the forest picks each tree's type and size with `rngAt(x, y)`, so adding or removing trees (a clearing, a new object) never changes the rest of the forest. Tree positions still come from the global RNG attempt loop, which consumes a fixed amount per attempt.
 - `y` is the ground line. Objects are depth-sorted by y (`prop(y)`).
 
 ### Characters with an agenda (`world/places.ts`, `world/nav.ts`, `actors/agenda.ts`)

@@ -1720,15 +1720,15 @@
   },
   {
    "type": "tent",
-   "x": 110,
-   "y": 270,
+   "x": -1190,
+   "y": 1450,
    "name": "Tamar's Tent"
   },
   {
    "type": "campfire",
    "id": "campfire",
-   "x": 180,
-   "y": 292,
+   "x": -1120,
+   "y": 1472,
    "name": "Campfire"
   },
   {
@@ -3151,7 +3151,8 @@
    "type": "ruins",
    "x": -1050,
    "y": 860,
-   "name": "Roman Ruins"
+   "name": "Roman Ruins",
+   "removed": true
   },
   {
    "type": "beehives",
@@ -3213,7 +3214,8 @@
    "y": 70,
    "n": 9,
    "cell": 18,
-   "name": "Hedge Maze"
+   "name": "Hedge Maze",
+   "removed": true
   },
   {
    "type": "waterTower",
@@ -3270,10 +3272,10 @@
    "y": 1780,
    "w": 380,
    "h": 190,
-   "a": "#b79be0",
-   "b": "#9576c9",
+   "a": "#d8cf86",
+   "b": "#c4b96d",
    "vertical": false,
-   "name": "Lavender Field"
+   "name": "Hay Field"
   },
   {
    "type": "island",
@@ -3319,12 +3321,6 @@
    "x": -640,
    "y": 2820,
    "name": "Rock Islet"
-  },
-  {
-   "type": "ship",
-   "x": 1350,
-   "y": 2760,
-   "name": "Ship"
   },
   {
    "type": "buoy",
@@ -3654,6 +3650,15 @@
    "y": -396,
    "color": "#7a52a8",
    "flip": 1
+  },
+  {
+   "type": "noTrees",
+   "rect": [
+    -1250,
+    1380,
+    -1060,
+    1500
+   ]
   }
  ],
  "generators": [
@@ -4069,8 +4074,8 @@
      "pants": "#3d5a80",
      "age": 24
     },
-    "x": 214,
-    "y": 293,
+    "x": -1086,
+    "y": 1473,
     "seat": 0.26,
     "flip": -1,
     "behavior": "warmHands"

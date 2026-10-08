@@ -45,6 +45,7 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   for (const o of w.objects) {
     const f = PREFABS[o.type];
     if (!f) { note('undeclared', `No prefab named "${o.type}"`, o.x ?? o.x0 ?? o.cx ?? 0, o.y ?? o.y0 ?? o.cy ?? 0); continue; }
+    if (o.removed) { drawAway(o, f); continue; }   // אובייקט שהוסר: לא מצויר, אבל צורך את אותם מספרים אקראיים (היער לא זז)
     if (o.id) ctx.named[o.id] = o;
     placeSmall(o);                             // כלל המיקום: חפץ לא עומד על שביל, על מים או על שפת רחבה
     const n0 = NO_TREE.length, s0 = statics.length, p0 = places.length;
@@ -95,6 +96,14 @@ function placeSmall(o: any) {
   if (fp) return;
   // יונה ליד ספסל שזז: זזה איתו
   if (o.type === 'pigeon') { const m = relocated.find(r => r.type === 'bench' && Math.hypot(r.from[0] - o.x, r.from[1] - o.y) < 50); if (m) { o.x += m.to[0] - m.from[0]; o.y += m.to[1] - m.from[1]; } }
+}
+
+/* אובייקט שהוסר מהעולם (removed: true בנתונים): הציור שלו צרך מספרים מהמחולל הכללי, ואם פשוט נמחק אותו – היער כולו יזוז.
+   לכן מציירים אותו לתוך שכבות שלא מחוברות לשום דבר, ומבטלים את מה שהוא צייר. השטח שהוא חסם לעצים נשאר קרחת */
+function drawAway(o: any, f: (o: any) => void) {
+  const L = ctx.L, keep = { ...L }, s0 = statics.length;
+  for (const k of Object.keys(L)) L[k] = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  try { f(o); } finally { Object.assign(L, keep); statics.length = s0; }   // השטח שהוא חסם נשאר קרחת (עצים לא נשתלים שם)
 }
 
 /* 27. ספסל פונה אל מה שיש לראות (בקשת הבעלים): ספסל לא זז – הוא מסתובב.
