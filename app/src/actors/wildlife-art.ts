@@ -4,7 +4,7 @@
 import { el, n2, circ, shade } from '../core/util';
 import type { LocalRng } from '../core/rng';
 
-export interface Parts { body: any; head?: any; tail?: any; legs: any[]; legBase: number[][]; size: number }
+export interface Parts { body: any; head?: any; tail?: any; legs: any[]; legBase: number[][]; size: number; c?: string; s?: number; wings?: any[]; lids?: any }
 const shadow = (g: any, rx: number) => el('ellipse', { cx: 0, cy: .8, rx, ry: rx * .22, fill: 'rgba(40,70,20,.22)' }, g);
 const leg = (g: any, c: string, w: number) => el('path', { stroke: c, 'stroke-width': w, 'stroke-linecap': 'round', fill: 'none' }, g);
 
@@ -22,7 +22,7 @@ export function rabbit(g: any, v: LocalRng): Parts {
   el('circle', { cx: 4.6, cy: -6.4, r: 2.6, fill: c }, head);
   el('circle', { cx: 5.8, cy: -6.8, r: .55, fill: '#2b2220' }, head);
   el('circle', { cx: 7.1, cy: -6, r: .45, fill: '#d98a8a' }, head);
-  return { body: b, head, legs, legBase: [[-3, -2], [2, -2]], size: 6 * s };
+  return { body: b, head, legs, legBase: [[-3, -2], [2, -2]], size: 6 * s, c, s };
 }
 
 /** סנאי: זנב גדול ומסולסל, אוזניים מחודדות, צבע חלודה או אפור */
@@ -38,7 +38,7 @@ export function squirrel(g: any, v: LocalRng): Parts {
   el('circle', { cx: 3.6, cy: -6.6, r: 2.2, fill: c }, head);
   el('path', { d: 'M2.6,-8.2l.2,-2l1,1.4zM3.8,-8.6l.6,-1.8l.7,1.6z', fill: c }, head);
   el('circle', { cx: 4.4, cy: -7, r: .5, fill: '#2b2220' }, head);
-  return { body: b, head, tail, legs, legBase: [[-2, -2], [2, -2]], size: 5 * s };
+  return { body: b, head, tail, legs, legBase: [[-2, -2], [2, -2]], size: 5 * s, c, s };
 }
 
 /** ינשוף: יושב על גדם, עיניים גדולות, גוף עגול עם נקודות */
@@ -49,6 +49,8 @@ export function owl(g: any, v: LocalRng): Parts {
   el('path', { d: 'M-5,0v-6q0,-1.4 1.4,-1.4h7.2q1.4,0 1.4,1.4v6z', fill: '#8a5f39' }, b);   // הגדם
   el('ellipse', { cx: 0, cy: -7.6, rx: 4.6, ry: 1.2, fill: '#c9a77d' }, b);
   const body = el('g', null, b);
+  // כנפיים (מוסתרות כשהינשוף יושב): נפרשות ומנופפות במעוף
+  const wings = [-1, 1].map(sd => el('path', { d: `M${sd * 3},-14q${sd * 9},-6 ${sd * 13},-1q${sd * -5},-1 ${sd * -6},3q${sd * -3},-1 ${sd * -7},1z`, fill: shade(c, -.08), stroke: shade(c, -.25), 'stroke-width': .4, opacity: 0 }, body));
   el('ellipse', { cx: 0, cy: -12.6, rx: 4.4, ry: 5.2, fill: c }, body);
   el('ellipse', { cx: 0, cy: -11.4, rx: 2.8, ry: 3.4, fill: shade(c, .3) }, body);
   el('path', { d: circ(-1.2, -11, .35) + circ(1, -10, .35) + circ(-.4, -9, .35) + circ(1.3, -12.2, .35), fill: shade(c, -.2) }, body);
@@ -57,7 +59,8 @@ export function owl(g: any, v: LocalRng): Parts {
   el('path', { d: circ(-1.6, -15.2, 1.5) + circ(1.6, -15.2, 1.5), fill: '#fff3c4' }, head);
   el('path', { d: circ(-1.5, -15.1, .7) + circ(1.5, -15.1, .7), fill: '#2b2220' }, head);
   el('path', { d: 'M-.5,-14l.5,1.2l.5,-1.2z', fill: '#e2a13a' }, head);
-  return { body, head, legs: [], legBase: [], size: 6 * s };
+  const lids = el('path', { d: circ(-1.6, -15.2, 1.6) + circ(1.6, -15.2, 1.6), fill: c, opacity: 0 }, head);   // עפעפיים (מצמוץ)
+  return { body, head, legs: [], legBase: [], size: 6 * s, c, s, wings, lids };
 }
 
 /** שועל: כתום עם חזה ושפיץ זנב לבנים, רגליים כהות */
@@ -77,7 +80,7 @@ export function fox(g: any, v: LocalRng): Parts {
   el('path', { d: 'M12,-9.6l4.6,-1.6l1.4,-.6l-1.6,1.8z', fill: '#fff3e2' }, head);
   el('circle', { cx: 18, cy: -11.6, r: .6, fill: '#2b2220' }, head);
   el('circle', { cx: 12.4, cy: -12.8, r: .55, fill: '#2b2220' }, head);
-  return { body: b, head, tail, legs, legBase: [[-6, -6.6], [-4, -6.6], [5, -6.6], [7, -6.6]], size: 11 * s };
+  return { body: b, head, tail, legs, legBase: [[-6, -6.6], [-4, -6.6], [5, -6.6], [7, -6.6]], size: 11 * s, c, s };
 }
 
 /** דוב: גדול, חום כהה, גבנון בכתפיים, אוזניים עגולות. ממשיך לאט על ארבע */
@@ -95,7 +98,7 @@ export function bear(g: any, v: LocalRng): Parts {
   el('ellipse', { cx: 21, cy: -13.4, rx: 2.8, ry: 2.2, fill: shade(c, .3) }, head);
   el('circle', { cx: 22.8, cy: -14, r: .9, fill: '#2b2220' }, head);
   el('circle', { cx: 17.8, cy: -16.4, r: .7, fill: '#2b2220' }, head);
-  return { body: b, head, legs, legBase: [[-12, -6], [-7, -6], [5, -6], [10, -6]], size: 20 * s };
+  return { body: b, head, legs, legBase: [[-12, -6], [-7, -6], [5, -6], [10, -6]], size: 20 * s, c, s };
 }
 
 export const WILD = { rabbit, squirrel, owl, fox, bear };
@@ -105,4 +108,54 @@ export type WildKind = keyof typeof WILD;
 export function setLeg(p: any, base: number[], phase: number, amp: number, stride: number) {
   const q = phase * Math.PI * 2, fx = base[0] + Math.sin(q) * stride * amp, fy = -Math.max(0, Math.cos(q)) * stride * .6 * amp;
   p.setAttribute('d', `M${n2(base[0])},${n2(base[1])}L${n2(fx)},${n2(fy)}`);
+}
+
+/** מבט מלפנים (front=true, החיה הולכת אל הצופה) או מאחור. אותו צבע וגודל כמו מבט הצד.
+ *  מחזיר את הקבוצה ואת הרגליים (מתרוממות לסירוגין בהליכה) עם נקודות הבסיס שלהן */
+export function frontBack(kind: WildKind, g: any, c: string, s: number, front: boolean) {
+  const b = el('g', { transform: `scale(${n2(s)})` }, g), d = shade(c, -.22), light = shade(c, .3), eye = '#2b2220';
+  const legs: any[] = [], base: number[][] = [];
+  const L = (x: number, top: number, col: string, w: number) => { legs.push(leg(b, col, w)); base.push([x, top]); };
+  if (kind === 'rabbit') {
+    shadow(b, 4.5);
+    L(-1.8, -2, d, 1.8); L(1.8, -2, d, 1.8);
+    el('ellipse', { cx: 0, cy: -4.4, rx: 3.8, ry: 3.6, fill: c }, b);
+    if (!front) el('circle', { cx: 0, cy: -2.8, r: 1.6, fill: '#fffaf0' }, b);
+    el('path', { d: 'M-2.2,-9.6q-1.4,-5 0,-6.6q1.6,1.6 1,6.4zM2.2,-9.6q1.4,-5 0,-6.6q-1.6,1.6 -1,6.4z', fill: c, stroke: d, 'stroke-width': .4 }, b);
+    if (front) el('path', { d: 'M-1.7,-10.6q-.6,-3.4 .2,-4.4M1.7,-10.6q.6,-3.4 -.2,-4.4', stroke: '#e8b7b0', 'stroke-width': .6, fill: 'none' }, b);
+    el('circle', { cx: 0, cy: -8.4, r: 2.8, fill: c }, b);
+    if (front) { el('path', { d: circ(-1.1, -8.9, .5) + circ(1.1, -8.9, .5), fill: eye }, b); el('circle', { cx: 0, cy: -7.6, r: .45, fill: '#d98a8a' }, b); el('ellipse', { cx: 0, cy: -5, rx: 2, ry: 1.8, fill: shade(c, .25) }, b); }
+  } else if (kind === 'squirrel') {
+    shadow(b, 4);
+    if (front) el('path', { d: 'M2,-3q6,-1 5,-7q-1,-4 -3.4,-3', fill: 'none', stroke: c, 'stroke-width': 3.4, 'stroke-linecap': 'round' }, b);
+    L(-1.4, -2, d, 1.5); L(1.4, -2, d, 1.5);
+    el('ellipse', { cx: 0, cy: -4.2, rx: 2.8, ry: 3.2, fill: c }, b);
+    if (front) el('ellipse', { cx: 0, cy: -3.8, rx: 1.6, ry: 2.2, fill: light }, b);
+    el('circle', { cx: 0, cy: -8, r: 2.3, fill: c }, b);
+    el('path', { d: 'M-2,-9.4l-.4,-2.2l1.4,1.2zM2,-9.4l.4,-2.2l-1.4,1.2z', fill: c }, b);
+    if (front) el('path', { d: circ(-.9, -8.3, .45) + circ(.9, -8.3, .45) + circ(0, -7.3, .35), fill: eye }, b);
+    else el('path', { d: 'M0,-2q-5,-2 -4,-8q1,-4 4,-3', fill: 'none', stroke: c, 'stroke-width': 3.6, 'stroke-linecap': 'round' }, b);   // הזנב מכסה את הגב
+  } else if (kind === 'fox') {
+    shadow(b, 6);
+    if (!front) { el('path', { d: 'M0,-7q2,4 1,7', stroke: c, 'stroke-width': 3.6, 'stroke-linecap': 'round', fill: 'none' }, b); el('circle', { cx: 1, cy: -.4, r: 1.6, fill: '#fffaf0' }, b); }
+    L(-2.2, -6, '#4a3326', 1.8); L(2.2, -6, '#4a3326', 1.8);
+    el('ellipse', { cx: 0, cy: -8.6, rx: 4.6, ry: 4.2, fill: c }, b);
+    if (front) el('ellipse', { cx: 0, cy: -8, rx: 2.4, ry: 3.2, fill: '#fff3e2' }, b);
+    el('path', { d: 'M-3.6,-12.6l-1,-4.8l3,2.6zM3.6,-12.6l1,-4.8l-3,2.6z', fill: shade(c, -.1) }, b);
+    el('path', { d: 'M-4,-14q0,-3 4,-3t4,3q0,2 -4,4.6q-4,-2.6 -4,-4.6z', fill: c }, b);
+    if (front) { el('path', { d: 'M-2.4,-12.8q2.4,1.4 4.8,0l-2.4,3.4z', fill: '#fff3e2' }, b); el('path', { d: circ(-1.5, -14.6, .5) + circ(1.5, -14.6, .5) + circ(0, -10.2, .55), fill: eye }, b); }
+  } else {   // bear
+    shadow(b, 12);
+    L(-5, -7, d, 5); L(5, -7, d, 5);
+    el('ellipse', { cx: 0, cy: -11, rx: 10.5, ry: 9, fill: c }, b);
+    if (!front) el('circle', { cx: 0, cy: -5.2, r: 1.8, fill: shade(c, -.1) }, b);
+    el('path', { d: circ(-4.4, -24.4, 2) + circ(4.4, -24.4, 2), fill: c }, b);
+    el('circle', { cx: 0, cy: -19.6, r: 6, fill: c }, b);
+    if (front) {
+      el('path', { d: circ(-4.4, -24.4, 1) + circ(4.4, -24.4, 1), fill: shade(c, -.2) }, b);
+      el('ellipse', { cx: 0, cy: -17.6, rx: 2.8, ry: 2.2, fill: light }, b);
+      el('path', { d: circ(-2.2, -21, .8) + circ(2.2, -21, .8) + circ(0, -18.4, .9), fill: eye }, b);
+    }
+  }
+  return { g: b, legs, base };
 }
