@@ -15,6 +15,7 @@ import '../prefabs/buildings';
 import '../prefabs/props';
 import '../prefabs/areas';
 import '../prefabs/village';
+import '../prefabs/cabin';
 import { buildTerrain, lakeShore } from './terrain';
 import { GENERATORS } from './generators';
 import { addLabel } from '../world/labels';

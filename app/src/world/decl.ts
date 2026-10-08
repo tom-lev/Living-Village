@@ -37,6 +37,7 @@ export const DECL: Record<string, Decl> = {
   modernHouse: { kind: 'home', solidBase: true, doorPath: true, door: o => [o.x + (o.w ?? 92) * .22 + 6.5, o.y] },
   chalet: { kind: 'home', solidBase: true, doorPath: true },
   logCabin: { kind: 'home', solidBase: true, doorPath: true },
+  forestCabin: { kind: 'visit', spot: o => [o.x - 16, o.y + 26] },
   shop: { kind: 'shop', noLabel: true },
   church: { kind: 'church', solidBase: true },
   chapel: { kind: 'church', solidBase: true, doorPath: true },
