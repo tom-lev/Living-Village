@@ -20,7 +20,7 @@ import { RULES, ruleOfCheck } from './rules';
 import { LAMPS, LAMPS_SPACING } from '../scene/generators';
 import { wildIssues } from '../actors/wildlife';
 import { lakeShore } from '../scene/terrain';
-import { BUDGET, STATIC_COST, FRAME } from './budget';
+import { BUDGET, STATIC_COST, FRAME, totalPts } from './budget';
 import { dynamics } from '../actors/people';
 
 /** הבדיקות שממומשות כאן (כל אחת שייכת לכלל ב-RULES) */
@@ -180,7 +180,8 @@ export function runChecks(): Issue[] {
     if (c[0] > BUDGET.objEls || c[1] > BUDGET.objPts) add('perf', `A ${o.type} is heavy to draw (${c[0]} elements, ${c[1]} points; budget ${BUDGET.objEls} / ${BUDGET.objPts})`, o.x ?? o.x0 ?? o.cx ?? 0, o.y ?? o.y0 ?? o.cy ?? 0, o);
   }
   (window as any).__budget = { static: { ...STATIC_COST }, frameMs: +FRAME.avg().toFixed(2), movers: dynamics.length, budget: BUDGET };   // לבדיקות
-  if (STATIC_COST.pts > BUDGET.totalPts) add('perf', `The static map has ${STATIC_COST.pts} points (budget ${BUDGET.totalPts})`, 0, 0);
+  const maxPts = totalPts(ctx.B);
+  if (STATIC_COST.pts > maxPts) add('perf', `The static map has ${STATIC_COST.pts} points (budget ${maxPts}, by area)`, 0, 0);
   if (FRAME.ms.length > 30 && FRAME.avg() > BUDGET.frameMs) add('perf', `Moving things take ${FRAME.avg().toFixed(1)} ms per frame (budget ${BUDGET.frameMs})`, 0, 0);
   const build = Object.values(stageMs).reduce((a, b) => a + b, 0);
   if (build > BUDGET.buildMs) add('perf', `Building the world takes ${Math.round(build)} ms (budget ${BUDGET.buildMs})`, 0, 0);

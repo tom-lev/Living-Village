@@ -3,10 +3,10 @@ import { el, n2, circ, blob } from '../core/util';
 import { rand, pick, R, rngAt } from '../core/rng';
 import { ctx, prop, NO_TREE, inWater, statics, bboxOf } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
-import { pine, roundTree } from '../prefabs/nature';
+import { pine, roundTree, sequoia, ancientFir } from '../prefabs/nature';
 import { winter, prairie, lakeShore } from './terrain';
 import { PREFABS } from '../prefabs/registry';
-import { placeOk } from '../world/walk';
+import { placeOk, flagsAt, PATH, WATER, SOLID } from '../world/walk';
 import { REAL_H, fitScale } from '../world/scale';
 
 const inRects = (x: number, y: number, rects: number[][]) => rects.some(([x0, y0, x1, y1]) => x > x0 && x < x1 && y > y0 && y < y1);
@@ -19,6 +19,36 @@ export const LAMPS_SPACING = { v: 150 };
 
 /** כל עצי היער שנשתלו: בסיס, וקופסת הצמרת (לציפורים שיושבות עליהם) */
 export const TREES: { x: number; y: number; x0: number; x1: number; top: number; pine: boolean }[] = [];
+
+/** רצפת היער העתיק: גוון כהה ועשיר שמתחזק מזרחה, כתמי טחב, שרכים, פטריות וגזעים שנפלו מכוסי טחב.
+ *  הכול לפי המקום (rngAt לכל תא), לא על שבילים, מים או מבנים, ולא בשלג */
+function ancientFloor(AN: any, anc: (x: number) => number, cold: (y: number) => number, lake: any, T: any) {
+  const { B } = ctx, G = ctx.L.groundProps, free = (x: number, y: number) => !(flagsAt(x, y) & (PATH | WATER | SOLID));
+  const nearLake = (x: number, y: number) => lake && y > T.beach.y - 60 && x < lake.Ex(y) + 70;
+  // (בלי שכבת גוון גדולה: שקיפות על שטח גדול השאירה קווים ישרים בין האריחים. את הרצפה הכהה נותנים כתמי הטחב)
+  let moss = '', fern = '', mush = '', caps = '';
+  const C = 70;
+  for (let gy = Math.floor(B.y0 / C); gy < B.y1 / C; gy++) for (let gx = Math.floor(AN.x0 / C); gx < B.x1 / C; gx++) {
+    const v = rngAt(gx, gy, 13), x = gx * C + v.r() * C, y = gy * C + v.r() * C, t = anc(x), k = v.r();
+    if (k > t * (1 - cold(y)) * .7 || !free(x, y) || nearLake(x, y)) continue;
+    const kind = v.r();
+    if (kind < .55) moss += blob(x, y, v.rand(14, 34), v.rand(5, 11), 7, .22, v.rand(0, 6));
+    else if (kind < .8) {
+      for (let j = -1; j <= 1; j++) { const a = -Math.PI / 2 + j * .6, l = (9 - Math.abs(j) * 1.6) * v.rand(.8, 1.2); fern += `M${n2(x)},${n2(y)}Q${n2(x + Math.cos(a) * l * .4)},${n2(y + Math.sin(a) * l * .7 - 2)} ${n2(x + Math.cos(a) * l)},${n2(y + Math.sin(a) * l * .8)}`; }
+    } else if (kind < .93) {
+      for (let j = 0; j < 3; j++) { const mx = x + v.rand(-4, 4), my = y + v.rand(-1.5, 1.5); mush += `M${n2(mx - .5)},${n2(my)}v-2.4h1v2.4Z`; caps += `M${n2(mx - 1.8)},${n2(my - 2.2)}q1.8,-2.6 3.6,0Z`; }
+    } else if (placeOk(x - 22, y - 6, x + 22, y + 3)) {
+      // גזע שנפל, מכוסה טחב, עם טבעות בקצה
+      const g = prop(y), L = v.rand(26, 40), a = v.rand(-.2, .2), dx = Math.cos(a) * L / 2, dy = Math.sin(a) * L / 2;
+      el('path', { d: `M${n2(x - dx)},${n2(y - dy - 3)}L${n2(x + dx)},${n2(y + dy - 3)}`, stroke: '#7a4f30', 'stroke-width': 6, 'stroke-linecap': 'round' }, g);
+      el('path', { d: `M${n2(x - dx * .7)},${n2(y - dy * .7 - 5.4)}L${n2(x + dx * .4)},${n2(y + dy * .4 - 5.4)}`, stroke: '#6f9a46', 'stroke-width': 2.6, 'stroke-linecap': 'round' }, g);
+      el('path', { d: circ(x + dx, y + dy - 3, 3) + circ(x + dx, y + dy - 3, 1.4), fill: '#d8a66e', stroke: '#8a5a32', 'stroke-width': .6 }, g);
+    }
+  }
+  if (moss) el('path', { d: moss, fill: '#4f7f3e', opacity: .5 }, G);
+  if (fern) el('path', { d: fern, fill: 'none', stroke: '#3f7a3c', 'stroke-width': 1.5, 'stroke-linecap': 'round' }, G);
+  if (mush) { el('path', { d: mush, fill: '#f1e6cc' }, G); el('path', { d: caps, fill: '#c0504d' }, G); }
+}
 
 export const GENERATORS: Record<string, (o: any) => void> = {
   /** אבנים פזורות בפס */
@@ -80,6 +110,9 @@ export const GENERATORS: Record<string, (o: any) => void> = {
       return false;
     };
     const dens = o.density, T = ctx.world.terrain, pr = prairie(T), lake = lakeShore(T);
+    /* היער העתיק במזרח (משימה 28): מ-ancient.x0 היער הולך ומשתנה עד שב-ancient.x1 הוא כולו עתיק:
+       סקוויות ענקיות ואשוחים כהים, רצפה כהה עם טחב, שרכים, גזעים שנפלו ופטריות. בצפון הערבה הופכת ליער לאט לאט */
+    const AN = o.ancient, anc = (x: number) => { if (!AN) return 0; const t = Math.min(1, Math.max(0, (x - AN.x0) / (AN.x1 - AN.x0))); return t * t * (3 - 2 * t); };
     /* מיקומי העצים נקבעים לפי המקום (רשת של תאים, ובכל תא אקראיות מקומית rngAt), לא לפי סדר הגרלה:
        כך הרחבת המפה, הוספת אובייקט או קרחת לא מזיזות אף עץ אחר (כלל stable-forest) */
     const C = o.cell ?? 52, cand: number[][] = [];
@@ -90,7 +123,7 @@ export const GENERATORS: Record<string, (o: any) => void> = {
     for (const [x, y, roll] of cand) {
       if (x < B.x0 || x > B.x1 || y < B.y0 || y > B.y1) continue;
       // בערבה: עצים בודדים בלבד
-      const d = (dense(x, y) ? (inHome(x, y) ? dens.village : dens.forest) : dens.open) * (1 - pr(y) * (1 - (dens.prairie ?? .04)));
+      const t = anc(x), d = (dense(x, y) ? (inHome(x, y) ? dens.village : dens.forest) : dens.open) * (1 - pr(y) * (1 - .9 * t * t) * (1 - (dens.prairie ?? .04))) * (1 - .5 * t);
       if (roll > d) continue;
       // האגם הדרומי: לא בחול ולא במים; על היבשה שמסביבו מותר
       if (lake && y > T.beach.y - 40 && x > lake.Wx(y) - 45 && !(x > lake.Ex(y) + 40 || y > lake.Sy(x) + 50)) continue;
@@ -106,12 +139,15 @@ export const GENERATORS: Record<string, (o: any) => void> = {
       // שלג על העצים בהדרגה: ככל שמצפינים בעמק, יותר עצים מושלגים (משימה 10א)
       const snowy = ctx.world.terrain.snow.full !== undefined ? v.r() < cold(y) ** 1.2 * 1.02 : y < o.snowLine;
       // בערבה: עצים עגולים (אלונים) בודדים, בלי שלג
-      const s0 = statics.length;
-      if (pr(y) > .4) { v.r(); roundTree(x, y, v.rand(1.4, 1.9)); }
+      const s0 = statics.length, t = anc(x), a = t > 0 ? rngAt(x, y, 9) : null;
+      if (a && a.r() < t * .9 && cold(y) < .45) { if (a.r() < .55) sequoia(x, y, a.rand(.85, 1.15)); else ancientFir(x, y, a.rand(.9, 1.15), snowy); }
+      else if (a && a.r() < t * .6) ancientFir(x, y, a.rand(.8, 1), snowy);
+      else if (pr(y) * (1 - .9 * t * t) > .4) { v.r(); roundTree(x, y, v.rand(1.4, 1.9)); }
       else if (inRects(x, y, o.pineZones) || v.r() < o.pineChance) pine(x, y, v.rand(1.5, 2.1), snowy);
       else roundTree(x, y, v.rand(1.3, 1.75));
       if (statics.length > s0) planted.push([x, y, s0]);
     }
+    if (AN) ancientFloor(AN, anc, cold, lake, T);
     // לציפורים (actors/bluebirds.ts): איפה כל עץ וקופסת הצמרת שלו. נמדד אחרי שכל העצים צוירו – מדידה אחת של הפריסה
     for (const [x, y, s0] of planted) { const bb = bboxOf(statics[s0]); TREES.push({ x, y, x0: bb[0], x1: bb[0] + bb[2], top: bb[1], pine: bb[3] > 0 && bb[2] < bb[3] * .62 }); }
   },

@@ -61,6 +61,6 @@ Every rule says where in the code it is enforced and how it is verified: **check
 | **one-shape**: Drawing, walking, bridges, junctions and checks all use the same drawn curve | `world/curve.ts` | built |
 | **build-order**: The world is built in a fixed order of stages; nothing runs before what it needs | `world/issues.ts STAGES, need(); scene/build.ts buildScene` | check `order` |
 | **declared**: Every object type declares its footprint, door, kind and label in one table | `world/decl.ts DECL` | check `undeclared` |
-| **perf-budget**: Performance budget: no single object too heavy to draw, the whole static map within its point budget, moving things within their per-frame time and count | `world/budget.ts BUDGET; core/util.ts drawCost; main.ts FRAME` | check `perf` |
+| **perf-budget**: Performance budget: no single object too heavy to draw, the whole static map within its point budget (by area: the same density however big the world grows), moving things within their per-frame time and count | `world/budget.ts BUDGET; core/util.ts drawCost; main.ts FRAME` | check `perf` |
 | **overlap**: Plots and buildings do not overlap each other | `tools/history/spread_plots.py` | check `overlap` |
 

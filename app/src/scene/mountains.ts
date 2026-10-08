@@ -91,7 +91,7 @@ function massif(x0: number, x1: number, base: number, m: any, rg: LocalRng, foot
 function range(m: any, idx: number, foot: string): Massif[] {
   const { B } = ctx, rg = rngAt(m.baseY, idx, 31), anchors: number[] = m.anchors || [], out: Massif[] = [];
   const spans: [number, number][] = [];
-  for (let x = B.x0 - 220; x < B.x1 + 200;) {
+  for (let x = B.x0 - 220; x < Math.min(B.x1, m.end ?? B.x1) + 200;) {
     if (rg.chance(m.gaps ?? .45)) {
       const gap = rg.rand(110, 320);
       if (!anchors.some(a => a > x - 90 && a < x + gap + 90)) x += gap;
@@ -190,7 +190,8 @@ export function autoBridges(C: Pt[], trails: Pt[][], half: number, existing: Pt[
 export function buildMountains(w: WorldData) {
   const T = w.terrain, { B } = ctx;
   // הרכסים הישנים צרכו מספרים מהמחולל הכללי; צורכים אותם גם עכשיו, כדי שהיער ושאר העולם יישארו במקומם
-  for (const m of T.mountains) for (let x = B.x0 - 120; x < B.x1 + 120; x += m.step * rand(.75, 1.15)) { rand(240, 330); rand(m.hMin, m.hMax); rand(-20, 20); }
+  // אותה צריכה של מספרים אקראיים כמו כשהעולם נגמר ב-x 2100 (לפני היער העתיק), כדי שהרחבת העולם לא תשנה שום דבר אחר
+  for (const m of T.mountains) for (let x = B.x0 - 120; x < Math.min(B.x1, 2100) + 120; x += m.step * rand(.75, 1.15)) { rand(240, 330); rand(m.hMin, m.hMax); rand(-20, 20); }
   T.mountains.forEach((m: any, i: number) => range(m, i, m.foot || (m.valley === 1 ? '#e2edf2' : '#a9bfa6')));
   if (T.creek) creek(T.creek, w.trails.map(t => curvePts(t)));   // גשרים מול העקומה המצוירת, לא מול הקווים הישרים שבין נקודות הנתונים
 }

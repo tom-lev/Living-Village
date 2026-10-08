@@ -64,7 +64,7 @@ export const RULES: Rule[] = [
   { id: 'one-shape', group: 'infrastructure', title: 'Drawing, walking, bridges, junctions and checks all use the same drawn curve', where: 'world/curve.ts', built: true },
   { id: 'build-order', group: 'infrastructure', title: 'The world is built in a fixed order of stages; nothing runs before what it needs', where: 'world/issues.ts STAGES, need(); scene/build.ts buildScene', check: 'order' },
   { id: 'declared', group: 'infrastructure', title: 'Every object type declares its footprint, door, kind and label in one table', where: 'world/decl.ts DECL', check: 'undeclared' },
-  { id: 'perf-budget', group: 'infrastructure', title: 'Performance budget: no single object too heavy to draw, the whole static map within its point budget, moving things within their per-frame time and count', why: 'The site must stay smooth on a phone however much content is added', where: 'world/budget.ts BUDGET; core/util.ts drawCost; main.ts FRAME', check: 'perf' },
+  { id: 'perf-budget', group: 'infrastructure', title: 'Performance budget: no single object too heavy to draw, the whole static map within its point budget (by area: the same density however big the world grows), moving things within their per-frame time and count', why: 'The site must stay smooth on a phone however much content is added', where: 'world/budget.ts BUDGET; core/util.ts drawCost; main.ts FRAME', check: 'perf' },
   { id: 'overlap', group: 'infrastructure', title: 'Plots and buildings do not overlap each other', where: 'tools/history/spread_plots.py', check: 'overlap' },
 ];
 

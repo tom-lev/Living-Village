@@ -163,7 +163,9 @@ export function buildTerrain(w: WorldData) {
     el('path', { d: wv, fill: 'none', stroke: '#c9eefa', 'stroke-width': 1.2, 'stroke-linecap': 'round', opacity: S ? .6 : .8 }, L.ground);
     if (S) {
       // היבשה שמסביב: רצועה במזרח ובדרום, חוף חול לאורך הקו, וקו מים בהיר
-      const land = [...S.east.map(p => [p[0], p[1]]), ...S.south.slice().reverse(), [S.south[0][0] - 10, B.y1 + 10], [B.x1 + 10, B.y1 + 10], [B.x1 + 10, S.east[0][1]]];
+      // (מזרחה מהאגם – גם רצועת החול שמעליו הופכת ליבשה: החוף נגמר באגם, לא נמשך לתוך היער העתיק)
+      const ex = Math.max(...S.east.map(p => p[0])) + 90;
+      const land = [...S.east.map(p => [p[0], p[1]]), ...S.south.slice().reverse(), [S.south[0][0] - 10, B.y1 + 10], [B.x1 + 10, B.y1 + 10], [B.x1 + 10, T.beach.y - 30], ...Array.from({ length: 9 }, (_, k) => { const u = 1 - k / 8; return [ex + u * 150 + Math.sin(k * 1.9) * 7, S.east[0][1] + (T.beach.y - 30 - S.east[0][1]) * u ** .7 + Math.cos(k * 2.3) * 4]; })];   // קצה החול: קו רך ולא ישר
       el('path', { d: 'M' + land.map(p => `${n2(p[0])},${n2(p[1])}`).join('L') + 'Z', fill: '#9cd162' }, L.ground);
       // החוף המערבי: יבשה מערבה ממנו (היער הגדול)
       const westLand = [[X0 - 5, T.beach.y - 40], ...S.west, [S.west[S.west.length - 1][0], B.y1 + 10], [X0 - 5, B.y1 + 10]];
@@ -210,24 +212,23 @@ export function buildTerrain(w: WorldData) {
   /* הערבה (prairie) בצפון: מעבר הדרגתי מהדשא הירוק לערבה עשבונית – כתמים גדולים של עשב ירוק וזהוב, ציציות עשב
      צפופות (מניפה של גבעולים), גושי צמחייה נמוכה ותלתן, וקבוצות של פרחי בר. הכול באקראיות מקומית (rngAt).
      חסכוני בנקודות (תקציב הביצועים): הרבה מהמראה בא מכתמים גדולים וזולים, והפרטים הקטנים נראים בזום קרוב */
-  if (T.prairie) {
-    const P = T.prairie, BANDS = 8, pr = prairie(T), area = (B.x1 - B.x0) * (P.start - B.y0);
-    for (let k = 0; k < BANDS; k++) el('path', { d: wavy(P.start - (P.start - P.full) * (k + .4) / BANDS, 40 + k, 40), fill: '#c9cf7c', opacity: .08 }, L.ground);
-    el('path', { d: wavy(P.full - 60, 49, 50), fill: '#c4cb78', opacity: .28 }, L.ground);
-    const v = rngAt(P.start, P.full, 75), keep = (y: number) => v.r() < pr(y) * 1.05;
+  /** פרטי הערבה בטווח x אחד (כתמים, צמחייה נמוכה, ציציות, פרחים). area לפי הטווח, כמו קודם */
+  function prairieDetail(X0: number, X1: number, v: any, fade: (x: number) => number) {
+    const P = T.prairie, pr = prairie(T), area = (X1 - X0) * (P.start - B.y0);
+    const keep = (y: number, x: number) => v.r() < pr(y) * 1.05 * fade(x);
     // כתמים גדולים: עשב ירוק כהה, ירוק־זהוב ועשב יבש – מרקם של אחו
     const patch: Record<string, string> = { '#a9c366': '', '#bccb72': '', '#d2cd84': '', '#97bb5c': '' };
     for (let i = 0; i < area / 22000; i++) {
-      const x = v.rand(B.x0, B.x1), y = v.rand(B.y0 + 20, P.start + 40), c = v.pick(Object.keys(patch)), w = v.rand(40, 130);
-      if (!keep(y)) continue;
+      const x = v.rand(X0, X1), y = v.rand(B.y0 + 20, P.start + 40), c = v.pick(Object.keys(patch)), w = v.rand(40, 130);
+      if (!keep(y, x)) continue;
       patch[c] += blob(x, y, w, w * v.rand(.25, .45), 7, .22, v.rand(0, 6));
     }
     for (const c in patch) if (patch[c]) el('path', { d: patch[c], fill: c, opacity: .55 }, L.ground);
     // צמחייה נמוכה: גושים קטנים ותלתן
     let low = '', low2 = '', clover = '';
     for (let i = 0; i < area / 4500; i++) {
-      const x = v.rand(B.x0 + 10, B.x1 - 10), y = v.rand(B.y0 + 10, P.start + 60), k = v.r(), w = v.rand(4, 9);
-      if (!keep(y) || occ(x, y, O_ROAD | O_RIVER)) continue;
+      const x = v.rand(X0 + 10, X1 - 10), y = v.rand(B.y0 + 10, P.start + 60), k = v.r(), w = v.rand(4, 9);
+      if (!keep(y, x) || occ(x, y, O_ROAD | O_RIVER)) continue;
       if (k < .45) low += blob(x, y - w * .25, w, w * .5, 5, .3, k * 9);
       else if (k < .8) low2 += blob(x, y - w * .2, w * .8, w * .4, 5, .3, k * 9);
       else clover += circ(x - 1.4, y, 1.3) + circ(x + 1.4, y, 1.3) + circ(x, y - 1.6, 1.3);
@@ -238,8 +239,8 @@ export function buildTerrain(w: WorldData) {
     // ציציות עשב: מניפה של ארבעה גבעולים, בשלושה גוונים (נראות בזום קרוב)
     const tufts = [DETAIL_GROUPS.map(() => ''), DETAIL_GROUPS.map(() => ''), DETAIL_GROUPS.map(() => '')];
     for (let i = 0; i < area / 1600; i++) {
-      const x = v.rand(B.x0 + 10, B.x1 - 10), y = v.rand(B.y0 + 10, P.start + 60), h = v.rand(6, 11), k = v.r();
-      if (!keep(y) || occ(x, y, O_ROAD | O_RIVER)) continue;
+      const x = v.rand(X0 + 10, X1 - 10), y = v.rand(B.y0 + 10, P.start + 60), h = v.rand(6, 11), k = v.r();
+      if (!keep(y, x) || occ(x, y, O_ROAD | O_RIVER)) continue;
       tufts[k < .4 ? 0 : k < .75 ? 1 : 2][tileOf(x, y)] += `M${n2(x)},${n2(y)}l-3,${n2(-h * .7)}M${n2(x)},${n2(y)}l-1,${n2(-h)}M${n2(x)},${n2(y)}l1.4,${n2(-h * .95)}M${n2(x)},${n2(y)}l3.2,${n2(-h * .6)}`;
     }
     // קבוצות פרטים משלהן, מעל שכבות הגוון של הערבה (אחרת הגוון מכסה אותן); מנוע האריחים מדלג עליהן כשמתרחקים
@@ -248,11 +249,21 @@ export function buildTerrain(w: WorldData) {
     // פרחי בר בקבוצות (כמו בטבע: כתם של פרחים מאותו סוג)
     const fl: Record<string, string> = { '#b48ad6': '', '#f2d24f': '', '#ffffff': '', '#e57a6a': '' };
     for (let i = 0; i < area / 90000; i++) {
-      const cx = v.rand(B.x0, B.x1), cy = v.rand(B.y0 + 30, P.start), c = v.pick(Object.keys(fl));
-      if (!keep(cy)) continue;
+      const cx = v.rand(X0, X1), cy = v.rand(B.y0 + 30, P.start), c = v.pick(Object.keys(fl));
+      if (!keep(cy, cx)) continue;
       for (let k = 0; k < 9; k++) fl[c] += circ(cx + v.rand(-22, 22), cy + v.rand(-10, 10) - 2, v.rand(1, 1.6));
     }
     for (const c in fl) if (fl[c]) el('path', { d: fl[c], fill: c }, L.ground);
+    }
+  if (T.prairie) {
+    const P = T.prairie, BANDS = 8, pr = prairie(T);
+    for (let k = 0; k < BANDS; k++) el('path', { d: wavy(P.start - (P.start - P.full) * (k + .4) / BANDS, 40 + k, 40), fill: '#c9cf7c', opacity: .08 }, L.ground);
+    el('path', { d: wavy(P.full - 60, 49, 50), fill: '#c4cb78', opacity: .28 }, L.ground);
+    // הפרטים מצוירים בשני מעברים: העולם המקורי (עד P.legacyX1) בדיוק כמו קודם, והרצועה החדשה במזרח באקראיות משלה,
+    // שם הם דועכים לפני P.east (היער העתיק). כך הרחבת העולם לא משנה אף כתם או ציצה בערבה הקיימת
+    const xa = B.x0, xl = Math.min(B.x1, P.legacyX1 ?? B.x1), xe = Math.min(B.x1, P.east ?? B.x1);
+    prairieDetail(xa, xl, rngAt(P.start, P.full, 75), () => 1);
+    if (xe > xl) prairieDetail(xl, xe, rngAt(P.start, P.full, 76), x => Math.min(1, (xe - x) / 900));
   }
   for (let i = 0; i < T.snow.patches; i++)
     el('path', { d: blob(rand(T.snow.thaw ? B.x0 : B.x0, B.x1), rand(T.snow.thaw ? T.snow.full : B.y0 + 60, T.snow.patchesTo), rand(50, 140), rand(20, 50), 7, .12, rand(0, 6)), fill: pick(['#ffffff', '#dfecf2']), opacity: .8 }, L.ground);

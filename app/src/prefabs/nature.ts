@@ -2,7 +2,8 @@
 import { TREE_MIN } from '../world/scale';
 import { el, n2, circ, shade } from '../core/util';
 import { rand, pick, R, rngAt } from '../core/rng';
-import { prop, block, statics } from '../world/context';
+import { ctx, prop, block, statics } from '../world/context';
+import { markRect, SOLID } from '../world/walk';
 import { register } from './registry';
 
 export function pine(x: number, y: number, s: number, snowy = false) {
@@ -14,7 +15,7 @@ export function pine(x: number, y: number, s: number, snowy = false) {
   el('ellipse', { cx: x + 2 * s, cy: y, rx: 9 * s * wf, ry: 2.6 * s, fill: 'rgba(40,70,20,.22)' }, g);
   el('rect', { x: x - 1.4 * s, y: y - trunk * s, width: 2.8 * s, height: (trunk + .5) * s, rx: .8 * s, fill: shade('#8b5a2b', v.rand(-.08, .08)) }, g);
   const tiers = [[5, 10.5, 14], [12, 8.5, 12], [18.5, 6.2, 10.5]].map(([dy, hw, th], i) => [(dy + trunk - 6) * hf, hw * wf * v.rand(.92, 1.08), th * hf * v.rand(.94, 1.06), lean * (i + 1) * 4]);
-  const c = shade(pick(['#3f9150', '#3a8a4c', '#459a55']), v.rand(-.06, .06));
+  const c = shade(rngAt(x, y, 4).pick(['#3f9150', '#3a8a4c', '#459a55']), v.rand(-.06, .06));
   let body = '', hl = '';
   for (const [dy, hw, th, lx] of tiers) {
     const by = y - dy * s, tx = x + lx;
@@ -44,7 +45,7 @@ export function roundTree(x: number, y: number, s: number, fruit = false) {
   const g = prop(y);
   el('ellipse', { cx: x + 2 * s, cy: y, rx: 10 * s * cr, ry: 3 * s, fill: 'rgba(40,70,20,.22)' }, g);
   el('path', { d: `M${n2(x - 1.6 * s)},${n2(y)}L${n2(x - 1 + sx * .3)},${n2(y - tk * s)}L${n2(x + 1 + sx * .3)},${n2(y - tk * s)}L${n2(x + 1.6 * s)},${n2(y)}Z`, fill: shade('#8b5a2b', v.rand(-.08, .08)) }, g);
-  const c = shade(pick(['#5db85a', '#63bd5c', '#55ad55', '#7cc35a']), v.rand(-.05, .05)), dy = (tk - 14) * s;
+  const c = shade(rngAt(x, y, 6).pick(['#5db85a', '#63bd5c', '#55ad55', '#7cc35a']), v.rand(-.05, .05)), dy = (tk - 14) * s;
   let crown = circ(x + sx, y - 22 * s - dy, 10.5 * s * cr) + circ(x - 6.5 * s * cr + sx, y - 16.5 * s - dy + v.rand(-1, 1) * s, 7 * s * v.rand(.88, 1.1)) + circ(x + 6.5 * s * cr + sx, y - 17 * s - dy + v.rand(-1, 1) * s, 7.5 * s * v.rand(.88, 1.1));
   const extra = v.chance(.35);
   if (extra) crown += circ(x + sx + v.rand(-4, 4) * s, y - 29 * s - dy, 5.5 * s * v.rand(.8, 1.1));   // לפעמים גוש נוסף למעלה
@@ -92,7 +93,83 @@ export function deer(x: number, y: number, f: number, antlers: boolean) {
   block(x - 20, y - 45, x + 25, y + 8);
 }
 
+/* ───── היער העתיק במזרח ───── */
+/** אליפסה כנתיב (קשתות: מעט נקודות) */
+const ell = (cx: number, cy: number, rx: number, ry: number) => `M${n2(cx - rx)},${n2(cy)}a${n2(rx)},${n2(ry)} 0 1,0 ${n2(2 * rx)},0a${n2(rx)},${n2(ry)} 0 1,0 ${n2(-2 * rx)},0Z`;
+
+/** סקוויה ענקית: גזע עבה ואדמדם שמתרחב בבסיס, קווי קליפה, טחב על השורשים, וצמרת גבוהה של גושים כהים בשכבות,
+ *  עם אור מצד אחד. גבוהה בערך פי שניים מאורן. s: קנה מידה (1 = כ-150 יחידות גובה) */
+export function sequoia(x: number, y: number, s: number) {
+  const v = rngAt(x, y, 15), H = 150 * s * v.rand(.9, 1.1), tw = 7.5 * s * v.rand(.9, 1.15), lean = v.rand(-.03, .03) * H;
+  const g = prop(y), bark = shade('#a3572f', v.rand(-.08, .08)), dark = shade(bark, -.25);
+  el('ellipse', { cx: x + 5 * s, cy: y + 1, rx: 26 * s, ry: 6 * s, fill: 'rgba(30,55,20,.25)' }, g);
+  // הגזע: מתרחב בשורשים, מצטמצם למעלה
+  const top = y - H * .78;
+  el('path', { d: `M${n2(x - tw * 1.7)},${n2(y)}C${n2(x - tw)},${n2(y - 6 * s)} ${n2(x - tw * .8)},${n2(y - H * .3)} ${n2(x - tw * .45 + lean)},${n2(top)}L${n2(x + tw * .45 + lean)},${n2(top)}C${n2(x + tw * .8)},${n2(y - H * .3)} ${n2(x + tw)},${n2(y - 6 * s)} ${n2(x + tw * 1.7)},${n2(y)}Z`, fill: bark }, g);
+  let lines = '';
+  for (const f of [-.4, .25]) lines += `M${n2(x + f * tw * 1.6)},${n2(y - 2 * s)}Q${n2(x + f * tw * .9 + lean * .3)},${n2(y - H * .3)} ${n2(x + f * tw * .5 + lean)},${n2(top + 8 * s)}`;
+  el('path', { d: lines, fill: 'none', stroke: dark, 'stroke-width': 1.3 * s, 'stroke-linecap': 'round' }, g);
+  el('path', { d: `M${n2(x + tw * .25)},${n2(y - 3 * s)}Q${n2(x + tw * .45 + lean * .3)},${n2(y - H * .35)} ${n2(x + tw * .2 + lean)},${n2(top + 6 * s)}`, fill: 'none', stroke: shade(bark, .18), 'stroke-width': 1.6 * s, 'stroke-linecap': 'round' }, g);   // אור על הגזע
+  el('path', { d: ell(x - tw * .9, y - 1.5 * s, tw * .9, 2.2 * s) + ell(x + tw * 1.1, y - 1 * s, tw * .7, 1.8 * s), fill: '#6f9a46' }, g);   // טחב על השורשים
+  // הצמרת: גושים כהים מלמטה למעלה, הולכים וקטנים; אור בצד ימין
+  const c = shade(v.pick(['#2f6b45', '#2c6542', '#356f47']), v.rand(-.05, .05));
+  let crown = '', hl = '';
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    // גושים עגולים וגבוהים שנבלעים זה בזה (חרוט אחד לא סדיר), כל אחד מוזז קצת לצד אחר
+    const u = i / (n - 1), cy = y - H * (.5 + u * .4), w = (21 - u * 12) * s * v.rand(.88, 1.12), h = (15 - u * 5) * s, cx = x + lean * (.55 + u * .45) + (i % 2 ? 1 : -1) * w * .14 + v.rand(-2, 2) * s;
+    crown += ell(cx, cy, w, h); hl += ell(cx + w * .38, cy - h * .2, w * .4, h * .55);
+  }
+  const tx = x + lean, ty = y - H * .9;
+  crown += `M${n2(tx - 7 * s)},${n2(ty)}L${n2(tx)},${n2(y - H * 1.01)}L${n2(tx + 7 * s)},${n2(ty)}Z`;   // קצה מחודד
+  el('path', { d: crown, fill: c }, g);
+  el('path', { d: hl, fill: shade(c, .13) }, g);
+  const x0 = x - 30 * s, x1 = x + 32 * s;
+  statics[statics.length - 1].bb = [x0, y - H, x1 - x0, H + 7 * s];
+}
+
+/** אשוח עתיק: גבוה, צר וכהה, ענפים שמשתלשלים בשכבות; גזע כהה. במדרון המושלג – עם שלג */
+export function ancientFir(x: number, y: number, s: number, snowy = false) {
+  const v = rngAt(x, y, 17), H = 105 * s * v.rand(.9, 1.12), W = 17 * s * v.rand(.88, 1.12);
+  const g = prop(y), c = shade(v.pick(['#2a5a44', '#2f6249', '#285440']), v.rand(-.05, .05));
+  el('ellipse', { cx: x + 3 * s, cy: y + 1, rx: W * .9, ry: 4 * s, fill: 'rgba(30,55,20,.25)' }, g);
+  el('rect', { x: x - 2.4 * s, y: y - H * .2, width: 4.8 * s, height: H * .2 + .5, fill: shade('#5c3d28', v.rand(-.08, .08)) }, g);
+  let body = '', hl = '', sn = '';
+  const n = 4;
+  for (let i = 0; i < n; i++) {
+    const u = i / n, by = y - H * (.12 + u * .8), w = W * (1 - u * .72), th = H * .27;
+    // שכבה עם קצוות שמשתלשלים מטה
+    body += `M${n2(x - w)},${n2(by + 2 * s)}Q${n2(x - w * .5)},${n2(by - th * .35)} ${n2(x)},${n2(by - th)}Q${n2(x + w * .5)},${n2(by - th * .35)} ${n2(x + w)},${n2(by + 2 * s)}Q${n2(x)},${n2(by - 2 * s)} ${n2(x - w)},${n2(by + 2 * s)}Z`;
+    hl += `M${n2(x)},${n2(by - th)}Q${n2(x + w * .5)},${n2(by - th * .35)} ${n2(x + w)},${n2(by + 2 * s)}L${n2(x + w * .2)},${n2(by)}Z`;
+    if (snowy) sn += `M${n2(x - w * .5)},${n2(by - th * .45)}Q${n2(x)},${n2(by - th * 1.1)} ${n2(x + w * .5)},${n2(by - th * .45)}Q${n2(x)},${n2(by - th * .6)} ${n2(x - w * .5)},${n2(by - th * .45)}Z`;
+  }
+  el('path', { d: body, fill: c }, g);
+  el('path', { d: hl, fill: shade(c, .12) }, g);
+  if (snowy) el('path', { d: sn, fill: '#ffffff' }, g);
+  statics[statics.length - 1].bb = [x - W - 1, y - H * .92 - 2, 2 * W + 2, H * .92 + 6 * s];
+}
+
+/** הענק הזקן: סקוויה עצומה אחת עם שם (יעד לטיול), בקרחת קטנה עם טחב ושרכים */
+function giantRedwood(o: any) {
+  const { x, y } = o, v = rngAt(x, y, 19);
+  let moss = '', fern = '';
+  for (let i = 0; i < 9; i++) { const a = v.rand(0, 6.28), r = v.rand(30, 70); moss += ell(x + Math.cos(a) * r, y + 6 + Math.sin(a) * r * .35, v.rand(8, 16), v.rand(3, 5)); }
+  for (let i = 0; i < 7; i++) {
+    const fx = x + v.rand(-70, 70), fy = y + v.rand(8, 30);
+    for (let k = -2; k <= 2; k++) { const a = -Math.PI / 2 + k * .45, l = 10 - Math.abs(k) * 1.5; fern += `M${n2(fx)},${n2(fy)}Q${n2(fx + Math.cos(a) * l * .4)},${n2(fy + Math.sin(a) * l * .7 - 2)} ${n2(fx + Math.cos(a) * l)},${n2(fy + Math.sin(a) * l * .8)}`; }
+  }
+  const G = ctx.L.groundProps;
+  el('path', { d: moss, fill: '#6f9a46', opacity: .6 }, G);
+  el('path', { d: fern, fill: 'none', stroke: '#3f7a3c', 'stroke-width': 1.6, 'stroke-linecap': 'round' }, G);
+  sequoia(x, y, 1.75);
+  block(x - 80, y - 270, x + 80, y + 40);
+  markRect(x - 28, y - 10, x + 28, y - 1, SOLID);
+}
+
 register({
+  sequoia: o => sequoia(o.x, o.y, o.s ?? 1),
+  ancientFir: o => ancientFir(o.x, o.y, o.s ?? 1, !!o.snowy),
+  giantRedwood,
   pine: o => pine(o.x, o.y, o.s ?? 1.8, !!o.snowy),
   roundTree: o => roundTree(o.x, o.y, o.s ?? 1.5, !!o.fruit),
   palm: o => palm(o.x, o.y, o.s ?? 1),
