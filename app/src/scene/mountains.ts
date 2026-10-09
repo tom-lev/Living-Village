@@ -4,6 +4,7 @@
    בין המסות יש לפעמים מעבר, כדי שהרכס לא ייראה כמו שורה אחידה.
    העמק שבין שני הרכסים: גבעות מושלגות בבסיס הרכס הצפוני, ופלג קפוא לאורך קרקעית העמק,
    עם גשרים אוטומטיים בכל מקום שדרך או שביל חוצים אותו. */
+import { bakedF64 } from '../world/lbake';
 import { curvePts } from '../world/curve';
 import { el, n2, blob, shade, smoothOpen } from '../core/util';
 import { rand, rngAt, type LocalRng } from '../core/rng';
@@ -146,8 +147,12 @@ function bridgeName(x: number, y: number, pool: string[]) {
   usedNames.add(`${pool[i0]} ${n}`); return `${pool[i0]} ${n}`;
 }
 
+let bridgeN = 0;
 export function autoBridges(C: Pt[], trails: Pt[][], half: number, existing: Pt[], snow = false) {
-  const L = ctx.L, hits: { x: number; y: number; a: number; road: boolean }[] = [];
+  const L = ctx.L;
+  // איפה דרכים ושבילים חוצים מים: באתר המפורסם מגיע מוכן (world/lbake.ts)
+  const flat = bakedF64('bridges' + (bridgeN++), () => {
+  const hits: { x: number; y: number; a: number; road: boolean }[] = [];
   // רשת חיפוש של קטעי המים (תא 80): כל קטע של דרך או שביל נבדק רק מול קטעי מים באותו תא ובתאים שלידו
   const G = new Map<number, number[]>(), key = (x: number, y: number) => Math.floor(x / 80) * 100003 + Math.floor(y / 80);
   for (let j = 0; j < C.length - 1; j++) for (const q of [C[j], C[j + 1]]) { const k = key(q[0], q[1]), L = G.get(k) || G.set(k, []).get(k)!; if (!L.includes(j)) L.push(j); }
@@ -169,6 +174,10 @@ export function autoBridges(C: Pt[], trails: Pt[][], half: number, existing: Pt[
   };
   for (const E of [...geo.EDGES, ...geo.OUTER]) cross(E.pts, true);
   for (const t of trails) cross(t, false);
+  return Float64Array.from(hits.flatMap(h => [h.x, h.y, h.a, h.road ? 1 : 0]));
+  });
+  const hits: { x: number; y: number; a: number; road: boolean }[] = [];
+  for (let k = 0; k < flat.length; k += 4) hits.push({ x: flat[k], y: flat[k + 1], a: flat[k + 2], road: flat[k + 3] === 1 });
   for (const h of hits) {
     const g = el('g', { transform: `translate(${n2(h.x)},${n2(h.y)}) rotate(${n2(h.a)})` }, L.groundProps), len = half;
     { const a = h.a * Math.PI / 180, c = Math.cos(a) * (len + 4), s = Math.sin(a) * (len + 4); markLine([[h.x - c, h.y - s], [h.x + c, h.y + s]], h.road ? ROAD_W / 2 : 7, PATH | BRIDGE | LANE); }   // הגשר: עוברים עליו מעל המים

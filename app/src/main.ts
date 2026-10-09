@@ -4,6 +4,9 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
+import { LBAKE } from './world/lbake';
+import { updateLabels } from './world/labels';
+import { walkFlags } from './world/walk';
 import { navPack, navLoad } from './world/nav';
 import { reachPack, reachLoad } from './actors/agenda';
 import { warmUp, bakeTile, tileGrid, bakeRegions, bakeStatic, manifestP, inlineStatic, initTilesFromRegions, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
@@ -61,7 +64,7 @@ async function boot() {
     try {
       const inl = inlineStatic(), b64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0)).buffer;
       const [bin, js] = inl ? [b64(inl.bin), inl.json] : await Promise.all([fetch('tiles/static.bin').then(r => r.ok ? r.arrayBuffer() : null), fetch('tiles/static.json').then(r => r.ok ? r.json() : null)]);
-      if (bin && js) { STATIC_BB.arr = new Float32Array(bin); STATIC.off = true; staticJson = js; RNG_REPLAY.marks = js.rng ?? null; }
+      if (bin && js) { STATIC_BB.arr = new Float32Array(bin); STATIC.off = true; staticJson = js; RNG_REPLAY.marks = js.rng ?? null; LBAKE.in = js.logic ?? null; }
     } catch {}
   }
   // רשת ההליכה האפויה (משימה 30, שלב 5): מורדת במקביל לבנייה, ונטענת לפני הדמויות
@@ -86,9 +89,11 @@ async function boot() {
   // קודם רשימת הציור לציירים (הם מתחילים לעבד אותה ברקע), ורק אחר כך הדמויות
   const items = STATIC.off ? initTilesFromRegions(canvas, staticJson) : initTiles(canvas); tm.tiles = performance.now() - t0 - tm.scene;
   // המצלמה והבקשה הראשונה לאריחים לפני הדמויות: הציירים מציירים את המפה בזמן שהדף בונה את הדמויות
-  if (view.gpu) { gpuOverlay(ctx.worldD.c); document.getElementById('dWrap').style.display = 'none'; CULL.layers = [ctx.L.fx.c, ctx.L.air.c]; }
+  if (view.gpu) { gpuOverlay(ctx.worldD.c); document.getElementById('dWrap').style.display = 'none'; CULL.layers = [ctx.L.fx.c, ctx.L.air.c, ctx.L.labels.c]; }   // גם שמות המקומות: רק מה שעל המסך נצבע
   const { startFollow } = initCamera(followables);
   let q0 = performance.now();
+  // לפני הציור הראשון: שמות המקומות מוסתרים בזום הזה, והשלטים ברזולוציה של הזום (אחרת השמות נצבעו לשווא והשלטים פעמיים)
+  updateLabels(); refreshTextResolution(TEXT_DPR.v);
   if (view.gpu) renderNow(); else requestStatic();
   tm.firstRender = performance.now() - q0; q0 = performance.now();
   await new Promise(r => setTimeout(r, 0));   // הפסקה קצרה: ההודעות לציירים יוצאות עכשיו, לא אחרי כל הבנייה
@@ -100,6 +105,7 @@ async function boot() {
   tm.buildActors = performance.now() - q0; tm.actors = performance.now() - t0 - tm.scene - tm.tiles;
   (window as any).__boot = tm;
   // לבדיקה בהעלאה (tools/site.mjs): חתימה של רשת ההליכה
+  (window as any).__walkSig = () => { const u = new Uint8Array(walkFlags().buffer); let h = 2166136261; for (let i = 0; i < u.length; i++) h = Math.imul(h ^ u[i], 16777619); return h >>> 0; };   // וגם של מפת המעבר
   (window as any).__navSig = () => { const u = new Uint8Array(navPack()); let h = 2166136261; for (let i = 0; i < u.length; i++) h = Math.imul(h ^ u[i], 16777619); return h >>> 0; };
   // בנייה ברקע של שאר מה שזז, בחלקים של עד כ-8 אלפיות שנייה בין הפריימים (גם כשהעולם מושהה); בסוף – מתי (__boot.allActors)
   const bgActors = () => { if (actors.build(8)) { tm.allActors = performance.now(); (window as any).__actorTimes = actors.times; } else setTimeout(bgActors, 0); };

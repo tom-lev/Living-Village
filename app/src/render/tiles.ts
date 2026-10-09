@@ -4,6 +4,7 @@
    כך שקצב הפריימים לא תלוי בכמות התוכן. אריח שעדיין לא מוכן מוחלף זמנית באריח מרמה אחרת. */
 import { el, clamp, rrect, circ } from '../core/util';
 import { grade, rawColor, setPalette } from '../core/palette';
+import { LBAKE } from '../world/lbake';
 import { ctx, bboxOf } from '../world/context';
 import { DETAIL_GROUPS } from '../scene/terrain';
 import { view } from '../camera/view';
@@ -186,7 +187,7 @@ export function bakeStatic() {
   for (const st of statics) if (st.cid !== undefined) { const b = (st as any).bb0 ?? bboxOf(st); a.set(b, st.cid * 4); }   // המידה לפני התאמת הגודל
   const u8 = new Uint8Array(a.buffer); let bin = ''; for (let q = 0; q < u8.length; q += 0x8000) bin += String.fromCharCode(...u8.subarray(q, q + 0x8000));
   // ומצבי המחולל הכללי בסוף כל קטע ציור (drawOnly), והמצב בסוף הבנייה – לבדיקה שהאתר בנה את אותו עולם
-  return { bin: btoa(bin), json: JSON.stringify({ texts: allTexts, colors, rng: RNG_MARKS, seedEnd: (globalThis as any).__seedEnd }) };
+  return { bin: btoa(bin), json: JSON.stringify({ texts: allTexts, colors, rng: RNG_MARKS, seedEnd: (globalThis as any).__seedEnd, logic: LBAKE.out }) };
 }
 /** האתר המפורסם: במקום רשימת ציור מהדף – הציירים טוענים בעצמם את קבצי האזורים */
 export function initTilesFromRegions(canvas: HTMLCanvasElement, st: { texts: any[]; colors: string[] }) {

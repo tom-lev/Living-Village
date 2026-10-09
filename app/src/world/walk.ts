@@ -21,6 +21,8 @@ export function initWalk() {
   W = Math.ceil((B.x1 - X0) / C); H = Math.ceil((B.y1 - Y0) / C);
   F = new Uint16Array(W * H); PRIV = new Uint16Array(W * H);
 }
+/** כל מפת המעבר (לאפייה של סימוני הקרקע) */
+export const walkFlags = () => F;
 const ix = (x: number) => Math.floor((x - X0) / C), iy = (y: number) => Math.floor((y - Y0) / C);
 const inside = (i: number, j: number) => i >= 0 && j >= 0 && i < W && j < H;
 

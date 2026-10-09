@@ -15,7 +15,8 @@ const dirty = new Set<VNode>();
 const texts = new Set<VNode>();
 const pow2 = (v: number) => Math.min(16, Math.max(.25, 2 ** Math.ceil(Math.log2(Math.max(v, 1e-3)))));
 /** רזולוציית הטקסט הדרושה: כמה פיקסלים של המסך יש ליחידה של הטקסט (כולל הזום וצפיפות המסך) */
-const textNeed = (n: VNode, dpr: number) => pow2(Math.abs(n.c.worldTransform.a) * dpr);
+// הגודל על המסך מחושב במדויק (גם לפני הציור הראשון, כשהמיקום השמור עוד לא עודכן – אחרת כל השלטים נצבעו פעמיים)
+const TM = new Matrix(), textNeed = (n: VNode, dpr: number) => pow2(Math.abs(n.c.getGlobalTransform(TM, false).a) * dpr);
 /** נקרא כשהמצלמה עומדת: טקסט נראה שהרזולוציה שלו רחוקה מהדרוש (פי 2) – נצבע מחדש */
 export function refreshTextResolution(dpr: number) {
   let changed = 0;

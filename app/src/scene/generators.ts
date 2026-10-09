@@ -2,6 +2,8 @@
 import { el, n2, circ, blob } from '../core/util';
 import { rand, pick, R, rngAt, drawOnly } from '../core/rng';
 import { STATIC } from '../core/util';
+import { bakedInts } from '../world/lbake';
+let forestN = 0;
 import { ctx, prop, NO_TREE, inWater, statics, bboxOf } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
 import { pine, roundTree, sequoia, ancientFir, pineBox, roundBox, sequoiaBox, firBox } from '../prefabs/nature';
@@ -140,17 +142,21 @@ export const GENERATORS: Record<string, (o: any) => void> = {
       const v = rngAt(gx, gy, 11);
       cand.push([gx * C + v.r() * C, gy * C + v.r() * C, v.r()]);
     }
-    for (const [x, y, roll] of cand) {
-      if (x < B.x0 || x > B.x1 || y < B.y0 || y > B.y1) continue;
+    // הבחירה (צפיפות, מים, מפת המעבר, מרווח בין עצים) כבדה: באתר המפורסם מגיעה מוכנה – רק המספרים של המועמדים שנבחרו
+    const keep = bakedInts('forest' + (forestN++), () => { const ks: number[] = [];
+    cand.forEach(([x, y, roll], ci) => {
+      if (x < B.x0 || x > B.x1 || y < B.y0 || y > B.y1) return;
       // בערבה: עצים בודדים בלבד
       const t = anc(x), d = (dense(x, y) ? (inHome(x, y) ? dens.village : dens.forest) : dens.open) * (1 - pr(y) * (1 - .9 * t * t) * (1 - (dens.prairie ?? .04))) * (1 - .5 * t);
-      if (roll > d) continue;
+      if (roll > d) return;
       // האגם הדרומי: לא בחול ולא במים; על היבשה שמסביבו מותר
-      if (lake && y > T.beach.y - 40 && x > lake.Wx(y) - 45 && !(x > lake.Ex(y) + 40 || y > lake.Sy(x) + 50)) continue;
-      if (!treeOk(x, y, o.noBands) || near(x, y)) continue;
-      trees.push([x, y]);
+      if (lake && y > T.beach.y - 40 && x > lake.Wx(y) - 45 && !(x > lake.Ex(y) + 40 || y > lake.Sy(x) + 50)) return;
+      if (!treeOk(x, y, o.noBands) || near(x, y)) return;
+      ks.push(ci);
       const k = Math.floor(x / cell) + ',' + Math.floor(y / cell); (grid.get(k) || grid.set(k, []).get(k)).push([x, y]);
-    }
+    });
+    return Int32Array.from(ks); });
+    for (const ci of keep) trees.push([cand[ci][0], cand[ci][1]]);
     // סוג העץ וגודלו נקבעים לפי המיקום שלו (rngAt), לא לפי הסדר: כך הוספה או הסרה של עצים (קרחת, אובייקט חדש) לא משנה את שאר היער
     const cold = winter(ctx.world.terrain);
     /* בנייה לפי אזורים (scene/chunks.ts): כאן רק מתכננים כל עץ – סוג, גודל ומידות מדויקות, בלי לצייר.

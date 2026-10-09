@@ -22,7 +22,8 @@ import { buildTerrain, lakeShore } from './terrain';
 import { GENERATORS } from './generators';
 import { addLabel } from '../world/labels';
 import { places, autoPlace } from '../world/places';
-import { initWalk, markRect, markEllipse, markLine, markPolygon, markPath, clearPathIn, placeOk, findPlace, flagsAt, WATER, SWIM, SOFT, SOLID, PATH, BRIDGE, LANE, PLAZA } from '../world/walk';
+import { bakedInts, rle16, unrle16 } from '../world/lbake';
+import { walkFlags, initWalk, markRect, markEllipse, markLine, markPolygon, markPath, clearPathIn, placeOk, findPlace, flagsAt, WATER, SWIM, SOFT, SOLID, PATH, BRIDGE, LANE, PLAZA } from '../world/walk';
 import { geo, ROAD_W } from '../world/geometry';
 import { catmull } from '../world/nav';
 import { autoBridges } from './mountains';
@@ -44,7 +45,8 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   finish('geometry');
   initWalk();   // מפת מעבר: מסמנים תוך כדי בנייה מה מותר לדרוך עליו
   buildTerrain(w);
-  markTerrain(w);
+  // סימוני המים והדרכים: באתר המפורסם מגיעים מוכנים (world/lbake.ts)
+  { const F = walkFlags(); unrle16(bakedInts('walkTerrain', () => { markTerrain(w); return rle16(F); }), F); }
   finish('terrain');
   // אגמים ובריכות מסומנים כמים כבר עכשיו, לפני שחפצים קטנים מחפשים מקום (אחרת ספסל יכול "לזוז" לתוך אגם)
   for (const o of w.objects) { const e = declOf(o.type).water?.(o); if (e) markEllipse(e[0], e[1], e[2], e[3], WATER); }

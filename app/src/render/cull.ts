@@ -10,7 +10,7 @@ const MARGIN = 90;   // עשן עולה, נדנדות זזות: מרווח סב�
 
 export function cullLayers(layers: Container[], cam: { k: number; x: number; y: number }, vw: number, vh: number) {
   const x0 = -cam.x / cam.k, y0 = -cam.y / cam.k, x1 = (vw - cam.x) / cam.k, y1 = (vh - cam.y) / cam.k;
-  for (const L of layers) for (const c of L.children) {
+  for (const L of layers) if (L.parent) for (const c of L.children) {   // שכבה שיצאה מעץ הציור (שמות מוסתרים): לא מודדים
     let b = box.get(c);
     if (!b) {
       // נמדד פעם אחת, כשכבר יש לו צורה (אלמנט ריק – למשל קן נמלים שעוד לא צויר – לא מדלגים עליו)

@@ -16,7 +16,7 @@ const PENDING = 'village-names-pending';   // שינויים שנשמרו אבל
 
 interface Label { o: any; key: string; original: string; x: number; y: number; x0: number; y0: number; g: any; inner: any; text: any }
 const labels: Label[] = [];
-let lastK = -1, alpha = 0, laidFor = -1;
+let lastK = -1, alpha = 0, laidFor = -1, parkAt: any = null, parkI = 0;
 
 let pending: Record<string, string> = {};
 try { pending = JSON.parse(localStorage.getItem(PENDING) || '{}'); } catch {}
@@ -109,6 +109,8 @@ export function updateLabels() {
   lastK = k;
   const L = ctx.L.labels; alpha = clamp((k / view.fitK - SHOW_FROM) / (FULL_AT - SHOW_FROM), 0, 1);
   L.setAttribute('display', alpha > 0 ? 'inline' : 'none');
+  // בכרטיס הגרפי: שכבה מוסתרת יוצאת לגמרי מעץ הציור (כשהיא רק "מוסתרת", מנוע הציור צבע את כל השמות בציור הראשון)
+  if (L instanceof VNode) { if (!alpha && L.c.parent) { parkAt = L.c.parent; parkI = parkAt.getChildIndex(L.c); parkAt.removeChild(L.c); } else if (alpha && parkAt && !L.c.parent) { parkAt.addChildAt(L.c, Math.min(parkI, parkAt.children.length)); parkAt = null; } }
   if (!alpha) return;
   L.setAttribute('opacity', alpha.toFixed(2));
   const s = PX / (FS * k);

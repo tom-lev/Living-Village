@@ -34,7 +34,8 @@ function LOGIC() { return {
   places: window.__places.map(p => `${p.kind}|${p.name}|${(p.door || p.at || []).map(Math.round)}`),
   objs: window.__world.objects.map(o => `${o.type}|${(o._bb || []).map(Math.round)}|${o._k ? o._k[0].toFixed(3) : ''}`),
   rng: window.__seedEnd,
-  nav: window.__navSig(),   // רשת ההליכה (באתר: נטענת מהקובץ האפוי – חייבת להיות זהה בדיוק)
+  nav: window.__navSig(),
+  walk: window.__walkSig(),   // מפת המעבר הסופית   // רשת ההליכה (באתר: נטענת מהקובץ האפוי – חייבת להיות זהה בדיוק)
 }; }
 
 async function bakeTiles() {
