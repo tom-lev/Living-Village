@@ -4,11 +4,12 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
-import { bakeTile, tileGrid, bakeRegions, bakeStatic, manifestP, inlineStatic, initTilesFromRegions, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
+import { warmUp, bakeTile, tileGrid, bakeRegions, bakeStatic, manifestP, inlineStatic, initTilesFromRegions, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
 import { CULL } from './render/gpu';
 import { chunksIn, buildChunk, buildDetail, nextChunk, pendingCount, allChunks } from './scene/chunks';
 import { ctx, STATIC_BB } from './world/context';
 import { STATIC } from './core/util';
+import { RNG_REPLAY, seedNow } from './core/rng';
 import { FRAME } from './world/budget';
 import { vstats, refreshTextResolution, TEXT_DPR } from './render/vnode';
 import { setPalette, regrade, grade, currentPalette } from './core/palette';
@@ -34,6 +35,7 @@ const PAL_KEY = 'village-palette';
 try { const p = localStorage.getItem(PAL_KEY); if (world.palettes?.some(x => x.name === p)) world.palette = p; } catch {}
 async function boot() {
   // קודם הכרטיס הגרפי: אם הוא זמין, גם הדמויות והאפקטים יחיו בו
+  startPainters();   // הציירים שברקע מתחילים להיטען מיד, במקביל להכנת הכרטיס הגרפי
   const canvas = await prepareGpu(document.getElementById('mapC') as HTMLCanvasElement);
   view.gpu = ctx.gpuDyn = tileStats.mode === 'gpu';
   const tm: Record<string, number> = {}, t0 = performance.now();   // זמני הטעינה (window.__boot), למדידה
@@ -42,15 +44,25 @@ async function boot() {
   // האתר המפורסם (משימה 30, שלב 3): הנוף הקבוע מגיע מוכן (אריחים וקבצי אזורים), אז לא בונים אותו – רק את ההיגיון.
   // המידות של הדברים העומדים והשלטים מגיעים מקובץ שנאפה (static.bin, static.json)
   const [man] = await Promise.all([manifestP, paintersLoaded()]);
+  // קודם נותנים לדפדפן להציג את התמונה המיידית (עד 1.5 שניות): בזמן הבנייה הכבדה הוא לא יכול לצייר כלום על המסך
+  await new Promise<void>(res => {
+    const s0 = performance.now(), box = document.getElementById('instant');
+    const f = () => (!box?.firstChild || (window as any).__instantAt || performance.now() - s0 > 1500)
+      ? requestAnimationFrame(() => setTimeout(res, 0)) : setTimeout(f, 30);
+    f();
+  });
   let staticJson: any = null;
   if (man?.regions) {
     try {
       const inl = inlineStatic(), b64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0)).buffer;
       const [bin, js] = inl ? [b64(inl.bin), inl.json] : await Promise.all([fetch('tiles/static.bin').then(r => r.ok ? r.arrayBuffer() : null), fetch('tiles/static.json').then(r => r.ok ? r.json() : null)]);
-      if (bin && js) { STATIC_BB.arr = new Float32Array(bin); STATIC.off = true; staticJson = js; }
+      if (bin && js) { STATIC_BB.arr = new Float32Array(bin); STATIC.off = true; staticJson = js; RNG_REPLAY.marks = js.rng ?? null; }
     } catch {}
   }
   buildScene(world, svgS, svgD);
+  // בדיקה: המחולל הכללי בסוף הבנייה – באתר המפורסם (בלי ציור) חייב להיות זהה למה שנאפה (אחרת ההיגיון לא תואם לנוף)
+  (globalThis as any).__seedEnd = seedNow();
+  if (STATIC.off && staticJson?.seedEnd !== undefined && staticJson.seedEnd !== seedNow()) { console.warn('the world logic differs from the baked scenery'); (window as any).__rngMismatch = true; }
   // בנייה לפי אזורים (scene/chunks.ts): רק האזורים של המבט הראשון מצוירים עכשיו; השאר ברקע אחרי שהמפה מוצגת
   {
     const r = document.getElementById('stage').getBoundingClientRect(), { B, home } = ctx, hw = home.x1 - home.x0, hh = home.y1 - home.y0;
@@ -101,7 +113,7 @@ async function boot() {
     // טקסטים ברזולוציה של הזום הנוכחי: מתעדכנים רק כשהמצלמה עומדת (לא באמצע זום), לכל היותר 3 פעמים בשנייה
     textRefresh();
     // זמן הטעינה כפי שמרגישים אותו: מתחילת טעינת הדף עד שכל האריחים שעל המסך צוירו (תקציב bootMs)
-    if (tm.ready === undefined && tileStats.painted > 0 && tileStats.missing === 0) tm.ready = performance.now();
+    if (tm.ready === undefined && tileStats.painted > 0 && tileStats.missing === 0) { tm.ready = performance.now(); setTimeout(warmUp, 300); }
     // התמונה המיידית יורדת כשהמפה החיה מוכנה (הן זהות), או כבר בתנועה הראשונה של המצלמה (אחרת התמונה הייתה נשארת במקום)
     if (instantEl && (tm.ready !== undefined || camMoved.at)) { instantEl.remove(); instantEl = null; }
     drawGrid();

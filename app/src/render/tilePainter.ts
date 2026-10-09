@@ -85,7 +85,7 @@ const WIDE = 64;   // צורה שמכסה יותר תאים מזה (רקע של 
 export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
   let items: DLItem[] = [], grid = new Map<number, number[]>(), wide: number[] = [], B: any, TILE = 256, BASE = 1 / 8;
   // קבצי אזורים: נטענים לפי האריחים שצריך לצייר (כל צורה נטענת פעם אחת, גם אם היא באזורים שכנים)
-  let R: { base: string; RS: number } | null = null, regionsReady: Promise<void> = Promise.resolve();
+  let R: { base: string; RS: number } | null = null;
   const loadedR = new Map<string, Promise<void>>(), haveId = new Set<number>();
   function addItems(add: DLItem[], ids?: Int32Array) {
     const from = items.length;
@@ -105,7 +105,7 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
   /** האזורים שהאריח נוגע בהם – נטענים לפני שמציירים אותו */
   function regionsFor(l: number, tx: number, ty: number) {
     if (!R) return null;
-    const tw = TILE / (BASE * 2 ** l), x0 = B.x0 + tx * tw, y0 = B.y0 + ty * tw, ps: Promise<void>[] = [regionsReady];
+    const tw = TILE / (BASE * 2 ** l), x0 = B.x0 + tx * tw, y0 = B.y0 + ty * tw, ps: Promise<void>[] = [loadRegion('global')];
     for (let cy = Math.floor(y0 / R.RS); cy <= Math.floor((y0 + tw) / R.RS); cy++) for (let cx = Math.floor(x0 / R.RS); cx <= Math.floor((x0 + tw) / R.RS); cx++) ps.push(loadRegion(cx + '_' + cy));
     return Promise.all(ps);
   }
@@ -185,7 +185,7 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
     } else if (m.type === 'regions') {
       // האתר המפורסם: אין רשימת ציור מהדף; הצורות מגיעות מקבצי האזורים (וקובץ אחד לצורות שמכסות שטח גדול)
       ({ B, TILE, BASE } = m); R = { base: m.base, RS: m.RS }; items = []; seen = new Uint32Array(0);
-      regionsReady = loadRegion('global');
+      // (גם הקובץ הגלובלי נטען רק כשבאמת צריך לצייר: בטעינה האריחים שעל המסך מגיעים מוכנים, והוא רק התחרה בהם ברשת)
     } else if (m.type === 'add') {
       // אזור שצויר מאוחר יותר: מצטרף לרשימה ולאינדקס
       const from = items.length, add = unpackDL(m.packed);

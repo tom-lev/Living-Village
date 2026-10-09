@@ -8,6 +8,18 @@ export function R() {
   return ((t ^ t >>> 14) >>> 0) / 4294967296;
 }
 export const rand = (a: number, b: number) => a + (b - a) * R();
+export const seedNow = () => seed;
+
+/* קטעי ציור בלבד (משימה 30, שלב 4): באתר המפורסם הנוף מגיע מוכן, אז קטע שרק מצייר לא רץ בכלל.
+   אבל חלק מהקטעים צורכים מספרים מהמחולל הכללי, וכל מה שאחריהם תלוי ברצף. לכן בבנייה הרגילה (ובאפייה בשרת)
+   נרשם מצב המחולל בסוף כל קטע, ובאתר המפורסם המחולל קופץ בדיוק למצב הזה – כאילו הקטע רץ */
+export const RNG_MARKS: number[] = [];
+export const RNG_REPLAY: { marks: number[] | null } = { marks: null };
+let markI = 0;
+export function drawOnly(off: boolean, f: () => void) {
+  if (off && RNG_REPLAY.marks && markI < RNG_REPLAY.marks.length) { seed = RNG_REPLAY.marks[markI++]; return; }
+  f(); RNG_MARKS.push(seed); markI++;
+}
 export const pick = <T>(arr: T[]): T => arr[Math.floor(R() * arr.length)];
 
 /** מחולל אקראי מקומי לפי מקום (למשל לכל בית אופי משלו): קבוע בין טעינות, ולא מזיז את הרצף של שאר העולם */

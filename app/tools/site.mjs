@@ -3,7 +3,7 @@
    שימוש: node tools/site.mjs   (מתוך app/; צריך Chromium של Playwright: npx playwright install chromium) */
 import { spawn, execSync } from 'node:child_process';
 import { cpus } from 'node:os';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 
 const PORT = 4399, SITE = `http://localhost:${PORT}/`;
 const run = cmd => { console.log('>', cmd); execSync(cmd, { stdio: 'inherit' }); };
@@ -27,6 +27,14 @@ try {
   if (process.platform === 'win32') try { execSync(`taskkill /pid ${server.pid} /T /F`, { stdio: 'ignore' }); } catch {} else server.kill();
 }
 console.log('site ready in dist/');
+
+/** ההיגיון של העולם (לבדיקה שהאתר המפורסם בונה אותו בדיוק) */
+function LOGIC() { return {
+  trees: window.__trees.map(t => [t.x, t.y, t.x0, t.x1, t.top].map(v => Math.round(v)).join(',')),
+  places: window.__places.map(p => `${p.kind}|${p.name}|${(p.door || p.at || []).map(Math.round)}`),
+  objs: window.__world.objects.map(o => `${o.type}|${(o._bb || []).map(Math.round)}|${o._k ? o._k[0].toFixed(3) : ''}`),
+  rng: window.__seedEnd,
+}; }
 
 async function bakeTiles() {
   const MAXL = 3, t0 = Date.now(), K = Math.max(1, Math.min(4, cpus().length - 1));
@@ -56,6 +64,7 @@ async function bakeTiles() {
     }
   }));
   const meta = await pages[0].evaluate(() => window.__tileBake.meta);
+  const logicBaked = await pages[0].evaluate(LOGIC);
   // שלב 3: קבצי אזורים (הצורות של העולם לזום קרוב), מידות הדברים העומדים, והשלטים
   const RS = 1024, regs = await pages[0].evaluate(RS => window.__tileBake.bakeRegions(RS), RS);
   mkdirSync(new URL('../dist/regions/', import.meta.url), { recursive: true });
@@ -70,7 +79,19 @@ async function bakeTiles() {
   writeFileSync(new URL('../dist/tiles/manifest.json', import.meta.url), JSON.stringify(manifest));
   // הנתונים הקטנים (הרשימה, מידות הדברים העומדים, השלטים) נכתבים לתוך הדף עצמו: בלי הורדות נוספות בתחילת הטעינה
   const html = new URL('../dist/index.html', import.meta.url), inline = JSON.stringify({ manifest, static: { bin: st.bin, json: JSON.parse(st.json) } }).replace(/</g, '\\u003c');
+  // כל חלקי הקוד שנטענים בהתחלה (המנוע הגרפי, הצייר שברקע): מתחילים להוריד מיד, במקביל לקוד הראשי (ולא בסבבים אחד אחרי השני)
+  const pre = readdirSync(new URL('../dist/assets/', import.meta.url)).filter(f => f.endsWith('.js') && !/^(index|check|samples)-/.test(f)).map(f => `<link rel="modulepreload" href="./assets/${f}">`).join('');
+  writeFileSync(html, readFileSync(html, 'utf8').replace('</head>', pre + '</head>'));
   writeFileSync(html, readFileSync(html, 'utf8').replace('<div id="instant"', `<script>window.__BAKED=${inline}</script>
 <div id="instant"`));
+  // בדיקה: האתר המפורסם (בלי ציור הנוף) בונה בדיוק את אותו היגיון כמו הבנייה המלאה – עצים, מקומות, מידות האובייקטים
+  {
+    const b2 = await chromium.launch(), q = await b2.newPage();
+    await q.goto(SITE); await q.waitForFunction(() => window.__trees?.length && window.__village && window.__places, null, { timeout: 180000 });
+    const logicSite = await q.evaluate(LOGIC); await b2.close();
+    const bad = Object.keys(logicBaked).filter(k => JSON.stringify(logicBaked[k]) !== JSON.stringify(logicSite[k]));
+    if (bad.length) throw new Error(`the published site builds different world logic than the full build: ${bad.join(', ')}`);
+    console.log('published site logic matches the full build');
+  }
   console.log(`baked ${n} tiles (${(bytes / 1e6).toFixed(1)} MB) with ${K} pages in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
 }

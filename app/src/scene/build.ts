@@ -63,7 +63,8 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
     if (places.length === p0) autoPlace(o);   // כל אובייקט (גם עתידי) הוא יעד, אלא אם הוא נוף בלבד
     // לבדיקת הפרופורציות: המלבן שהאובייקט צייר (איחוד כל מה שנוסף לסצנה בציור שלו)
     // (כל דבר עומד נמדד עכשיו, כשהציור עוד קטן, ונשמר: מדידה אחרי שכל היער צויר מכריחה חישוב פריסה של כל העולם)
-    { let bb: number[] | null = null; for (const st of statics.slice(s0)) { const b = bboxOf(st); if (b[2] > 0) bb = bb ? [Math.min(bb[0], b[0]), Math.min(bb[1], b[1]), Math.max(bb[2], b[0] + b[2]), Math.max(bb[3], b[1] + b[3])] : [b[0], b[1], b[0] + b[2], b[1] + b[3]]; } if (bb) Object.defineProperty(o, '_bb', { value: bb, enumerable: false, writable: true }); }
+    // (st.bb0: המידה כפי שנמדדה, לפני התאמת הגודל – זו שנאפית לאתר המפורסם, כדי שגם שם ההתאמה תחושב בדיוק אותו דבר)
+    { let bb: number[] | null = null; for (const st of statics.slice(s0)) { const b = bboxOf(st); (st as any).bb0 ??= b.slice(); if (b[2] > 0) bb = bb ? [Math.min(bb[0], b[0]), Math.min(bb[1], b[1]), Math.max(bb[2], b[0] + b[2]), Math.max(bb[3], b[1] + b[3])] : [b[0], b[1], b[0] + b[2], b[1] + b[3]]; } if (bb) Object.defineProperty(o, '_bb', { value: bb, enumerable: false, writable: true }); }
     // פרופורציות (world/scale.ts): דבר בגודל אמיתי שהציור שלו סוטה ביותר מ-30% מהגובה האמיתי – מוקטן או מוגדל סביב נקודת הקרקע שלו
     const realH = REAL_H[o.type], minH = MAP_MIN[o.type], bb0 = o._bb;
     if ((realH || minH) && bb0 && o.x !== undefined) {

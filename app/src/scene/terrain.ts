@@ -2,7 +2,8 @@
 import { addLabel } from '../world/labels';
 import { curvePts } from '../world/curve';
 import { el, n2, circ, blob, smoothOpen, clamp } from '../core/util';
-import { rand, pick, rngAt } from '../core/rng';
+import { rand, pick, rngAt, drawOnly } from '../core/rng';
+import { STATIC } from '../core/util';
 import { buildMountains } from './mountains';
 import { addPlace } from '../world/places';
 import { ctx } from '../world/context';
@@ -18,6 +19,8 @@ export function buildTerrain(w: WorldData) {
   el('rect', { x: B.x0, y: B.y0, width: B.x1 - B.x0, height: B.y1 - B.y0, fill: '#9cd162' }, L.ground);
   const BAND = 300, COL = 400, NR = Math.ceil((B.y1 - B.y0) / BAND), NC = Math.ceil((B.x1 - B.x0) / COL);
   const tileOf = (x: number, y: number) => clamp(Math.floor((y - B.y0) / BAND), 0, NR - 1) * NC + clamp(Math.floor((x - B.x0) / COL), 0, NC - 1);
+  // (קטעי ציור בלבד – drawOnly: באתר המפורסם לא רצים, הנוף מוכן מראש)
+  drawOnly(STATIC.off, () => {
   for (let i = 0; i < NR * NC; i++) DETAIL_GROUPS.push(el('g', null, L.ground));
   for (let i = 0; i < T.grass.patches; i++)
     el('path', { d: blob(rand(B.x0 + 40, B.x1 - 40), rand(B.y0 + 40, B.y1 - 40), rand(40, 110), rand(25, 60), 7, .12, rand(0, 6)), fill: '#a9d96f', opacity: .7 }, L.ground);
@@ -67,9 +70,10 @@ export function buildTerrain(w: WorldData) {
   el('path', { d: worn, fill: '#fbe2c9', opacity: .7 }, L.roads);
   el('path', { d: pebbles, fill: '#e0b08a', opacity: .75 }, L.roads);
   verge.forEach((d, i) => d && el('path', { d, fill: 'none', stroke: '#7fb84d', 'stroke-width': 1, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: .85 }, DETAIL_GROUPS[i]));
+  });
 
   /* שבילים צרים להולכי רגל (מתחת לדרכים) */
-  {
+  drawOnly(STATIC.off, () => {
     const tg = el('g', null, L.roads); L.roads.insertBefore(tg, L.roads.firstChild);
     // קצה שלא מוביל לשום מקום: השביל מצטמצם ונמוג בדשא (במקום קצה עגול וסגור)
     const TAIL = 34, tails: number[][][] = [];
@@ -120,7 +124,7 @@ export function buildTerrain(w: WorldData) {
     el('path', { d: d + fil, fill: 'none', stroke: '#efd6b4', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, tg);
     el('path', { d: flare(4, 6) + taper(4), fill: '#efd6b4' }, tg);
     el('path', { d: crumbs, fill: '#ead0ab', opacity: .85 }, tg);
-  }
+  });
 
   /* חוף (למטה) */
   // החוף והמים מתחילים בחוף המערבי של האגם (אם יש לו), ממערב לו יבשה (היער)
@@ -138,7 +142,7 @@ export function buildTerrain(w: WorldData) {
   if (T.sea.name) addLabel({ type: 'lake', x: T.sea.labelAt?.[0] ?? 300, y: T.sea.labelAt?.[1] ?? T.sea.y + 120, name: T.sea.name }, T.sea.labelAt?.[1] ?? T.sea.y + 120);
 
   /* הנהר (נמשך מעל החול אל הים) */
-  {
+  drawOnly(STATIC.off, () => {
     const d = smoothOpen(w.river);
     el('path', { d, fill: 'none', stroke: '#e9dcae', 'stroke-width': 58, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.ground);
     el('path', { d, fill: 'none', stroke: '#5ec6e8', 'stroke-width': 44, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.ground);
@@ -146,11 +150,11 @@ export function buildTerrain(w: WorldData) {
     let wv = '';
     for (const p of geo.RIVER_SAMPLES.filter((_, i) => i % 3 === 0)) wv += `M${n2(p[0] - 6 + rand(-8, 8))},${n2(p[1])}q3,-2.5 6,0q3,2.5 6,0`;
     el('path', { d: wv, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 1.3, 'stroke-linecap': 'round', opacity: .8 }, L.ground);
-  }
+  });
 
   /* המים בדרום: אגם גדול ושקט (משימה 11). חוף דרומי וחוף מזרחי סוגרים אותו; במערב הוא ממשיך עד קצה העולם
      (שם יתחבר בעתיד לים). בלי גלים: רק אדוות קטנות וקו חוף רך */
-  {
+  drawOnly(STATIC.off, () => {
     const top = wave(T.sea.y, 10, .02, 1, 90), S = lakeShore(T);
     el('path', { d: top + `L${B.x1},${B.y1}L${X0},${B.y1}Z`, fill: S ? '#5ec0e2' : '#4fb8de' }, L.ground);
     el('path', { d: top, fill: 'none', stroke: '#e8f8fd', 'stroke-width': S ? 4 : 7, 'stroke-linecap': 'round', opacity: .8 }, L.ground);
@@ -174,7 +178,7 @@ export function buildTerrain(w: WorldData) {
       el('path', { d: shore, fill: 'none', stroke: '#f3dfb0', 'stroke-width': 34, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.ground);
       el('path', { d: shore, fill: 'none', stroke: '#e8f8fd', 'stroke-width': 3, 'stroke-linecap': 'round', opacity: .75, transform: 'translate(-6,-6)' }, L.ground);
     }
-  }
+  });
 
   /* צפון ההרים: מעבר הדרגתי לחורף (משימה 10א). מהרכס הדרומי (snow.line) ועד קרקעית העמק (snow.full):
      הקרקע מצהיבה בשכבות שקופות, כתמי שלג קטנים שהולכים וגדלים ומתמזגים, ורק משם קרקע מושלגת מלאה.
@@ -189,7 +193,7 @@ export function buildTerrain(w: WorldData) {
     for (let x = B.x0 - 60; x <= B.x1 + 60; x += 70) pts.push([x, y0 + v.rand(-amp, amp * .65)]);
     return pts;
   };
-  {
+  drawOnly(STATIC.off, () => {
     const y0 = T.snow.line, y1 = T.snow.full ?? T.snow.line, th = T.snow.thaw as number[] | undefined, BANDS = 7, cold = winter(T);
     for (let k = 0; k < BANDS; k++) el('path', { d: wavy(y0 - (y0 - y1) * (k + .3) / BANDS, k + 1, 30), fill: '#d9d4a0', opacity: .13 }, L.ground);   // הדשא מצהיב
     // כתמי שלג: גדלים לכיוון קרקעית העמק, ומתכווצים שוב צפונה ממנה (השלג נמס אל הערבה)
@@ -208,7 +212,7 @@ export function buildTerrain(w: WorldData) {
       const S = wavyPts(y1, 0), N = wavyPts(th[0], 5).reverse();
       el('path', { d: smoothOpen(S) + smoothOpen(N).replace(/^M/, 'L') + 'Z', fill: '#eaf3f7' }, L.ground);
     }
-  }
+  });
   /* הערבה (prairie) בצפון: מעבר הדרגתי מהדשא הירוק לערבה עשבונית – כתמים גדולים של עשב ירוק וזהוב, ציציות עשב
      צפופות (מניפה של גבעולים), גושי צמחייה נמוכה ותלתן, וקבוצות של פרחי בר. הכול באקראיות מקומית (rngAt).
      חסכוני בנקודות (תקציב הביצועים): הרבה מהמראה בא מכתמים גדולים וזולים, והפרטים הקטנים נראים בזום קרוב */
@@ -255,7 +259,7 @@ export function buildTerrain(w: WorldData) {
     }
     for (const c in fl) if (fl[c]) el('path', { d: fl[c], fill: c }, L.ground);
     }
-  if (T.prairie) {
+  drawOnly(STATIC.off, () => { if (T.prairie) {
     const P = T.prairie, BANDS = 8, pr = prairie(T);
     for (let k = 0; k < BANDS; k++) el('path', { d: wavy(P.start - (P.start - P.full) * (k + .4) / BANDS, 40 + k, 40), fill: '#c9cf7c', opacity: .08 }, L.ground);
     el('path', { d: wavy(P.full - 60, 49, 50), fill: '#c4cb78', opacity: .28 }, L.ground);
@@ -264,9 +268,11 @@ export function buildTerrain(w: WorldData) {
     const xa = B.x0, xl = Math.min(B.x1, P.legacyX1 ?? B.x1), xe = Math.min(B.x1, P.east ?? B.x1);
     prairieDetail(xa, xl, rngAt(P.start, P.full, 75), () => 1);
     if (xe > xl) prairieDetail(xl, xe, rngAt(P.start, P.full, 76), x => Math.min(1, (xe - x) / 900));
-  }
+  } });
+  drawOnly(STATIC.off, () => {
   for (let i = 0; i < T.snow.patches; i++)
     el('path', { d: blob(rand(T.snow.thaw ? B.x0 : B.x0, B.x1), rand(T.snow.thaw ? T.snow.full : B.y0 + 60, T.snow.patchesTo), rand(50, 140), rand(20, 50), 7, .12, rand(0, 6)), fill: pick(['#ffffff', '#dfecf2']), opacity: .8 }, L.ground);
+  });
 
   /* רכסי הרים, העמק שביניהם והפלג */
   buildMountains(w);

@@ -8,6 +8,7 @@ import { ctx, bboxOf } from '../world/context';
 import { DETAIL_GROUPS } from '../scene/terrain';
 import { view } from '../camera/view';
 import { createPainter, packDL, encodeRegion, type DLItem } from './tilePainter';
+import { RNG_MARKS } from '../core/rng';
 import { SNode, mul, parseTransform, pathBox, boxThrough, type M6 } from './snode';
 import { statics, cidCount } from '../world/context';
 import { createGpuTiles, type GpuTiles } from './gpu';
@@ -108,6 +109,9 @@ export function flushCoarseTiles() {
   coarseDirty.clear(); lastNeed = ''; requestStatic();
 }
 let colorSet = new Set<string>();
+/** המבט הראשון מוכן: מכאן גם מכינים מראש אריחים של רמות זום אחרות */
+let warm = false;
+export function warmUp() { if (!warm) { warm = true; lastNeed = ''; requestStatic(); } }
 const addColor = (c: string) => { if (!colorSet.has(c)) { colorSet.add(c); colors.push(c); for (const p of painters) p.postMessage({ type: 'palette', cmap: colorMap(), gen, keep: true }); } };
 
 /* ───────── אריחים מוכנים מראש (משימה 30, שלב 2) ─────────
@@ -133,7 +137,9 @@ const inflight = new Set<string>(), failed = new Set<string>();
 function fetchTile(l: number, i: number, j: number) {
   const k = tkey(l, i, j), g0 = gen, pi = bakedPal();
   if (inflight.has(k)) return; inflight.add(k);
-  fetch(`tiles/p${pi}/${l}/${i}_${j}.webp`).then(r => { if (!r.ok) throw 0; return r.blob(); }).then(b => createImageBitmap(b)).then(bmp => {
+  // אם התמונה המיידית כבר הציגה את האריח הזה – לוקחים אותו ממנה (כבר הורד ופוענח), בלי הורדה נוספת
+  const path = `tiles/p${pi}/${l}/${i}_${j}.webp`, im = document.querySelector<HTMLImageElement>(`#instant img[src="${path}"]`);
+  (im?.complete && im.naturalWidth ? createImageBitmap(im) : fetch(path).then(r => { if (!r.ok) throw 0; return r.blob(); }).then(b => createImageBitmap(b))).then(bmp => {
     inflight.delete(k);
     if (g0 !== gen) { bmp.close(); return; }   // הפלטה התחלפה בינתיים
     tileStats.painted++; putTile(l, i, j, bmp); requestStatic();
@@ -177,9 +183,10 @@ export function bakeRegions(RS: number) {
 /** לשרת הבנייה: המידות של כל דבר עומד לפי מספר היצירה שלו (static.bin), השלטים והצבעים (static.json) */
 export function bakeStatic() {
   const n = cidCount(), a = new Float32Array(n * 4);
-  for (const st of statics) if (st.cid !== undefined) { const b = bboxOf(st); a.set(b, st.cid * 4); }
+  for (const st of statics) if (st.cid !== undefined) { const b = (st as any).bb0 ?? bboxOf(st); a.set(b, st.cid * 4); }   // המידה לפני התאמת הגודל
   const u8 = new Uint8Array(a.buffer); let bin = ''; for (let q = 0; q < u8.length; q += 0x8000) bin += String.fromCharCode(...u8.subarray(q, q + 0x8000));
-  return { bin: btoa(bin), json: JSON.stringify({ texts: allTexts, colors }) };
+  // ומצבי המחולל הכללי בסוף כל קטע ציור (drawOnly), והמצב בסוף הבנייה – לבדיקה שהאתר בנה את אותו עולם
+  return { bin: btoa(bin), json: JSON.stringify({ texts: allTexts, colors, rng: RNG_MARKS, seedEnd: (globalThis as any).__seedEnd }) };
 }
 /** האתר המפורסם: במקום רשימת ציור מהדף – הציירים טוענים בעצמם את קבצי האזורים */
 export function initTilesFromRegions(canvas: HTMLCanvasElement, st: { texts: any[]; colors: string[] }) {
@@ -364,7 +371,8 @@ function requestTiles(l: number, tw: number, ix0: number, ix1: number, iy0: numb
     q.sort((x, y) => x[3] - y[3]); for (const e of q) want.push(e);
   };
   around(l, 1 + 2 * tw / Math.min(vwW, vhW));   // טבעת של אריח סביב המסך
-  around(l - 1, 2); around(l + 1, .7); around(l - 2, 4); around(l + 2, .3);
+  // הכנה מראש של רמות אחרות – רק אחרי שהמבט הראשון מוכן: בטעינה הן התחרו ברשת (קבצי אזורים) באריחים שעל המסך
+  if (warm) { around(l - 1, 2); around(l + 1, .7); around(l - 2, 4); around(l + 2, .3); }
   // במסך גדול בצפיפות כפולה יש יותר מ-300 משבצות על המסך: קודם נחתכו מהרשימה גם אריחים נראים בקצוות, והם לא צוירו אף פעם
   const nVis = (ix1 - ix0 + 1) * (iy1 - iy0 + 1);
   cap = Math.max(TILE_CAP, Math.ceil(nVis * 1.6) + L0_KEYS.length + 16);
@@ -373,7 +381,7 @@ function requestTiles(l: number, tw: number, ix0: number, ix1: number, iy0: numb
   wanted = new Set(want.map(q => tkey(q[0], q[1], q[2])));
   const need = (q: number[]) => { const k = tkey(q[0], q[1], q[2]); return !tiles.has(k) || stale.has(k); };
   const list = want.filter(need).map(q => q.slice(0, 3));
-  for (const k of L0_KEYS) if (need(k)) list.push(k);   // תמיד גם סקירה של כל העולם
+  if (warm) for (const k of L0_KEYS) if (need(k)) list.push(k);   // תמיד גם סקירה של כל העולם (אחרי שהמבט הראשון מוכן)
   // אריח מוכן מראש – נטען כתמונה (אם הטעינה נכשלה – מצייר אותו)
   const toPaint = list.filter(q => { if (isBaked(q[0]) && !failed.has(tkey(q[0], q[1], q[2]))) { fetchTile(q[0], q[1], q[2]); return false; } return true; });
   // כל אריח שייך תמיד לאותו צייר, כדי שלא יצויר פעמיים

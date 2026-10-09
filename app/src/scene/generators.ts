@@ -1,6 +1,7 @@
 /* מחוללים: רצים אחרי שכל האובייקטים הונחו (כי הם צריכים לדעת איפה כבר יש מבנים) */
 import { el, n2, circ, blob } from '../core/util';
-import { rand, pick, R, rngAt } from '../core/rng';
+import { rand, pick, R, rngAt, drawOnly } from '../core/rng';
+import { STATIC } from '../core/util';
 import { ctx, prop, NO_TREE, inWater, statics, bboxOf } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
 import { pine, roundTree, sequoia, ancientFir, pineBox, roundBox, sequoiaBox, firBox } from '../prefabs/nature';
@@ -71,10 +72,12 @@ export const GENERATORS: Record<string, (o: any) => void> = {
   /** אבנים פזורות בפס */
   rocks(o) {
     const { B } = ctx;
+    drawOnly(STATIC.off, () => {
     for (let i = 0; i < o.count; i++) {
       const x = rand(B.x0 + 20, B.x1 - 20), y = rand(o.y0, o.y1);
       el('path', { d: blob(x, y, rand(7, 16), rand(5, 9), 6, .15, rand(0, 6)), fill: pick(['#a9b2b7', '#9aa3a8', '#b5bdc1']), stroke: '#8a9398', 'stroke-width': .8 }, ctx.L.groundProps);
     }
+    });
   },
 
   /** פנסי רחוב לאורך דרכי הכפר, לסירוגין משני הצדדים.
