@@ -37,7 +37,7 @@ export function initLayers(svgS: SVGSVGElement, svgD: SVGSVGElement) {
 export const statics: { el: any; y: number; bb?: number[]; idx?: number; cid?: number }[] = [];
 /** מספר יצירה לכל דבר עומד (אותו סדר בכל בנייה). באתר המפורסם המידות שלהם מגיעות מקובץ שנאפה (static.bin), לפי המספר */
 let CID = 0;
-export const STATIC_BB: { arr: Float32Array | null } = { arr: null };
+export const STATIC_BB: { arr: Float64Array | null } = { arr: null };
 export const cidCount = () => CID;
 /** ציור נדחה (בנייה לפי אזורים, scene/chunks.ts): בזמן שהדבר מצויר, prop() מחזיר את הקבוצה שכבר שמורה לו ברשימה */
 let deferTarget: any = null;

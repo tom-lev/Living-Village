@@ -64,7 +64,7 @@ async function boot() {
     try {
       const inl = inlineStatic(), b64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0)).buffer;
       const [bin, js] = inl ? [b64(inl.bin), inl.json] : await Promise.all([fetch('tiles/static.bin').then(r => r.ok ? r.arrayBuffer() : null), fetch('tiles/static.json').then(r => r.ok ? r.json() : null)]);
-      if (bin && js) { STATIC_BB.arr = new Float32Array(bin); STATIC.off = true; staticJson = js; RNG_REPLAY.marks = js.rng ?? null; LBAKE.in = js.logic ?? null; }
+      if (bin && js) { STATIC_BB.arr = new Float64Array(bin); STATIC.off = true; staticJson = js; RNG_REPLAY.marks = js.rng ?? null; LBAKE.in = js.logic ?? null; }
     } catch {}
   }
   // רשת ההליכה האפויה (משימה 30, שלב 5): מורדת במקביל לבנייה, ונטענת לפני הדמויות

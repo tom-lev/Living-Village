@@ -183,7 +183,7 @@ export function bakeRegions(RS: number) {
 }
 /** לשרת הבנייה: המידות של כל דבר עומד לפי מספר היצירה שלו (static.bin), השלטים והצבעים (static.json) */
 export function bakeStatic() {
-  const n = cidCount(), a = new Float32Array(n * 4);
+  const n = cidCount(), a = new Float64Array(n * 4);   // 64 ביט: בעולם גדול (קואורדינטות רחוקות) 32 ביט כבר לא מדויק
   for (const st of statics) if (st.cid !== undefined) { const b = (st as any).bb0 ?? bboxOf(st); a.set(b, st.cid * 4); }   // המידה לפני התאמת הגודל
   const u8 = new Uint8Array(a.buffer); let bin = ''; for (let q = 0; q < u8.length; q += 0x8000) bin += String.fromCharCode(...u8.subarray(q, q + 0x8000));
   // ומצבי המחולל הכללי בסוף כל קטע ציור (drawOnly), והמצב בסוף הבנייה – לבדיקה שהאתר בנה את אותו עולם
