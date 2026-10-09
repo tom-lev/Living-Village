@@ -9,6 +9,8 @@ export function R() {
 }
 export const rand = (a: number, b: number) => a + (b - a) * R();
 export const seedNow = () => seed;
+/** מריץ קטע על רצף אקראי נפרד (שמתחיל ב-s) ומחזיר איפה הרצף הזה נעצר; הרצף הכללי לא זז */
+export function withSeed(s: number, f: () => void) { const keep = seed; seed = s; try { f(); return seed; } finally { seed = keep; } }
 
 /* קטעי ציור בלבד (משימה 30, שלב 4): באתר המפורסם הנוף מגיע מוכן, אז קטע שרק מצייר לא רץ בכלל.
    אבל חלק מהקטעים צורכים מספרים מהמחולל הכללי, וכל מה שאחריהם תלוי ברצף. לכן בבנייה הרגילה (ובאפייה בשרת)

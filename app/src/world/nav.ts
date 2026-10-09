@@ -79,6 +79,42 @@ export function buildNav() {
   repairLinks();
 }
 
+/* ───── רשת אפויה (משימה 30, שלב 5): באתר המפורסם הרשת מגיעה מוכנה (tiles/nav.bin), בלי לבנות אותה בדפדפן ─────
+   מבנה: מספר הצמתים והקשתות, לכל צומת מיקום/רוחב/קו, המחירים, השכנים, ומשבצות רשת החיפוש (בסדר המקורי). מספרים ב-64 ביט: בדיוק אותה רשת */
+export function navPack(): ArrayBuffer {
+  buildNav();
+  const N = nodes.length;
+  let E = 0; for (const n of nodes) E += n.nb.length;
+  const f = new Float64Array(3 + N * 4 + E), i32 = new Int32Array(N + 1 + E);
+  f[0] = N; f[1] = E; let o = 3, q = N + 1;
+  nodes.forEach((n, k) => { f[o++] = n.x; f[o++] = n.y; f[o++] = n.lane; f[o++] = n.line; i32[k] = q - N - 1; for (const j of n.nb) i32[q++] = j; });
+  i32[N] = E;
+  let c = 3 + N * 4; for (const n of nodes) for (const v of n.cost) f[c++] = v;
+  // סדר הצמתים בכל משבצת של רשת החיפוש משנה את הבחירה בשוויון: נשמר כמו שהוא
+  const cells = [...grid.entries()], gi: number[] = [];
+  for (const [key, ids] of cells) { const [cx, cy] = key.split(',').map(Number); gi.push(cx, cy, ids.length, ...ids); }
+  const g32 = Int32Array.from(gi), out = new Uint8Array(f.byteLength + 4 + i32.byteLength + 4 + g32.byteLength);
+  out.set(new Uint8Array(f.buffer), 0); let p = f.byteLength;
+  new DataView(out.buffer).setInt32(p, i32.length, true); p += 4; out.set(new Uint8Array(i32.buffer), p); p += i32.byteLength;
+  new DataView(out.buffer).setInt32(p, g32.length, true); p += 4; out.set(new Uint8Array(g32.buffer), p);
+  return out.buffer;
+}
+export function navLoad(buf: ArrayBuffer) {
+  const dv = new DataView(buf), f0 = new Float64Array(buf, 0, 3), N = f0[0], E = f0[1];
+  const f = new Float64Array(buf, 0, 3 + N * 4 + E); let p = f.byteLength;
+  const li = dv.getInt32(p, true); p += 4; const i32 = new Int32Array(buf.slice(p, p + li * 4)); p += li * 4;
+  const lg = dv.getInt32(p, true); p += 4; const g32 = new Int32Array(buf.slice(p, p + lg * 4));
+  nodes.length = 0; grid.clear();
+  let c = 3 + N * 4;
+  for (let k = 0; k < N; k++) {
+    const a = i32[k], b = k + 1 < N ? i32[k + 1] : E, nb: number[] = [], cost: number[] = [];
+    for (let m = a; m < b; m++) { nb.push(i32[N + 1 + m]); cost.push(f[c++]); }
+    nodes.push({ x: f[3 + k * 4], y: f[4 + k * 4], lane: f[5 + k * 4], line: f[6 + k * 4], nb, cost });
+  }
+  for (let q = 0; q < g32.length;) { const cx = g32[q], cy = g32[q + 1], n = g32[q + 2]; grid.set(cx + ',' + cy, Array.from(g32.subarray(q + 3, q + 3 + n))); q += 3 + n; }
+  built = true; compCache = null;
+}
+
 /** מכשול קשה לרשת: מבנה, מזרקה, האי שבכיכר, מגרש פרטי, או מים בלי גשר */
 const hardAt = (x: number, y: number) => { const f = flagsAt(x, y); return !!(f & SOLID || (f & WATER && !(f & PATH)) || privateAt(x, y)); };
 function hardBlocked(a: Node, b: Node) {

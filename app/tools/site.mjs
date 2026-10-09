@@ -34,6 +34,7 @@ function LOGIC() { return {
   places: window.__places.map(p => `${p.kind}|${p.name}|${(p.door || p.at || []).map(Math.round)}`),
   objs: window.__world.objects.map(o => `${o.type}|${(o._bb || []).map(Math.round)}|${o._k ? o._k[0].toFixed(3) : ''}`),
   rng: window.__seedEnd,
+  nav: window.__navSig(),   // רשת ההליכה (באתר: נטענת מהקובץ האפוי – חייבת להיות זהה בדיוק)
 }; }
 
 async function bakeTiles() {
@@ -71,6 +72,11 @@ async function bakeTiles() {
   let rb = 0;
   for (const [k, b64] of Object.entries(regs)) { const buf = Buffer.from(b64, 'base64'); rb += buf.length; writeFileSync(new URL(`../dist/regions/${k}.bin`, import.meta.url), buf); }
   const st = await pages[0].evaluate(() => window.__tileBake.bakeStatic());
+  // שלב 5: רשת ההליכה, ואם אפשר להגיע לכל מקום מהכפר – מוכנים מראש (בדפדפן זה היה החלק הכבד בבניית הדמויות)
+  const nav = Buffer.from(await pages[0].evaluate(() => window.__tileBake.bakeNav()), 'base64');
+  writeFileSync(new URL('../dist/tiles/nav.bin', import.meta.url), nav);
+  { const js = JSON.parse(st.json); js.reach = await pages[0].evaluate(() => window.__tileBake.bakeReach()); st.json = JSON.stringify(js); }
+  console.log(`baked the walk network (${(nav.length / 1e3).toFixed(0)} KB)`);
   writeFileSync(new URL('../dist/tiles/static.bin', import.meta.url), Buffer.from(st.bin, 'base64'));
   writeFileSync(new URL('../dist/tiles/static.json', import.meta.url), st.json);
   console.log(`baked ${Object.keys(regs).length} region files (${(rb / 1e6).toFixed(1)} MB)`);
@@ -87,7 +93,7 @@ async function bakeTiles() {
   // בדיקה: האתר המפורסם (בלי ציור הנוף) בונה בדיוק את אותו היגיון כמו הבנייה המלאה – עצים, מקומות, מידות האובייקטים
   {
     const b2 = await chromium.launch(), q = await b2.newPage();
-    await q.goto(SITE); await q.waitForFunction(() => window.__trees?.length && window.__village && window.__places, null, { timeout: 180000 });
+    await q.goto(SITE); await q.waitForFunction(() => window.__trees?.length && window.__village && window.__places && window.__boot, null, { timeout: 180000 });
     const logicSite = await q.evaluate(LOGIC); await b2.close();
     const bad = Object.keys(logicBaked).filter(k => JSON.stringify(logicBaked[k]) !== JSON.stringify(logicSite[k]));
     if (bad.length) throw new Error(`the published site builds different world logic than the full build: ${bad.join(', ')}`);

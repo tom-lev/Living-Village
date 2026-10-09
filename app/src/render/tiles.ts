@@ -323,6 +323,7 @@ const levelFor = (k: number) => clamp(Math.ceil(Math.log2(k * sdpr() / BASE) - .
 
 /** מרכיב את האריחים המוכנים על הקנבס, ומבקש מה-Worker את החסרים (הקרובים למרכז קודם) */
 function drawStatic() {
+  if (!ctx.B) return;   // העולם עוד לא נבנה (למשל בזמן שמחכים שהתמונה המיידית תוצג)
   const { B } = ctx, { cam, vw, vh } = view, dpr = sdpr(), flat = mode === '2d';
   if (flat) { cs.setTransform(1, 0, 0, 1, 0, 0); cs.fillStyle = grade('#9cd162'); cs.fillRect(0, 0, cvS.width, cvS.height); }
   const l = levelFor(cam.k), tw = TILE / tileScale(l);

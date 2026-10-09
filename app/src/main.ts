@@ -4,6 +4,8 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
+import { navPack, navLoad } from './world/nav';
+import { reachPack, reachLoad } from './actors/agenda';
 import { warmUp, bakeTile, tileGrid, bakeRegions, bakeStatic, manifestP, inlineStatic, initTilesFromRegions, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
 import { CULL } from './render/gpu';
 import { chunksIn, buildChunk, buildDetail, nextChunk, pendingCount, allChunks } from './scene/chunks';
@@ -38,7 +40,8 @@ async function boot() {
   startPainters();   // הציירים שברקע מתחילים להיטען מיד, במקביל להכנת הכרטיס הגרפי
   const canvas = await prepareGpu(document.getElementById('mapC') as HTMLCanvasElement);
   view.gpu = ctx.gpuDyn = tileStats.mode === 'gpu';
-  const tm: Record<string, number> = {}, t0 = performance.now();   // זמני הטעינה (window.__boot), למדידה
+  const tm: Record<string, number> = {};
+  let t0 = performance.now();   // זמני הטעינה (window.__boot), למדידה
   TEXT_DPR.v = Math.min(devicePixelRatio || 1, 3);   // טקסטים נצבעים לפי צפיפות המסך (ולא פי 8 תמיד)
   startPainters();   // הציירים שברקע נטענים קודם (הטעינה שלהם צריכה דף פנוי), ואז בונים
   // האתר המפורסם (משימה 30, שלב 3): הנוף הקבוע מגיע מוכן (אריחים וקבצי אזורים), אז לא בונים אותו – רק את ההיגיון.
@@ -51,6 +54,8 @@ async function boot() {
       ? requestAnimationFrame(() => setTimeout(res, 0)) : setTimeout(f, 30);
     f();
   });
+  // ההמתנה (לציירים ולתמונה המיידית) היא לא עבודה של הדף: נמדדת לחוד, ועבודת הטעינה (תקציב bootMs) נספרת מכאן
+  tm.wait = performance.now() - t0; t0 = performance.now();
   let staticJson: any = null;
   if (man?.regions) {
     try {
@@ -59,6 +64,8 @@ async function boot() {
       if (bin && js) { STATIC_BB.arr = new Float32Array(bin); STATIC.off = true; staticJson = js; RNG_REPLAY.marks = js.rng ?? null; }
     } catch {}
   }
+  // רשת ההליכה האפויה (משימה 30, שלב 5): מורדת במקביל לבנייה, ונטענת לפני הדמויות
+  const navP: Promise<ArrayBuffer | null> = STATIC.off ? fetch('tiles/nav.bin').then(r => r.ok ? r.arrayBuffer() : null).catch(() => null) : Promise.resolve(null);
   buildScene(world, svgS, svgD);
   // בדיקה: המחולל הכללי בסוף הבנייה – באתר המפורסם (בלי ציור) חייב להיות זהה למה שנאפה (אחרת ההיגיון לא תואם לנוף)
   (globalThis as any).__seedEnd = seedNow();
@@ -86,8 +93,17 @@ async function boot() {
   tm.firstRender = performance.now() - q0; q0 = performance.now();
   await new Promise(r => setTimeout(r, 0));   // הפסקה קצרה: ההודעות לציירים יוצאות עכשיו, לא אחרי כל הבנייה
   tm.yield = performance.now() - q0; q0 = performance.now();
-  const actors = buildActors(world.actors); tm.buildActors = performance.now() - q0; tm.actors = performance.now() - t0 - tm.scene - tm.tiles;
+  { const nb = await navP; if (nb) navLoad(nb); if (staticJson?.reach) reachLoad(staticJson.reach); }
+  tm.nav = performance.now() - q0; q0 = performance.now();
+  const actors = buildActors(world.actors);
+  actors.build(0);   // רק הדמויות של הכפר (המבט הראשון); השאר נבנות בפריימים הבאים, אחרי שהמפה מוצגת
+  tm.buildActors = performance.now() - q0; tm.actors = performance.now() - t0 - tm.scene - tm.tiles;
   (window as any).__boot = tm;
+  // לבדיקה בהעלאה (tools/site.mjs): חתימה של רשת ההליכה
+  (window as any).__navSig = () => { const u = new Uint8Array(navPack()); let h = 2166136261; for (let i = 0; i < u.length; i++) h = Math.imul(h ^ u[i], 16777619); return h >>> 0; };
+  // בנייה ברקע של שאר מה שזז, בחלקים של עד כ-8 אלפיות שנייה בין הפריימים (גם כשהעולם מושהה); בסוף – מתי (__boot.allActors)
+  const bgActors = () => { if (actors.build(8)) { tm.allActors = performance.now(); (window as any).__actorTimes = actors.times; } else setTimeout(bgActors, 0); };
+  setTimeout(bgActors, 0);
 
   let instantEl: HTMLElement | null = document.getElementById('instant'), textAt = 0;
   // טקסטים ברזולוציה של הזום הנוכחי: מתעדכנים רק כשהמצלמה עומדת (לא באמצע זום), לכל היותר 3 פעמים בשנייה; גם בהשהיה
@@ -209,7 +225,7 @@ async function boot() {
   const buildEverything = async () => { await built; for (const c of allChunks()) { const out = buildDetail(c); if (out) addChunkItems(out.layers, out.rect); } flushCoarseTiles(); };
   // שרת הבנייה (tools/site.mjs, ?bake=tiles): העולם כולו, ואז ציור של כל אריח מוכן מראש
   // (העולם עוצר בזמן האפייה: רק ציור האריחים רץ, בלי דמויות ואנימציה שמתחרות עליו)
-  if (location.search.includes('bake=tiles')) (window as any).__tileBake = { ready: buildEverything().then(() => setRunning(false)), bakeTile, tileGrid, bakeRegions, bakeStatic, pals: world.palettes.map((p: any) => p.name), meta: { B: world.bounds, home: world.home, def: world.palette } };
+  if (location.search.includes('bake=tiles')) (window as any).__tileBake = { ready: buildEverything().then(() => setRunning(false)), bakeTile, tileGrid, bakeRegions, bakeStatic, bakeNav: () => { const u8 = new Uint8Array(navPack()); let s = ''; for (let q = 0; q < u8.length; q += 0x8000) s += String.fromCharCode(...u8.subarray(q, q + 0x8000)); return btoa(s); }, bakeReach: reachPack, pals: world.palettes.map((p: any) => p.name), meta: { B: world.bounds, home: world.home, def: world.palette } };
 
   // פריים ראשון, כדי שגם במצב "פחות תנועה" הדמויות יופיעו
   actors.update(.016, 0);

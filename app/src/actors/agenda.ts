@@ -116,6 +116,10 @@ export function reachable(p: Place, priv = -1) {
   return r;
 }
 
+/** לשרת הבנייה: האם אפשר להגיע לכל מקום מהכפר (נאפה לאתר המפורסם, ושם לא מחושב בדפדפן) */
+export function reachPack() { addHikes(); return places.filter(p => p.kind !== 'home').map(p => [p.id, reachable(p) ? 1 : 0]); }
+export function reachLoad(list: number[][]) { addHikes(); for (const [id, r] of list) reachCache.set(id * 1000, !!r); }
+
 /** שם המשפחה לפי הבית: "Fisher House" → "Fisher"; בית בלי שם משפחה ("Old Stone Farm") → "of Old Stone Farm" */
 export function surnameOf(home: Place | null) {
   if (!home?.name) return '';
