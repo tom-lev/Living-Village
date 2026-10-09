@@ -62,7 +62,10 @@ function clampCam() {
   cam.x = bw <= vw ? vw / 2 - (B.x0 + B.x1) / 2 * cam.k : clamp(cam.x, vw - B.x1 * cam.k, -B.x0 * cam.k);
   cam.y = bh <= vh ? vh / 2 - (B.y0 + B.y1) / 2 * cam.k : clamp(cam.y, vh - B.y1 * cam.k, -B.y0 * cam.k);
 }
+/** מתי המצלמה זזה בפעם האחרונה (זום או גרירה): עבודה ברקע מחכה שהתנועה תיגמר, כדי שהפריימים לא יתעכבו */
+export const camMoved = { at: 0 };
 export function applyCam() {
+  camMoved.at = performance.now();
   clampCam();
   if (gesturing && !view.gpu) { gestureMoved = true; if (!cssMove(dWrap, dcam)) commitD(); }
   else commitD();

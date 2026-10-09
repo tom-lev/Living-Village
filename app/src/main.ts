@@ -12,7 +12,7 @@ import { FRAME } from './world/budget';
 import { vstats } from './render/vnode';
 import { setPalette, regrade, grade, currentPalette } from './core/palette';
 import { buildActors, followables } from './actors';
-import { initCamera, cameraTick, loopState, zoomAt, animateTo } from './camera/camera';
+import { initCamera, cameraTick, loopState, zoomAt, animateTo, camMoved } from './camera/camera';
 import { view } from './camera/view';
 import { applySharedNames } from './world/labels';
 import { initGrid, drawGrid } from './ui/grid';
@@ -154,6 +154,8 @@ async function boot() {
   const built = new Promise<void>(r => { builtResolve = r; });
   (window as any).__built = false;
   const chunkStep = () => {
+    // בזמן זום או גרירה לא בונים (בנייה של אזור לוקחת כמה עשרות אלפיות שנייה, והפריים היה מתעכב – קפיצה במסך)
+    if (performance.now() - camMoved.at < 350) { setTimeout(chunkStep, 120); return; }
     const { cam, vw, vh } = view, x0 = -cam.x / cam.k, y0 = -cam.y / cam.k, x1 = (vw - cam.x) / cam.k, y1 = (vh - cam.y) / cam.k;
     if (cam.k * Math.min(view.dpr, 2) >= .5)
       for (const c of chunksIn(x0, y0, x1, y1)) { const out = buildDetail(c); if (out) { addChunkItems(out.layers, out.rect); setTimeout(chunkStep, 0); return; } }

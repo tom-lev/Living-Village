@@ -87,16 +87,19 @@ export function addChunkItems(layers: Record<string, any[]>, rect: number[], coa
     if (tx > x1 || tx + t < x0 || ty > y1 || ty + t < y0) continue;
     // האריחים הגסים (מבט מרחוק) מכסים הרבה אזורים: לא מציירים אותם מחדש אחרי כל אזור, אלא פעם אחת בסוף (או מדי פעם)
     if (l <= 1 && !coarseNow) { coarseDirty.add(k); continue; }
-    const v = tiles.get(k); tiles.delete(k); gpu?.remove(k); v?.close?.();
+    stale.add(k);
   }
   if (coarseNow || performance.now() - coarseAt > 2500) flushCoarseTiles();
   lastNeed = ''; requestStatic();
 }
 const coarseDirty = new Set<string>(); let coarseAt = 0;
+/* אריח שצריך לצייר מחדש (אזור שנוסף) לא נזרק: הוא נשאר על המסך עד שהאריח החדש מגיע ומחליף אותו במקום.
+   (זריקה מיידית השאירה לרגע אריח מטושטש מרמה אחרת – זה נראה כמו קפיצה של המסך, בעיקר בזום מהיר) */
+const stale = new Set<string>();
 /** מצייר מחדש את האריחים הגסים שהשתנו (אחרי שאזורים נוספו) */
 export function flushCoarseTiles() {
   coarseAt = performance.now();
-  for (const k of coarseDirty) { const v = tiles.get(k); tiles.delete(k); gpu?.remove(k); v?.close?.(); }
+  for (const k of coarseDirty) stale.add(k);
   coarseDirty.clear(); lastNeed = ''; requestStatic();
 }
 let colorSet = new Set<string>();
@@ -112,6 +115,8 @@ function getTile(l: number, x: number, y: number) {
 }
 function putTile(l: number, x: number, y: number, bmp: any) {
   const key = tkey(l, x, y);
+  const old = tiles.get(key); if (old && old !== bmp) old.close?.();
+  stale.delete(key);
   tiles.set(key, bmp);
   if (gpu) { const t = TILE / tileScale(l); gpu.add(key, l, ctx.B.x0 + x * t, ctx.B.y0 + y * t, t, bmp); }
   for (const [k, v] of tiles) {
@@ -267,8 +272,9 @@ function requestTiles(l: number, tw: number, ix0: number, ix1: number, iy0: numb
   const budget = cap - L0_KEYS.length - 16;
   if (want.length > budget) want.length = budget;
   wanted = new Set(want.map(q => tkey(q[0], q[1], q[2])));
-  const list = want.filter(q => !tiles.has(tkey(q[0], q[1], q[2]))).map(q => q.slice(0, 3));
-  for (const k of L0_KEYS) if (!tiles.has(tkey(k[0], k[1], k[2]))) list.push(k);   // תמיד גם סקירה של כל העולם
+  const need = (q: number[]) => { const k = tkey(q[0], q[1], q[2]); return !tiles.has(k) || stale.has(k); };
+  const list = want.filter(need).map(q => q.slice(0, 3));
+  for (const k of L0_KEYS) if (need(k)) list.push(k);   // תמיד גם סקירה של כל העולם
   // כל אריח שייך תמיד לאותו צייר, כדי שלא יצויר פעמיים
   const parts: number[][][] = painters.map(() => []);
   for (const q of list) parts[(q[1] * 7 + q[2] * 13 + q[0]) % painters.length].push(q);
