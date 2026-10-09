@@ -4,7 +4,7 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
-import { bakeTile, tileGrid, bakeRegions, bakeStatic, manifestP, initTilesFromRegions, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
+import { bakeTile, tileGrid, bakeRegions, bakeStatic, manifestP, inlineStatic, initTilesFromRegions, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
 import { CULL } from './render/gpu';
 import { chunksIn, buildChunk, buildDetail, nextChunk, pendingCount, allChunks } from './scene/chunks';
 import { ctx, STATIC_BB } from './world/context';
@@ -44,7 +44,8 @@ async function boot() {
   let staticJson: any = null;
   if (man?.regions) {
     try {
-      const [bin, js] = await Promise.all([fetch('tiles/static.bin').then(r => r.ok ? r.arrayBuffer() : null), fetch('tiles/static.json').then(r => r.ok ? r.json() : null)]);
+      const inl = inlineStatic(), b64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0)).buffer;
+      const [bin, js] = inl ? [b64(inl.bin), inl.json] : await Promise.all([fetch('tiles/static.bin').then(r => r.ok ? r.arrayBuffer() : null), fetch('tiles/static.json').then(r => r.ok ? r.json() : null)]);
       if (bin && js) { STATIC_BB.arr = new Float32Array(bin); STATIC.off = true; staticJson = js; }
     } catch {}
   }

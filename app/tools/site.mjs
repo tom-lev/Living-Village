@@ -66,6 +66,11 @@ async function bakeTiles() {
   writeFileSync(new URL('../dist/tiles/static.json', import.meta.url), st.json);
   console.log(`baked ${Object.keys(regs).length} region files (${(rb / 1e6).toFixed(1)} MB)`);
   await b.close();
-  writeFileSync(new URL('../dist/tiles/manifest.json', import.meta.url), JSON.stringify({ maxL: MAXL, pals, ...meta, regions: { RS } }));
+  const manifest = { maxL: MAXL, pals, ...meta, regions: { RS } };
+  writeFileSync(new URL('../dist/tiles/manifest.json', import.meta.url), JSON.stringify(manifest));
+  // הנתונים הקטנים (הרשימה, מידות הדברים העומדים, השלטים) נכתבים לתוך הדף עצמו: בלי הורדות נוספות בתחילת הטעינה
+  const html = new URL('../dist/index.html', import.meta.url), inline = JSON.stringify({ manifest, static: { bin: st.bin, json: JSON.parse(st.json) } }).replace(/</g, '\\u003c');
+  writeFileSync(html, readFileSync(html, 'utf8').replace('<div id="instant"', `<script>window.__BAKED=${inline}</script>
+<div id="instant"`));
   console.log(`baked ${n} tiles (${(bytes / 1e6).toFixed(1)} MB) with ${K} pages in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
 }

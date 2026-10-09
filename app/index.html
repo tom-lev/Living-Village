@@ -32,7 +32,8 @@
 <script>
 (function () {
   try {
-    fetch('tiles/manifest.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
+    var inl = window.__BAKED;   // בהעלאה הרשימה נכתבת לתוך הדף (בלי הורדה נוספת)
+    (inl ? Promise.resolve(inl.manifest) : fetch('tiles/manifest.json').then(function (r) { return r.ok ? r.json() : null; })).then(function (m) {
       var box = document.getElementById('instant'); if (!m || !m.B || !box) return;
       var pal = m.def; try { var s = localStorage.getItem('village-palette'); if (m.pals.indexOf(s) >= 0) pal = s; } catch (e) {}
       var pi = m.pals.indexOf(pal); if (pi < 0) return;

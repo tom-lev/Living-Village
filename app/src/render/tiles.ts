@@ -120,8 +120,12 @@ const allDL: DLItem[] = [];   // רק במצב אפייה: כל רשימת הצ�
 const allTexts: { ta: any; text: string }[] = [];   // ושלטי הטקסט שעוברים לשכבה הדינמית
 let baked: { maxL: number; pals: string[]; regions?: { RS: number } } | null = null;
 /** רשימת האריחים המוכנים (נטענת בתחילת הטעינה; בלי – null) */
+// באתר המפורסם הנתונים האלה כתובים בתוך הדף עצמו (window.__BAKED, נכתב בהעלאה): בלי הורדה נוספת לפני הבנייה,
+// שבטלפון עלתה כמה מאות אלפיות שנייה לכל הלוך-חזור. בלי – מנסים להוריד (ובשרת פיתוח אין, וזה בסדר)
+const INLINE = typeof window !== 'undefined' ? (window as any).__BAKED : null;
 export const manifestP: Promise<any> = typeof fetch === 'undefined' || BAKE ? Promise.resolve(null)
-  : fetch('tiles/manifest.json').then(r => r.ok ? r.json() : null).then(m => { if (m) { baked = m; lastNeed = ''; requestStatic(); } return m; }).catch(() => null);
+  : (INLINE ? Promise.resolve(INLINE.manifest) : fetch('tiles/manifest.json').then(r => r.ok ? r.json() : null)).then(m => { if (m) { baked = m; lastNeed = ''; requestStatic(); } return m; }).catch(() => null);
+export const inlineStatic = () => INLINE?.static ?? null;
 const bakedPal = () => baked && ctx.world ? baked.pals.indexOf(ctx.world.palette) : -1;
 /** האריח הזה מגיע מוכן (ולא צריך לצייר אותו, גם לא מחדש) */
 const isBaked = (l: number) => bakedPal() >= 0 && l <= baked!.maxL;
