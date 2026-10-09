@@ -4,7 +4,7 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
-import { initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
+import { bakeTile, tileGrid, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
 import { CULL } from './render/gpu';
 import { chunksIn, buildChunk, buildDetail, nextChunk, pendingCount, allChunks } from './scene/chunks';
 import { ctx } from './world/context';
@@ -61,6 +61,7 @@ async function boot() {
   const actors = buildActors(world.actors); tm.actors = performance.now() - t0 - tm.scene - tm.tiles;
   (window as any).__boot = tm;
 
+  let instantEl: HTMLElement | null = document.getElementById('instant');
   /* ───────── לולאת האנימציה ───────── */
   let last = 0, T = 0;
   const playBtn = document.getElementById('play');
@@ -77,6 +78,8 @@ async function boot() {
     if (tm.first === undefined) tm.first = performance.now() - r0;   // הפריים הראשון
     // זמן הטעינה כפי שמרגישים אותו: מתחילת טעינת הדף עד שכל האריחים שעל המסך צוירו (תקציב bootMs)
     if (tm.ready === undefined && tileStats.painted > 0 && tileStats.missing === 0) tm.ready = performance.now();
+    // התמונה המיידית יורדת כשהמפה החיה מוכנה (הן זהות), או כבר בתנועה הראשונה של המצלמה (אחרת התמונה הייתה נשארת במקום)
+    if (instantEl && (tm.ready !== undefined || camMoved.at)) { instantEl.remove(); instantEl = null; }
     drawGrid();
     requestAnimationFrame(tick);
   }
@@ -167,6 +170,9 @@ async function boot() {
   setTimeout(chunkStep, 200);
   /** לבדיקות: כל העולם, כולל כל הפרטים */
   const buildEverything = async () => { await built; for (const c of allChunks()) { const out = buildDetail(c); if (out) addChunkItems(out.layers, out.rect); } flushCoarseTiles(); };
+  // שרת הבנייה (tools/site.mjs, ?bake=tiles): העולם כולו, ואז ציור של כל אריח מוכן מראש
+  // (העולם עוצר בזמן האפייה: רק ציור האריחים רץ, בלי דמויות ואנימציה שמתחרות עליו)
+  if (location.search.includes('bake=tiles')) (window as any).__tileBake = { ready: buildEverything().then(() => setRunning(false)), bakeTile, tileGrid, pals: world.palettes.map((p: any) => p.name), meta: { B: world.bounds, home: world.home, def: world.palette } };
 
   // פריים ראשון, כדי שגם במצב "פחות תנועה" הדמויות יופיעו
   actors.update(.016, 0);

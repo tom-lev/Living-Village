@@ -3,7 +3,7 @@
    של 256 פיקסלים בכמה רמות זום, ברקע. בכל פריים רק מרכיבים את האריחים המוכנים על קנבס,
    כך שקצב הפריימים לא תלוי בכמות התוכן. אריח שעדיין לא מוכן מוחלף זמנית באריח מרמה אחרת. */
 import { el, clamp, rrect, circ } from '../core/util';
-import { grade, rawColor } from '../core/palette';
+import { grade, rawColor, setPalette } from '../core/palette';
 import { ctx } from '../world/context';
 import { DETAIL_GROUPS } from '../scene/terrain';
 import { view } from '../camera/view';
@@ -76,6 +76,7 @@ export function addChunkItems(layers: Record<string, any[]>, rect: number[], coa
   const DL: DLItem[] = [];
   for (const layer of LAYERS) if (layers[layer]) extractNodes(layers[layer], layer, DL);
   if (!DL.length) return;
+  if (BAKE) allDL.push(...DL);
   for (const it of DL) { if (it.fill) addColor(it.fill); if (it.stroke) addColor(it.stroke); }
   const { pk } = packDL(DL), KEYS2 = ['d', 'dLen', 'm', 'a', 'pad', 'sw', 'det', 'sty', 'z'];
   const packs: any[] = painters.map((_, q) => q === 0 ? pk : { ...pk, ...Object.fromEntries(KEYS2.map(k => [k, (pk as any)[k].slice()])) });
@@ -85,6 +86,7 @@ export function addChunkItems(layers: Record<string, any[]>, rect: number[], coa
   for (const k of [...tiles.keys()]) {
     const [l, i, j] = k.split('/').map(Number), t = TILE / tileScale(l), tx = B.x0 + i * t, ty = B.y0 + j * t;
     if (tx > x1 || tx + t < x0 || ty > y1 || ty + t < y0) continue;
+    if (isBaked(l)) continue;   // אריח מוכן מראש כבר כולל את כל העולם
     // האריחים הגסים (מבט מרחוק) מכסים הרבה אזורים: לא מציירים אותם מחדש אחרי כל אזור, אלא פעם אחת בסוף (או מדי פעם)
     if (l <= 1 && !coarseNow) { coarseDirty.add(k); continue; }
     stale.add(k);
@@ -99,11 +101,55 @@ const stale = new Set<string>();
 /** מצייר מחדש את האריחים הגסים שהשתנו (אחרי שאזורים נוספו) */
 export function flushCoarseTiles() {
   coarseAt = performance.now();
-  for (const k of coarseDirty) stale.add(k);
+  for (const k of coarseDirty) if (!isBaked(+k.split('/')[0])) stale.add(k);
   coarseDirty.clear(); lastNeed = ''; requestStatic();
 }
 let colorSet = new Set<string>();
 const addColor = (c: string) => { if (!colorSet.has(c)) { colorSet.add(c); colors.push(c); for (const p of painters) p.postMessage({ type: 'palette', cmap: colorMap(), gen, keep: true }); } };
+
+/* ───────── אריחים מוכנים מראש (משימה 30, שלב 2) ─────────
+   בזמן ההעלאה (tools/site.mjs) שרת הבנייה מצייר את כל האריחים של הרמות הרחוקות והבינוניות (0..maxL), לכל פלטה,
+   באותו צייר בדיוק ומהעולם הבנוי כולו, ושומר אותם כתמונות (tiles/p<פלטה>/<רמה>/<i>_<j>.webp, ו-manifest.json).
+   באתר: אריח ברמות האלה נטען כתמונה מוכנה במקום להיות מצויר, והוא לא מצויר מחדש כשאזור נוסף (הוא כבר כולל את כל העולם).
+   בלי manifest (שרת פיתוח, או בנייה מקומית) – הכול מצויר כרגיל. */
+const BAKE = typeof location !== 'undefined' && location.search.includes('bake=tiles');
+const allDL: DLItem[] = [];   // רק במצב אפייה: כל רשימת הציור (גם של אזורים שנוספו)
+let baked: { maxL: number; pals: string[] } | null = null;
+if (typeof fetch !== 'undefined' && !BAKE) fetch('tiles/manifest.json').then(r => r.ok ? r.json() : null).then(m => { if (m) { baked = m; lastNeed = ''; requestStatic(); } }).catch(() => {});
+const bakedPal = () => baked && ctx.world ? baked.pals.indexOf(ctx.world.palette) : -1;
+/** האריח הזה מגיע מוכן (ולא צריך לצייר אותו, גם לא מחדש) */
+const isBaked = (l: number) => bakedPal() >= 0 && l <= baked!.maxL;
+const inflight = new Set<string>(), failed = new Set<string>();
+function fetchTile(l: number, i: number, j: number) {
+  const k = tkey(l, i, j), g0 = gen, pi = bakedPal();
+  if (inflight.has(k)) return; inflight.add(k);
+  fetch(`tiles/p${pi}/${l}/${i}_${j}.webp`).then(r => { if (!r.ok) throw 0; return r.blob(); }).then(b => createImageBitmap(b)).then(bmp => {
+    inflight.delete(k);
+    if (g0 !== gen) { bmp.close(); return; }   // הפלטה התחלפה בינתיים
+    tileStats.painted++; putTile(l, i, j, bmp); requestStatic();
+  }).catch(() => { inflight.delete(k); failed.add(k); lastNeed = ''; requestStatic(); });
+}
+
+/** לשרת הבנייה: מצייר אריח אחד בפלטה נתונה ומחזיר אותו כתמונת webp (base64) */
+let bp: any = null, bgen = 0, waitTile: ((m: any) => void) | null = null;
+export async function bakeTile(pal: string, l: number, i: number, j: number) {
+  if (!bp) {
+    bp = createPainter(m => { if (m.type === 'tile') waitTile?.(m); });
+    bp({ type: 'init', items: allDL.map(it => ({ ...it, bb: null, parts: undefined, p: undefined })), B: ctx.B, TILE, BASE });
+  }
+  const keep = ctx.world.palette, spec = ctx.world.palettes.find((p: any) => p.name === pal);
+  setPalette(spec, ctx.world.palettes); const cmap = colorMap();
+  setPalette(ctx.world.palettes.find((p: any) => p.name === keep), ctx.world.palettes);
+  bp({ type: 'palette', cmap, gen: ++bgen });
+  const m: any = await new Promise(r => { waitTile = r; bp({ type: 'need', list: [[l, i, j]] }); });
+  const c = new OffscreenCanvas(TILE, TILE); c.getContext('2d')!.drawImage(m.bmp, 0, 0);
+  const blob = await c.convertToBlob({ type: 'image/webp', quality: .86 });
+  const u8 = new Uint8Array(await blob.arrayBuffer()); let bin = '';
+  for (let q = 0; q < u8.length; q += 0x8000) bin += String.fromCharCode(...u8.subarray(q, q + 0x8000));
+  return btoa(bin);
+}
+/** לשרת הבנייה: כמה אריחים יש בכל רמה */
+export const tileGrid = (l: number) => { const t = TILE / tileScale(l), { B } = ctx; return [Math.ceil((B.x1 - B.x0) / t), Math.ceil((B.y1 - B.y0) / t)]; };
 
 /* ───────── מטמון אריחים (LRU; רמה 0 נשמרת תמיד) ───────── */
 const tiles = new Map<string, any>();
@@ -183,6 +229,7 @@ export function initTiles(canvas: HTMLCanvasElement) {
   if (mode === '2d') cs = canvas.getContext('2d');
   gpu?.setBackground(grade('#9cd162'));
   const DL = extractDisplayList();
+  if (BAKE) allDL.push(...DL);
   startPainters();
   const onTile = (m: any) => { if (m.type === 'ready') { tileStats.log.push([performance.now(), -1, m.ms, m.n, { lag: performance.now() - m.sent, sentAbs: performance.timeOrigin + m.sent, wBoot: m.wBoot, wStart: m.wStart, wEnd: m.wEnd, recvAbs: performance.timeOrigin + performance.now(), origin: performance.timeOrigin }]); return; } if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; if (tileStats.log.length < 400) tileStats.log.push([performance.now(), m.l, m.ms, m.n, m.dbg]); putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
   onTileFn = onTile;
@@ -275,9 +322,11 @@ function requestTiles(l: number, tw: number, ix0: number, ix1: number, iy0: numb
   const need = (q: number[]) => { const k = tkey(q[0], q[1], q[2]); return !tiles.has(k) || stale.has(k); };
   const list = want.filter(need).map(q => q.slice(0, 3));
   for (const k of L0_KEYS) if (need(k)) list.push(k);   // תמיד גם סקירה של כל העולם
+  // אריח מוכן מראש – נטען כתמונה (אם הטעינה נכשלה – מצייר אותו)
+  const toPaint = list.filter(q => { if (isBaked(q[0]) && !failed.has(tkey(q[0], q[1], q[2]))) { fetchTile(q[0], q[1], q[2]); return false; } return true; });
   // כל אריח שייך תמיד לאותו צייר, כדי שלא יצויר פעמיים
   const parts: number[][][] = painters.map(() => []);
-  for (const q of list) parts[(q[1] * 7 + q[2] * 13 + q[0]) % painters.length].push(q);
+  for (const q of toPaint) parts[(q[1] * 7 + q[2] * 13 + q[0]) % painters.length].push(q);
   painters.forEach((p, n) => p.postMessage({ type: 'need', list: parts[n] }));
 }
 

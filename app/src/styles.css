@@ -17,6 +17,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); c
 /* שתי שכבות: קנבס סטטי (מאריחים) ו-SVG דינמי (דמויות ואפקטים) */
 #stage { position: fixed; inset: 0; overflow: hidden; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 #stage.drag { cursor: grabbing; }
+/* תמונה מיידית מהאריחים המוכנים מראש, עד שהמפה החיה מצוירת (index.html) */
+#instant { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+#instant img { image-rendering: auto; }
 #dWrap { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 #mapD { position: absolute; display: block; }
 #mapC { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }

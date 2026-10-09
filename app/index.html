@@ -15,6 +15,7 @@
   <div id="dWrap"><svg id="mapD"></svg></div>
   <div id="grain" hidden></div>
 </div>
+<div id="instant" aria-hidden="true"></div>
 
 <div class="controls">
   <button id="zfit" aria-label="Back to the full view">⤢</button>
@@ -26,6 +27,32 @@
 <div class="palMenu" id="palMenu" role="menu" aria-label="Colour palette" hidden></div>
 <div class="follow" id="follow"><span id="followName"></span><button id="unfollow" aria-label="Stop following">✕</button></div>
 
+<!-- תמונה מיידית (משימה 30): לפני שהקוד הראשי נטען, מציגים את המבט הראשון מהאריחים המוכנים מראש,
+     בדיוק במקום שבו המפה החיה תצויר (אותו חישוב כמו המצלמה). כשהמפה החיה מוכנה התמונה יורדת. -->
+<script>
+(function () {
+  try {
+    fetch('tiles/manifest.json').then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
+      var box = document.getElementById('instant'); if (!m || !m.B || !box) return;
+      var pal = m.def; try { var s = localStorage.getItem('village-palette'); if (m.pals.indexOf(s) >= 0) pal = s; } catch (e) {}
+      var pi = m.pals.indexOf(pal); if (pi < 0) return;
+      var vw = innerWidth, vh = innerHeight, B = { x0: m.B[0], y0: m.B[1], x1: m.B[2], y1: m.B[3] }, H = { x0: m.home[0], y0: m.home[1], x1: m.home[2], y1: m.home[3] };
+      var hw = H.x1 - H.x0, hh = H.y1 - H.y0, c = Math.min(vw / hw, vh / hh), v = Math.max(vw / hw, vh / hh);
+      var k = Math.max(v / c < 1.2 ? v : c, Math.max(vw / (B.x1 - B.x0), vh / (B.y1 - B.y0)));
+      var cx = vw / 2 - (H.x0 + H.x1) / 2 * k, cy = vh / 2 - (H.y0 + H.y1) / 2 * k, BASE = 1 / 8, dpr = Math.min(devicePixelRatio || 1, 2);
+      var l = Math.max(0, Math.min(m.maxL, Math.ceil(Math.log2(k * dpr / BASE) - .15))), tw = 256 / (BASE * Math.pow(2, l));
+      var i0 = Math.max(0, Math.floor((-cx / k - B.x0) / tw)), i1 = Math.floor(((vw - cx) / k - B.x0) / tw);
+      var j0 = Math.max(0, Math.floor((-cy / k - B.y0) / tw)), j1 = Math.floor(((vh - cy) / k - B.y0) / tw);
+      for (var j = j0; j <= j1; j++) for (var i = i0; i <= i1; i++) {
+        var im = new Image(), x = Math.round((B.x0 + i * tw) * k + cx), y = Math.round((B.y0 + j * tw) * k + cy);
+        im.src = 'tiles/p' + pi + '/' + l + '/' + i + '_' + j + '.webp'; im.alt = '';
+        im.style.cssText = 'position:absolute;left:' + x + 'px;top:' + y + 'px;width:' + (Math.round((B.x0 + (i + 1) * tw) * k + cx) - x) + 'px;height:' + (Math.round((B.y0 + (j + 1) * tw) * k + cy) - y) + 'px';
+        box.appendChild(im);
+      }
+    }).catch(function () {});
+  } catch (e) {}
+})();
+</script>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
