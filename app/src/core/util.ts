@@ -8,8 +8,13 @@ export const NS = 'http://www.w3.org/2000/svg';
 /** יוצר אלמנט SVG עם תכונות, ומוסיף אותו להורה (אם ניתן) */
 /** מונה עלות ציור (לתקציב הביצועים, world/budget.ts): כמה אלמנטים נוצרו וכמה נקודות יש בצורות שלהם */
 export const drawCost = { els: 0, pts: 0 };
+/** באתר המפורסם (משימה 30, שלב 3) הנוף הקבוע מגיע מוכן מראש (אריחים וקבצי אזורים), אז הציור הנייח לא נבנה בכלל:
+ *  כל אלמנט נייח הוא אותו אלמנט ריק שמתעלם מהכול. רק ההיגיון של הציור רץ (מקומות, מפת ההליכה, אפקטים) */
+export const STATIC = { off: false };
+const DUMMY: any = new (class extends SNode { setAttribute() {} appendChild(c: any) { return c; } insertBefore(c: any) { return c; } })('g');
 export function el(tag: string, a?: Record<string, any> | null, parent?: Element | null): any {
   // הורה בכרטיס הגרפי → גם הילד שם; הורה נייח (SNode) → אלמנט קל בזיכרון; אחרת אלמנט SVG רגיל
+  if (STATIC.off && parent instanceof SNode) return DUMMY;   // בלי ציור נייח (האתר המפורסם): רק ההיגיון רץ
   const e: any = parent instanceof VNode ? new VNode(tag) : parent instanceof SNode ? new SNode(tag) : document.createElementNS(NS, tag);
   drawCost.els++;
   if (a?.d) drawCost.pts += (String(a.d).match(/[-\d.]+/g)?.length ?? 0) / 2;

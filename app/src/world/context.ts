@@ -34,7 +34,11 @@ export function initLayers(svgS: SVGSVGElement, svgD: SVGSVGElement) {
 }
 
 /* ───────── אובייקטים נייחים: ממוינים לפי y (מה שלמטה במסך מצויר מעל) ───────── */
-export const statics: { el: any; y: number; bb?: number[]; idx?: number }[] = [];
+export const statics: { el: any; y: number; bb?: number[]; idx?: number; cid?: number }[] = [];
+/** מספר יצירה לכל דבר עומד (אותו סדר בכל בנייה). באתר המפורסם המידות שלהם מגיעות מקובץ שנאפה (static.bin), לפי המספר */
+let CID = 0;
+export const STATIC_BB: { arr: Float32Array | null } = { arr: null };
+export const cidCount = () => CID;
 /** ציור נדחה (בנייה לפי אזורים, scene/chunks.ts): בזמן שהדבר מצויר, prop() מחזיר את הקבוצה שכבר שמורה לו ברשימה */
 let deferTarget: any = null;
 export function drawInto(g: any, f: () => void) { const k = deferTarget; deferTarget = g; try { f(); } finally { deferTarget = k; } }
@@ -47,7 +51,11 @@ export function bboxOf(st: { el: any; bb?: number[] }) {
 export function prop(y: number, parent?: any) {
   if (deferTarget && !parent) { const g = deferTarget; deferTarget = null; return g; }
   const g = el('g', null, parent || ctx.L.props);
-  if (!parent) { const st = { el: g, y }; statics.push(st); g.st = st; }
+  if (!parent) {
+    const st: any = { el: g, y, cid: CID++ }, a = STATIC_BB.arr, i = st.cid * 4;
+    if (a && i + 3 < a.length && a[i + 2] > 0) st.bb = [a[i], a[i + 1], a[i + 2], a[i + 3]];
+    statics.push(st); g.st = st;
+  }
   return g;
 }
 export function sortStatics() {

@@ -4,10 +4,11 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
-import { bakeTile, tileGrid, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
+import { bakeTile, tileGrid, bakeRegions, bakeStatic, manifestP, initTilesFromRegions, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
 import { CULL } from './render/gpu';
 import { chunksIn, buildChunk, buildDetail, nextChunk, pendingCount, allChunks } from './scene/chunks';
-import { ctx } from './world/context';
+import { ctx, STATIC_BB } from './world/context';
+import { STATIC } from './core/util';
 import { FRAME } from './world/budget';
 import { vstats } from './render/vnode';
 import { setPalette, regrade, grade, currentPalette } from './core/palette';
@@ -36,7 +37,17 @@ async function boot() {
   const canvas = await prepareGpu(document.getElementById('mapC') as HTMLCanvasElement);
   view.gpu = ctx.gpuDyn = tileStats.mode === 'gpu';
   const tm: Record<string, number> = {}, t0 = performance.now();   // זמני הטעינה (window.__boot), למדידה
-  startPainters(); await paintersLoaded();   // הציירים שברקע נטענים קודם (הטעינה שלהם צריכה דף פנוי), ואז בונים
+  startPainters();   // הציירים שברקע נטענים קודם (הטעינה שלהם צריכה דף פנוי), ואז בונים
+  // האתר המפורסם (משימה 30, שלב 3): הנוף הקבוע מגיע מוכן (אריחים וקבצי אזורים), אז לא בונים אותו – רק את ההיגיון.
+  // המידות של הדברים העומדים והשלטים מגיעים מקובץ שנאפה (static.bin, static.json)
+  const [man] = await Promise.all([manifestP, paintersLoaded()]);
+  let staticJson: any = null;
+  if (man?.regions) {
+    try {
+      const [bin, js] = await Promise.all([fetch('tiles/static.bin').then(r => r.ok ? r.arrayBuffer() : null), fetch('tiles/static.json').then(r => r.ok ? r.json() : null)]);
+      if (bin && js) { STATIC_BB.arr = new Float32Array(bin); STATIC.off = true; staticJson = js; }
+    } catch {}
+  }
   buildScene(world, svgS, svgD);
   // בנייה לפי אזורים (scene/chunks.ts): רק האזורים של המבט הראשון מצוירים עכשיו; השאר ברקע אחרי שהמפה מוצגת
   {
@@ -44,7 +55,7 @@ async function boot() {
     const c = Math.min(r.width / hw, r.height / hh), v = Math.max(r.width / hw, r.height / hh);
     const k = Math.max(v / c < 1.2 ? v : c, Math.max(r.width / (B.x1 - B.x0), r.height / (B.y1 - B.y0)));
     const cx = (home.x0 + home.x1) / 2, cy = (home.y0 + home.y1) / 2, ex = r.width / 2 / k * 1.15, ey = r.height / 2 / k * 1.15;
-    for (const ch of chunksIn(cx - ex, cy - ey, cx + ex, cy + ey)) {
+    if (!STATIC.off) for (const ch of chunksIn(cx - ex, cy - ey, cx + ex, cy + ey)) {
       tm.bootChunks = (tm.bootChunks || 0) + 1;
       const out = buildChunk(ch);
       if (out) for (const [layer, nodes] of Object.entries(out.layers)) for (const n of nodes) ctx.L[layer].appendChild(n);
@@ -52,13 +63,16 @@ async function boot() {
   }
   tm.scene = performance.now() - t0;
   // קודם רשימת הציור לציירים (הם מתחילים לעבד אותה ברקע), ורק אחר כך הדמויות
-  const items = initTiles(canvas); tm.tiles = performance.now() - t0 - tm.scene;
+  const items = STATIC.off ? initTilesFromRegions(canvas, staticJson) : initTiles(canvas); tm.tiles = performance.now() - t0 - tm.scene;
   // המצלמה והבקשה הראשונה לאריחים לפני הדמויות: הציירים מציירים את המפה בזמן שהדף בונה את הדמויות
   if (view.gpu) { gpuOverlay(ctx.worldD.c); document.getElementById('dWrap').style.display = 'none'; CULL.layers = [ctx.L.fx.c, ctx.L.air.c]; }
   const { startFollow } = initCamera(followables);
+  let q0 = performance.now();
   if (view.gpu) renderNow(); else requestStatic();
+  tm.firstRender = performance.now() - q0; q0 = performance.now();
   await new Promise(r => setTimeout(r, 0));   // הפסקה קצרה: ההודעות לציירים יוצאות עכשיו, לא אחרי כל הבנייה
-  const actors = buildActors(world.actors); tm.actors = performance.now() - t0 - tm.scene - tm.tiles;
+  tm.yield = performance.now() - q0; q0 = performance.now();
+  const actors = buildActors(world.actors); tm.buildActors = performance.now() - q0; tm.actors = performance.now() - t0 - tm.scene - tm.tiles;
   (window as any).__boot = tm;
 
   let instantEl: HTMLElement | null = document.getElementById('instant');
@@ -157,6 +171,7 @@ async function boot() {
   const built = new Promise<void>(r => { builtResolve = r; });
   (window as any).__built = false;
   const chunkStep = () => {
+    if (STATIC.off) { (window as any).__built = true; builtResolve(); return; }   // הכול מוכן מראש
     // בזמן זום או גרירה לא בונים (בנייה של אזור לוקחת כמה עשרות אלפיות שנייה, והפריים היה מתעכב – קפיצה במסך)
     if (performance.now() - camMoved.at < 350) { setTimeout(chunkStep, 120); return; }
     const { cam, vw, vh } = view, x0 = -cam.x / cam.k, y0 = -cam.y / cam.k, x1 = (vw - cam.x) / cam.k, y1 = (vh - cam.y) / cam.k;
@@ -172,7 +187,7 @@ async function boot() {
   const buildEverything = async () => { await built; for (const c of allChunks()) { const out = buildDetail(c); if (out) addChunkItems(out.layers, out.rect); } flushCoarseTiles(); };
   // שרת הבנייה (tools/site.mjs, ?bake=tiles): העולם כולו, ואז ציור של כל אריח מוכן מראש
   // (העולם עוצר בזמן האפייה: רק ציור האריחים רץ, בלי דמויות ואנימציה שמתחרות עליו)
-  if (location.search.includes('bake=tiles')) (window as any).__tileBake = { ready: buildEverything().then(() => setRunning(false)), bakeTile, tileGrid, pals: world.palettes.map((p: any) => p.name), meta: { B: world.bounds, home: world.home, def: world.palette } };
+  if (location.search.includes('bake=tiles')) (window as any).__tileBake = { ready: buildEverything().then(() => setRunning(false)), bakeTile, tileGrid, bakeRegions, bakeStatic, pals: world.palettes.map((p: any) => p.name), meta: { B: world.bounds, home: world.home, def: world.palette } };
 
   // פריים ראשון, כדי שגם במצב "פחות תנועה" הדמויות יופיעו
   actors.update(.016, 0);

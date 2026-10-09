@@ -56,7 +56,16 @@ async function bakeTiles() {
     }
   }));
   const meta = await pages[0].evaluate(() => window.__tileBake.meta);
+  // שלב 3: קבצי אזורים (הצורות של העולם לזום קרוב), מידות הדברים העומדים, והשלטים
+  const RS = 1024, regs = await pages[0].evaluate(RS => window.__tileBake.bakeRegions(RS), RS);
+  mkdirSync(new URL('../dist/regions/', import.meta.url), { recursive: true });
+  let rb = 0;
+  for (const [k, b64] of Object.entries(regs)) { const buf = Buffer.from(b64, 'base64'); rb += buf.length; writeFileSync(new URL(`../dist/regions/${k}.bin`, import.meta.url), buf); }
+  const st = await pages[0].evaluate(() => window.__tileBake.bakeStatic());
+  writeFileSync(new URL('../dist/tiles/static.bin', import.meta.url), Buffer.from(st.bin, 'base64'));
+  writeFileSync(new URL('../dist/tiles/static.json', import.meta.url), st.json);
+  console.log(`baked ${Object.keys(regs).length} region files (${(rb / 1e6).toFixed(1)} MB)`);
   await b.close();
-  writeFileSync(new URL('../dist/tiles/manifest.json', import.meta.url), JSON.stringify({ maxL: MAXL, pals, ...meta }));
+  writeFileSync(new URL('../dist/tiles/manifest.json', import.meta.url), JSON.stringify({ maxL: MAXL, pals, ...meta, regions: { RS } }));
   console.log(`baked ${n} tiles (${(bytes / 1e6).toFixed(1)} MB) with ${K} pages in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
 }

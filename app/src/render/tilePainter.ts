@@ -36,6 +36,26 @@ function unpackDL(pk: PackedDL): DLItem[] {
   return out;
 }
 
+/* ───── קבצי אזורים (משימה 30, שלב 3): רשימת הציור של העולם, מחולקת לפי אזורים, כקובץ בינארי לכל אזור ─────
+   מבנה: 4 בתים – אורך הכותרת; כותרת JSON (סגנונות, מספר הצורות); ואחריה המערכים, כל אחד מיושר ל-8 בתים */
+const RKEYS: [string, any][] = [['ids', Int32Array], ['dLen', Int32Array], ['z', Float64Array], ['m', Float64Array], ['a', Float32Array], ['pad', Float32Array], ['sw', Float32Array], ['det', Uint8Array], ['sty', Int32Array], ['d', Uint8Array]];
+export function encodeRegion(DL: DLItem[], ids: number[]): Uint8Array {
+  const { pk } = packDL(DL), arrs: Record<string, any> = { ...pk, ids: Int32Array.from(ids) };
+  const head = new TextEncoder().encode(JSON.stringify({ n: DL.length, styles: pk.styles, lens: RKEYS.map(([k]) => arrs[k].byteLength) }));
+  let size = 4 + head.length; size = Math.ceil(size / 8) * 8;
+  for (const [k] of RKEYS) size += Math.ceil(arrs[k].byteLength / 8) * 8;
+  const out = new Uint8Array(size); new DataView(out.buffer).setUint32(0, head.length, true); out.set(head, 4);
+  let o = Math.ceil((4 + head.length) / 8) * 8;
+  for (const [k] of RKEYS) { out.set(new Uint8Array(arrs[k].buffer, arrs[k].byteOffset, arrs[k].byteLength), o); o += Math.ceil(arrs[k].byteLength / 8) * 8; }
+  return out;
+}
+export function decodeRegion(buf: ArrayBuffer): { items: DLItem[]; ids: Int32Array } {
+  const hl = new DataView(buf).getUint32(0, true), head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl)));
+  let o = Math.ceil((4 + hl) / 8) * 8; const a: Record<string, any> = {};
+  RKEYS.forEach(([k, T], q) => { const len = head.lens[q]; a[k] = new T(buf.slice(o, o + len)); o += Math.ceil(len / 8) * 8; });
+  return { items: unpackDL({ ...a, styles: head.styles } as any), ids: a.ids };
+}
+
 export interface TileMsg { type: 'tile'; l: number; i: number; j: number; bmp: any; gen: number; ms?: number; n?: number }
 
 const DLC = 160;   // גודל תא באינדקס המרחבי
@@ -64,6 +84,31 @@ const WIDE = 64;   // צורה שמכסה יותר תאים מזה (רקע של 
 
 export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
   let items: DLItem[] = [], grid = new Map<number, number[]>(), wide: number[] = [], B: any, TILE = 256, BASE = 1 / 8;
+  // קבצי אזורים: נטענים לפי האריחים שצריך לצייר (כל צורה נטענת פעם אחת, גם אם היא באזורים שכנים)
+  let R: { base: string; RS: number } | null = null, regionsReady: Promise<void> = Promise.resolve();
+  const loadedR = new Map<string, Promise<void>>(), haveId = new Set<number>();
+  function addItems(add: DLItem[], ids?: Int32Array) {
+    const from = items.length;
+    add.forEach((it, q) => { if (ids) { if (haveId.has(ids[q])) return; haveId.add(ids[q]); } items.push(it); });
+    if (items.length === from) return;
+    const s2 = new Uint32Array(items.length); s2.set(seen); seen = s2;
+    index(from);
+  }
+  function loadRegion(key: string): Promise<void> {
+    let p = loadedR.get(key);
+    if (!p) {
+      p = fetch(R!.base + key + '.bin').then(r => r.ok ? r.arrayBuffer() : null).then(b => { if (b) { const { items: add, ids } = decodeRegion(b); addItems(add, ids); } }).catch(() => {});
+      loadedR.set(key, p);
+    }
+    return p;
+  }
+  /** האזורים שהאריח נוגע בהם – נטענים לפני שמציירים אותו */
+  function regionsFor(l: number, tx: number, ty: number) {
+    if (!R) return null;
+    const tw = TILE / (BASE * 2 ** l), x0 = B.x0 + tx * tw, y0 = B.y0 + ty * tw, ps: Promise<void>[] = [regionsReady];
+    for (let cy = Math.floor(y0 / R.RS); cy <= Math.floor((y0 + tw) / R.RS); cy++) for (let cx = Math.floor(x0 / R.RS); cx <= Math.floor((x0 + tw) / R.RS); cx++) ps.push(loadRegion(cx + '_' + cy));
+    return Promise.all(ps);
+  }
   let queue: number[][] = [], busy = false, stamp = 1, seen: Uint32Array, drawn = 0;
   let cmap: Record<string, string> = {}, gen = 0;   // צבע מקורי → צבע אחרי הפלטה
   let cvR: any = null, cR: any = null;
@@ -124,7 +169,9 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
   async function pump() {
     busy = false;
     if (!queue.length) return;
-    const t0 = performance.now(), [l, i, j] = queue.shift(), bmp = await render(l, i, j);
+    const [l, i, j] = queue.shift(), wait = regionsFor(l, i, j);
+    if (wait) await wait;
+    const t0 = performance.now(), bmp = await render(l, i, j);
     post({ type: 'tile', l, i, j, bmp, gen, ms: performance.now() - t0, n: drawn} as any, bmp.close ? [bmp] : undefined);
     busy = true; setTimeout(pump, 0);
   }
@@ -135,6 +182,10 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
       ({ B, TILE, BASE } = m); items = m.packed ? unpackDL(m.packed) : m.items; seen = new Uint32Array(items.length);
       index(0);
       (post as any)({ type: 'ready', ms: performance.now() - ti0, n: items.length, sent: m.sent, wStart: performance.timeOrigin + ti0, wEnd: performance.timeOrigin + performance.now(), wBoot: performance.timeOrigin });
+    } else if (m.type === 'regions') {
+      // האתר המפורסם: אין רשימת ציור מהדף; הצורות מגיעות מקבצי האזורים (וקובץ אחד לצורות שמכסות שטח גדול)
+      ({ B, TILE, BASE } = m); R = { base: m.base, RS: m.RS }; items = []; seen = new Uint32Array(0);
+      regionsReady = loadRegion('global');
     } else if (m.type === 'add') {
       // אזור שצויר מאוחר יותר: מצטרף לרשימה ולאינדקס
       const from = items.length, add = unpackDL(m.packed);

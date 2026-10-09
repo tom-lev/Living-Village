@@ -4,11 +4,12 @@
    כך שקצב הפריימים לא תלוי בכמות התוכן. אריח שעדיין לא מוכן מוחלף זמנית באריח מרמה אחרת. */
 import { el, clamp, rrect, circ } from '../core/util';
 import { grade, rawColor, setPalette } from '../core/palette';
-import { ctx } from '../world/context';
+import { ctx, bboxOf } from '../world/context';
 import { DETAIL_GROUPS } from '../scene/terrain';
 import { view } from '../camera/view';
-import { createPainter, packDL, type DLItem } from './tilePainter';
-import { SNode, mul, parseTransform, type M6 } from './snode';
+import { createPainter, packDL, encodeRegion, type DLItem } from './tilePainter';
+import { SNode, mul, parseTransform, pathBox, boxThrough, type M6 } from './snode';
+import { statics, cidCount } from '../world/context';
 import { createGpuTiles, type GpuTiles } from './gpu';
 
 const TILE = 256, BASE = 1 / 8, LMAX = 10, TILE_CAP = 300;
@@ -38,7 +39,9 @@ function extractNodes(nodes: SNode[], layer: string, DL: DLItem[]) {
         'text-anchor': st['text-anchor'] || 'start', fill: st.fill || '#000', transform: `matrix(${m[0]} ${m[1]} ${m[2]} ${m[3]} ${m[4]} ${m[5]})` };
       for (const k of ['font-family', 'font-style', 'stroke', 'stroke-width']) if (st[k] !== undefined) ta[k] = st[k];
       const t = el('text', ta, L.fx);
-      t.textContent = e.textContent; return;
+      t.textContent = e.textContent;
+      if (BAKE) allTexts.push({ ta, text: e.textContent });
+      return;
     }
     let d: string;
     if (tag === 'path') d = at.d || '';
@@ -114,8 +117,11 @@ const addColor = (c: string) => { if (!colorSet.has(c)) { colorSet.add(c); color
    בלי manifest (שרת פיתוח, או בנייה מקומית) – הכול מצויר כרגיל. */
 const BAKE = typeof location !== 'undefined' && location.search.includes('bake=tiles');
 const allDL: DLItem[] = [];   // רק במצב אפייה: כל רשימת הציור (גם של אזורים שנוספו)
-let baked: { maxL: number; pals: string[] } | null = null;
-if (typeof fetch !== 'undefined' && !BAKE) fetch('tiles/manifest.json').then(r => r.ok ? r.json() : null).then(m => { if (m) { baked = m; lastNeed = ''; requestStatic(); } }).catch(() => {});
+const allTexts: { ta: any; text: string }[] = [];   // ושלטי הטקסט שעוברים לשכבה הדינמית
+let baked: { maxL: number; pals: string[]; regions?: { RS: number } } | null = null;
+/** רשימת האריחים המוכנים (נטענת בתחילת הטעינה; בלי – null) */
+export const manifestP: Promise<any> = typeof fetch === 'undefined' || BAKE ? Promise.resolve(null)
+  : fetch('tiles/manifest.json').then(r => r.ok ? r.json() : null).then(m => { if (m) { baked = m; lastNeed = ''; requestStatic(); } return m; }).catch(() => null);
 const bakedPal = () => baked && ctx.world ? baked.pals.indexOf(ctx.world.palette) : -1;
 /** האריח הזה מגיע מוכן (ולא צריך לצייר אותו, גם לא מחדש) */
 const isBaked = (l: number) => bakedPal() >= 0 && l <= baked!.maxL;
@@ -148,6 +154,48 @@ export async function bakeTile(pal: string, l: number, i: number, j: number) {
   for (let q = 0; q < u8.length; q += 0x8000) bin += String.fromCharCode(...u8.subarray(q, q + 0x8000));
   return btoa(bin);
 }
+/** לשרת הבנייה: קבצי האזורים. כל צורה נכנסת לכל אזור שהיא נוגעת בו (הצייר טוען אותה פעם אחת),
+ *  וצורות ענקיות (רקע, צורות שמכסות הרבה אזורים) – לקובץ אחד, global, שנטען תמיד */
+export function bakeRegions(RS: number) {
+  const reg = new Map<string, number[]>(), G: number[] = [];
+  allDL.forEach((it, id) => {
+    const b = pathBox(it.d), p = it.pad ?? 2; if (!(b[0] <= b[2])) return;
+    const q = boxThrough(it.m as M6, [b[0] - p, b[1] - p, b[2] + p, b[3] + p]);
+    const cx0 = Math.floor(q[0] / RS), cx1 = Math.floor(q[2] / RS), cy0 = Math.floor(q[1] / RS), cy1 = Math.floor(q[3] / RS);
+    if ((cx1 - cx0 + 1) * (cy1 - cy0 + 1) > 6) { G.push(id); return; }
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) { const k = cx + '_' + cy; (reg.get(k) || reg.set(k, []).get(k)!).push(id); }
+  });
+  const b64 = (u8: Uint8Array) => { let bin = ''; for (let q = 0; q < u8.length; q += 0x8000) bin += String.fromCharCode(...u8.subarray(q, q + 0x8000)); return btoa(bin); };
+  const files: Record<string, string> = { global: b64(encodeRegion(G.map(i => allDL[i]), G)) };
+  for (const [k, ids] of reg) files[k] = b64(encodeRegion(ids.map(i => allDL[i]), ids));
+  return files;
+}
+/** לשרת הבנייה: המידות של כל דבר עומד לפי מספר היצירה שלו (static.bin), השלטים והצבעים (static.json) */
+export function bakeStatic() {
+  const n = cidCount(), a = new Float32Array(n * 4);
+  for (const st of statics) if (st.cid !== undefined) { const b = bboxOf(st); a.set(b, st.cid * 4); }
+  const u8 = new Uint8Array(a.buffer); let bin = ''; for (let q = 0; q < u8.length; q += 0x8000) bin += String.fromCharCode(...u8.subarray(q, q + 0x8000));
+  return { bin: btoa(bin), json: JSON.stringify({ texts: allTexts, colors }) };
+}
+/** האתר המפורסם: במקום רשימת ציור מהדף – הציירים טוענים בעצמם את קבצי האזורים */
+export function initTilesFromRegions(canvas: HTMLCanvasElement, st: { texts: any[]; colors: string[] }) {
+  cvS = canvas;
+  if (mode === '2d') cs = canvas.getContext('2d');
+  gpu?.setBackground(grade('#9cd162'));
+  startPainters();
+  onTileFn = (m: any) => { if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
+  if (!painters.length) { const handle = createPainter(m => setTimeout(() => onTileFn(m), 0)); painters = [{ postMessage: m => handle(m) }]; }
+  colors = st.colors.slice(); colorSet = new Set(colors);
+  const base = new URL('regions/', location.href).href;
+  for (const p of painters) { p.postMessage({ type: 'regions', base, RS: baked!.regions!.RS, B: ctx.B, TILE, BASE }); p.postMessage({ type: 'palette', cmap: colorMap(), gen }); }
+  // שלטים: הטקסטים של הנוף הקבוע, בשכבה הדינמית (כמו בחילוץ הרגיל)
+  for (const { ta, text } of st.texts) el('text', ta, ctx.L.fx).textContent = text;
+  const { B } = ctx, tw0 = TILE / tileScale(0);
+  for (let j = 0; j < Math.ceil((B.y1 - B.y0) / tw0); j++) for (let i = 0; i < Math.ceil((B.x1 - B.x0) / tw0); i++) L0_KEYS.push([0, i, j]);
+  ctx.svgS.remove();
+  return 0;
+}
+
 /** לשרת הבנייה: כמה אריחים יש בכל רמה */
 export const tileGrid = (l: number) => { const t = TILE / tileScale(l), { B } = ctx; return [Math.ceil((B.x1 - B.x0) / t), Math.ceil((B.y1 - B.y0) / t)]; };
 
