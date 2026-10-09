@@ -3,6 +3,7 @@
    שימוש: node tools/site.mjs   (מתוך app/; צריך Chromium של Playwright: npx playwright install chromium) */
 import { spawn, execSync } from 'node:child_process';
 import { cpus } from 'node:os';
+import { gzipSync } from 'node:zlib';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 
 const PORT = 4399, SITE = `http://localhost:${PORT}/`;
@@ -76,6 +77,9 @@ async function bakeTiles() {
   // שלב 5: רשת ההליכה, ואם אפשר להגיע לכל מקום מהכפר – מוכנים מראש (בדפדפן זה היה החלק הכבד בבניית הדמויות)
   const nav = Buffer.from(await pages[0].evaluate(() => window.__tileBake.bakeNav()), 'base64');
   writeFileSync(new URL('../dist/tiles/nav.bin', import.meta.url), nav);
+  // דחוס (קבצים בינאריים לא נדחסים בדרך; הרשת נדחסת פי 2 בערך) – הדפדפן פותח אותו בעצמו (DecompressionStream).
+  // סיומת לא מוכרת בכוונה: שרת שמזהה .gz מסמן אותו כדחוס, והדפדפן פותח אותו לפני הקוד
+  writeFileSync(new URL('../dist/tiles/nav.navz', import.meta.url), gzipSync(nav, { level: 9 }));
   { const js = JSON.parse(st.json); js.reach = await pages[0].evaluate(() => window.__tileBake.bakeReach()); st.json = JSON.stringify(js); }
   console.log(`baked the walk network (${(nav.length / 1e3).toFixed(0)} KB)`);
   writeFileSync(new URL('../dist/tiles/static.bin', import.meta.url), Buffer.from(st.bin, 'base64'));

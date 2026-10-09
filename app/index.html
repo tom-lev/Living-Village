@@ -38,7 +38,9 @@
     var more = function () {
       if (!inl || window.__LOGIC) return;
       window.__LOGIC = fetch('tiles/logic.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
-      window.__NAV = fetch('tiles/nav.bin', { priority: 'low' }).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).catch(function () { return null; });
+      // (דחוסה; דפדפן בלי DecompressionStream – הקובץ הרגיל)
+      var gz = typeof DecompressionStream !== 'undefined';
+      window.__NAV = fetch(gz ? 'tiles/nav.navz' : 'tiles/nav.bin', { priority: 'low' }).then(function (r) { return !r.ok ? null : gz ? new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer() : r.arrayBuffer(); }).catch(function () { return null; });
     };
     (inl ? Promise.resolve(inl.manifest) : fetch('tiles/manifest.json').then(function (r) { return r.ok ? r.json() : null; })).then(function (m) {
       var box = document.getElementById('instant'); if (!m || !m.B || !box) return;
