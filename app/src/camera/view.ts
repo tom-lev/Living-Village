@@ -20,3 +20,18 @@ export function updateSeen() {
 }
 /** האם עיגול ברדיוס r סביב (x, y) נוגע באזור הנראה */
 export const inView = (x: number, y: number, r = 0) => x + r > seen.x0 && x - r < seen.x1 && y + r > seen.y0 && y - r < seen.y1;
+
+/* סימולציה לפי מרחק (משימה 30, שלב 5): חיה רחוקה מהמבט (מעבר ל-FAR יחידות מהמסך) מתעדכנת רק פעם ב-EVERY פריימים,
+   עם כל הזמן שעבר מאז (לכל היותר MAXDT): היא מגיעה לאותם מקומות, רק בצעדים גדולים יותר שאף אחד לא רואה.
+   החיות מפוזרות על הפריימים (כל אחת בתור שלה), כדי שהעבודה לא תתרכז בפריים אחד. ליד המבט – כל פריים, כרגיל */
+const FAR = 250, EVERY = 4, MAXDT = .25;
+let lodN = 0;
+export function farDt(o: { x: number; y: number; _lodAcc?: number; _lodI?: number }, dt: number): number {
+  const acc = (o._lodAcc ?? 0) + dt;
+  if (inView(o.x, o.y, FAR)) { o._lodAcc = 0; return Math.min(acc, MAXDT); }
+  o._lodI = ((o._lodI ?? lodN++ % EVERY) + 1) % EVERY;
+  if (o._lodI) { o._lodAcc = acc; return 0; }
+  o._lodAcc = 0; return Math.min(acc, MAXDT);
+}
+/** עדכון של קבוצת חיות לפי מרחק */
+export const updateFar = (all: any[]) => (dt: number, t: number) => { for (const a of all) { const d = farDt(a, dt); if (d > 0) a.update(d, t); } };

@@ -9,7 +9,7 @@
 import { el, n2, circ, show } from '../core/util';
 import { rngAt, type LocalRng } from '../core/rng';
 import { ctx } from '../world/context';
-import { inView } from '../camera/view';
+import { inView, updateFar } from '../camera/view';
 import { TREES } from '../scene/generators';
 import { REAL_DYN, fitScale } from '../world/scale';
 import { dynamics } from './people';
@@ -180,5 +180,5 @@ export function bluebirds(o: { pond?: string; count: number }) {
   if (!perches.length) return () => {};
   const birds = Array.from({ length: o.count }, (_, i) => new Bluebird(i, perches, shore, rngAt(cx + i, cy, 93)));
   (window as any).__bluebirds = birds;   // לבדיקות
-  return (dt: number, t: number) => { for (const b of birds) b.update(dt, t); };
+  return updateFar(birds);   // רחוק מהמבט: פחות עדכונים (camera/view.ts farDt)
 }

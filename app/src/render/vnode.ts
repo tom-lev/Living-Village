@@ -71,29 +71,43 @@ function scalePath(d: string) {
 }
 
 /* ───────── מטריצות transform ───────── */
-const mCache = new Map<string, Matrix>();
 function parseTransform(t: string): Matrix {
-  const hit = mCache.get(t); if (hit) return hit;
-  const m = new Matrix();
-  const re = /(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g; let a: RegExpExecArray | null;
-  const ops: [string, number[]][] = [];
-  while ((a = re.exec(t))) ops.push([a[1], a[2].split(/[\s,]+/).filter(Boolean).map(Number)]);
-  for (const [op, v] of ops) {
-    const o = new Matrix();
-    if (op === 'matrix') o.set(v[0], v[1], v[2], v[3], v[4], v[5]);
-    else if (op === 'translate') o.translate(v[0] || 0, v[1] || 0);
-    else if (op === 'scale') o.scale(v[0], v.length > 1 ? v[1] : v[0]);
+  // מפענח ידני (בלי ביטויים רגולריים, בלי מטריצות ביניים ובלי מטמון): נקרא בכל פריים לכל דבר שזז, והמחרוזות כמעט תמיד חדשות
+  let a = 1, b = 0, c = 0, d = 1, e = 0, f = 0, i = 0;
+  const n = t.length, v: number[] = [];
+  while (i < n) {
+    while (i < n && !isLetter(t.charCodeAt(i))) i++;
+    const s0 = i; while (i < n && isLetter(t.charCodeAt(i))) i++;
+    const op = t.slice(s0, i);
+    while (i < n && t.charCodeAt(i) !== 40) i++;   // '('
+    i++; v.length = 0;
+    while (i < n && t.charCodeAt(i) !== 41) {     // ')'
+      const ch = t.charCodeAt(i);
+      if (ch === 32 || ch === 44 || ch === 9 || ch === 10) { i++; continue; }   // רווח, פסיק
+      const s1 = i; i++;
+      while (i < n) { const q = t.charCodeAt(i); if ((q >= 48 && q <= 57) || q === 46 || ((q === 45 || q === 43) && (t.charCodeAt(i - 1) | 32) === 101) || (q | 32) === 101) i++; else break; }
+      v.push(+t.slice(s1, i));
+    }
+    i++;
+    if (!op) break;
+    let oa = 1, ob = 0, oc = 0, od = 1, oe = 0, of = 0;
+    if (op === 'matrix') { oa = v[0]; ob = v[1]; oc = v[2]; od = v[3]; oe = v[4]; of = v[5]; }
+    else if (op === 'translate') { oe = v[0] || 0; of = v[1] || 0; }
+    else if (op === 'scale') { oa = v[0]; od = v.length > 1 ? v[1] : v[0]; }
     else if (op === 'rotate') {
-      const r = v[0] * Math.PI / 180, cx = v[1] || 0, cy = v[2] || 0;
-      o.translate(-cx, -cy).rotate(r).translate(cx, cy);
-    } else if (op === 'skewX') o.set(1, 0, Math.tan(v[0] * Math.PI / 180), 1, 0, 0);
-    else if (op === 'skewY') o.set(1, Math.tan(v[0] * Math.PI / 180), 0, 1, 0, 0);
-    m.append(o);
+      const r = v[0] * Math.PI / 180, cx = v[1] || 0, cy = v[2] || 0, co = Math.cos(r), si = Math.sin(r);
+      oa = co; ob = si; oc = -si; od = co; oe = cx - co * cx + si * cy; of = cy - si * cx - co * cy;
+    } else if (op === 'skewX') oc = Math.tan(v[0] * Math.PI / 180);
+    else if (op === 'skewY') ob = Math.tan(v[0] * Math.PI / 180);
+    else continue;
+    // M = M · O (כמו append של Pixi)
+    const a1 = a, b1 = b, c1 = c, d1 = d;
+    a = oa * a1 + ob * c1; b = oa * b1 + ob * d1; c = oc * a1 + od * c1; d = oc * b1 + od * d1;
+    e = oe * a1 + of * c1 + e; f = oe * b1 + of * d1 + f;
   }
-  if (mCache.size > 3000) mCache.clear();
-  mCache.set(t, m);
-  return m;
+  return new Matrix(a, b, c, d, e, f);
 }
+const isLetter = (q: number) => (q >= 65 && q <= 90) || (q >= 97 && q <= 122);
 
 /* ───────── גרדיאנט רדיאלי (זוהר המדורה) כטקסטורה ───────── */
 const gradTex = new Map<string, Texture>();
@@ -126,6 +140,11 @@ export class VNode {
   get textContent() { return this._text; }
   set textContent(v: string) { this._text = String(v); dirty.add(this); }
   getAttribute(k: string) { return this.attrs[k] ?? null; }
+  /** מיקום וגודל ישירות (בלי מחרוזת transform לפענוח) – לאפקטים שמתעדכנים בכל פריים */
+  setTS(tx: number, ty: number, s: number) {
+    if (this.attrs.transform !== undefined) { delete this.attrs.transform; this.c.rotation = 0; this.c.skew.set(0, 0); this.c.pivot.set(0, 0); }
+    this.c.position.set(tx, ty); this.c.scale.set(s, s);
+  }
   removeAttribute(k: string) { delete this.attrs[k]; this.setAttribute(k, null); }
   setAttribute(k: string, v: any) {
     if (v === null || v === undefined) { if (!(k in this.attrs)) return; delete this.attrs[k]; }

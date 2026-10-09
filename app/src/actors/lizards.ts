@@ -9,7 +9,7 @@
 import { el, n2, circ, show, shade } from '../core/util';
 import { rngAt, type LocalRng } from '../core/rng';
 import { ctx } from '../world/context';
-import { inView } from '../camera/view';
+import { inView, updateFar } from '../camera/view';
 import { REAL_DYN, fitScale } from '../world/scale';
 import { GRASS_RX, GRASS_RY, holeOf } from '../prefabs/tallgrass';
 import { dynamics } from './people';
@@ -151,5 +151,5 @@ export function lizards(o: { count?: number }) {
   const homes = (ctx.world.objects as any[]).filter(q => q.type === 'tallGrass').slice(0, o.count ?? 99);
   const all = homes.map((h, i) => new Lizard(h, rngAt(h.x, h.y, 62 + i)));
   (window as any).__lizards = all;   // לבדיקות
-  return (dt: number, t: number) => { for (const l of all) l.update(dt, t); };
+  return updateFar(all);   // רחוק מהמבט: פחות עדכונים (camera/view.ts farDt)
 }

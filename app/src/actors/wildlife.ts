@@ -7,7 +7,7 @@ import { REAL_DYN, fitScale } from '../world/scale';
 import { el, n2, show } from '../core/util';
 import { rngAt } from '../core/rng';
 import { ctx, statics, bboxOf } from '../world/context';
-import { inView } from '../camera/view';
+import { inView, updateFar, view } from '../camera/view';
 import { walkable, flagsAt, clearLine, PATH, WATER } from '../world/walk';
 import { places } from '../world/places';
 import { WILD, setLeg, frontBack, type WildKind, type Parts } from './wildlife-art';
@@ -206,6 +206,8 @@ class Animal {
     this.sit += (this.sitWant - this.sit) * Math.min(1, dt * 3);
     this.shown = inView(this.x, this.y - 10, 40); show(this.g, this.shown);
     if (!this.shown) return;
+    // חיה זעירה על המסך (פחות מ-8 פיקסלים): התנוחה מתעדכנת כל פריים שני, המיקום – תמיד (הקפיצה של ארנבת רק מקרוב נראית)
+    if (this.H * view.cam.k < 8 && (this.tk = (this.tk ?? 0) ^ 1)) { this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y - (this.lastLift ?? 0))})`); return; }
     // קפיצה של ארנבת או סנאי: דחיפה ברגליים האחוריות, תעופה בקשת, נחיתה על הכפות הקדמיות
     const lift = K.hop ? hopPose(this.p.hop, this.kind, this.hopH, this.amp, this.sit, t, this.hx) * unit : 0;
     if (this.front) {
@@ -273,7 +275,7 @@ class Animal {
         this.p.folded.setAttribute('opacity', '1');
       }
     }
-    this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y - lift)})`);
+    this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y - lift)})`); this.lastLift = lift;
     this.f.setAttribute('transform', `scale(${(this.Hd ? this.Hd.sx : this.flip).toFixed(3)},1)`);
   }
 }
@@ -293,7 +295,7 @@ export function wildlife(counts: Partial<Record<WildKind, number>>) {
   }
   (window as any).__wildlife = all;   // לבדיקות
   WILD_ALL.splice(0, WILD_ALL.length, ...all);
-  return (dt: number, t: number) => { for (const a of all) a.update(dt, t); };
+  return updateFar(all);   // רחוק מהמבט: פחות עדכונים (camera/view.ts farDt)
 }
 
 /** כל החיות (לבדיקת העולם, כלל wild-apart) */

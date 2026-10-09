@@ -8,7 +8,7 @@
 import { el, n2, circ, show, shade } from '../core/util';
 import { rngAt, type LocalRng } from '../core/rng';
 import { ctx } from '../world/context';
-import { inView } from '../camera/view';
+import { inView, updateFar, view } from '../camera/view';
 import { REAL_DYN, fitScale } from '../world/scale';
 import { lakeShore } from '../scene/terrain';
 import { dynamics } from './people';
@@ -215,6 +215,8 @@ class Bird {
     this.flip = this.face;   // ציפור מסתובבת בקפיצה מהירה: היפוך מיידי, בלי להתכווץ על הציר
     const on = inView(this.x, this.y - this.alt - 10, 40); show(this.g, on);
     if (!on) return;
+    // ציפור זעירה על המסך (פחות מ-10 פיקסלים, למשל דרורים כשרואים את כל הכפר): התנוחה מתעדכנת כל פריים שני, המיקום – תמיד
+    if (NATURAL_H[this.kind] * this.k * view.cam.k < 10 && (this.tk = (this.tk ?? 0) ^ 1)) { this.g.setAttribute('transform', `translate(${n2(this.x)},${n2(this.y - this.alt)})`); return; }
     const fl = wings > 0;
     P.W.near.setAttribute('opacity', fl ? '1' : '0'); P.W.far.setAttribute('opacity', fl ? '1' : '0'); P.wing.setAttribute('opacity', fl ? '0' : '1');
     if (fl) {
@@ -263,5 +265,5 @@ export function birds(o: { sparrows?: number; herons?: number; larks?: number })
     all.push(new Bird('lark', spots, [cx, cy], v));
   }
   (window as any).__birds = all;   // לבדיקות
-  return (dt: number, t: number) => { for (const b of all) b.update(dt, t); };
+  return updateFar(all);   // רחוק מהמבט: פחות עדכונים (camera/view.ts farDt)
 }
