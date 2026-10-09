@@ -10,7 +10,7 @@ import { chunksIn, buildChunk, buildDetail, nextChunk, pendingCount, allChunks }
 import { ctx, STATIC_BB } from './world/context';
 import { STATIC } from './core/util';
 import { FRAME } from './world/budget';
-import { vstats } from './render/vnode';
+import { vstats, refreshTextResolution, TEXT_DPR } from './render/vnode';
 import { setPalette, regrade, grade, currentPalette } from './core/palette';
 import { buildActors, followables } from './actors';
 import { initCamera, cameraTick, loopState, zoomAt, animateTo, camMoved } from './camera/camera';
@@ -37,6 +37,7 @@ async function boot() {
   const canvas = await prepareGpu(document.getElementById('mapC') as HTMLCanvasElement);
   view.gpu = ctx.gpuDyn = tileStats.mode === 'gpu';
   const tm: Record<string, number> = {}, t0 = performance.now();   // זמני הטעינה (window.__boot), למדידה
+  TEXT_DPR.v = Math.min(devicePixelRatio || 1, 3);   // טקסטים נצבעים לפי צפיפות המסך (ולא פי 8 תמיד)
   startPainters();   // הציירים שברקע נטענים קודם (הטעינה שלהם צריכה דף פנוי), ואז בונים
   // האתר המפורסם (משימה 30, שלב 3): הנוף הקבוע מגיע מוכן (אריחים וקבצי אזורים), אז לא בונים אותו – רק את ההיגיון.
   // המידות של הדברים העומדים והשלטים מגיעים מקובץ שנאפה (static.bin, static.json)
@@ -76,7 +77,13 @@ async function boot() {
   const actors = buildActors(world.actors); tm.buildActors = performance.now() - q0; tm.actors = performance.now() - t0 - tm.scene - tm.tiles;
   (window as any).__boot = tm;
 
-  let instantEl: HTMLElement | null = document.getElementById('instant');
+  let instantEl: HTMLElement | null = document.getElementById('instant'), textAt = 0;
+  // טקסטים ברזולוציה של הזום הנוכחי: מתעדכנים רק כשהמצלמה עומדת (לא באמצע זום), לכל היותר 3 פעמים בשנייה; גם בהשהיה
+  const textRefresh = () => {
+    const now = performance.now();
+    if (!view.gpu || now - textAt < 330 || now - camMoved.at < 250) { if (view.gpu && !loopState.running && now - camMoved.at < 600) setTimeout(requestStatic, 300); return 0; }
+    textAt = now; TEXT_DPR.v = Math.min(view.dpr, 3); return refreshTextResolution(TEXT_DPR.v);
+  };
   /* ───────── לולאת האנימציה ───────── */
   let last = 0, T = 0;
   const playBtn = document.getElementById('play');
@@ -91,6 +98,8 @@ async function boot() {
     const r0 = performance.now();
     if (view.gpu) renderNow();   // פריים אחד משותף: אריחים ודמויות
     if (tm.first === undefined) tm.first = performance.now() - r0;   // הפריים הראשון
+    // טקסטים ברזולוציה של הזום הנוכחי: מתעדכנים רק כשהמצלמה עומדת (לא באמצע זום), לכל היותר 3 פעמים בשנייה
+    textRefresh();
     // זמן הטעינה כפי שמרגישים אותו: מתחילת טעינת הדף עד שכל האריחים שעל המסך צוירו (תקציב bootMs)
     if (tm.ready === undefined && tileStats.painted > 0 && tileStats.missing === 0) tm.ready = performance.now();
     // התמונה המיידית יורדת כשהמפה החיה מוכנה (הן זהות), או כבר בתנועה הראשונה של המצלמה (אחרת התמונה הייתה נשארת במקום)
@@ -107,7 +116,7 @@ async function boot() {
   }
   playBtn.onclick = () => setRunning(!loopState.running);
   // בהשהיה: גרירה מציירת בלי לקדם זמן, אבל מה שנכנס למסך צריך להופיע (מחוץ למסך הוא מוסתר)
-  onStaticFrame(() => { if (!loopState.running) actors.update(0, T); drawGrid(); });
+  onStaticFrame(() => { if (!loopState.running) { actors.update(0, T); if (textRefresh()) requestStatic(); } drawGrid(); });
   initGrid();
 
   /* ───────── בחירת סכימת צבעים ───────── */

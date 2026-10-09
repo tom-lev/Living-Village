@@ -10,6 +10,23 @@ const GEOM = new Set(['d', 'x', 'y', 'width', 'height', 'rx', 'ry', 'cx', 'cy', 
 const STYLE = new Set(['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-weight', 'font-family', 'font-style', 'text-anchor', 'fill-opacity', 'stroke-opacity']);
 const INHERIT = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'font-size', 'font-weight', 'font-family', 'font-style', 'text-anchor'];
 const dirty = new Set<VNode>();
+/* טקסט (שלטים, שמות מקומות): נצבע לתמונה ברזולוציה שצריך בזום הנוכחי – לא פי 8 תמיד (זה היה פי עשרות פיקסלים מהדרוש,
+   וההעלאה שלהם לכרטיס הגרפי עלתה כשתי שניות בטעינה בטלפון). כשהמצלמה נעצרת בזום אחר, הטקסטים שעל המסך נצבעים מחדש */
+const texts = new Set<VNode>();
+const pow2 = (v: number) => Math.min(16, Math.max(.25, 2 ** Math.ceil(Math.log2(Math.max(v, 1e-3)))));
+/** רזולוציית הטקסט הדרושה: כמה פיקסלים של המסך יש ליחידה של הטקסט (כולל הזום וצפיפות המסך) */
+const textNeed = (n: VNode, dpr: number) => pow2(Math.abs(n.c.worldTransform.a) * dpr);
+/** נקרא כשהמצלמה עומדת: טקסט נראה שהרזולוציה שלו רחוקה מהדרוש (פי 2) – נצבע מחדש */
+export function refreshTextResolution(dpr: number) {
+  let changed = 0;
+  for (const n of texts) {
+    if (!n.c.visible || !n.c.parent) continue;
+    const want = textNeed(n, dpr);
+    if (want !== n.textRes) { n.textRes = want; dirty.add(n); changed++; }
+  }
+  return changed;
+}
+export const TEXT_DPR = { v: 1 };
 let defsRoot: Element | null = null;
 export const setDefs = (e: Element) => { defsRoot = e; };
 
@@ -96,7 +113,7 @@ function gradientTexture(id: string): Texture | null {
 
 export class VNode {
   tag: string; attrs: Record<string, string> = {}; kids: VNode[] = []; parentNode: VNode | null = null;
-  c = new Container(); gfx: Graphics | Text | Sprite | null = null;
+  c = new Container(); gfx: Graphics | Text | Sprite | null = null; textRes = 0;
   dataset: Record<string, any> = {}; private _text = '';
   constructor(tag: string) {
     this.tag = tag;
@@ -158,16 +175,18 @@ export class VNode {
     const a = this.attrs, num = (k: string) => +(a[k] || 0);
     if (this.tag === 'text') {
       const fill = parseColor(this.style('fill') || '#000') || [0, 1], size = +(this.style('font-size') || 12), anchor = this.style('text-anchor');
-      if (!(this.gfx instanceof Text)) { this.gfx?.destroy(); this.gfx = new Text({ text: '', style: { fontFamily: 'Rubik, system-ui, sans-serif' } }); this.c.addChildAt(this.gfx, 0); }
+      if (!(this.gfx instanceof Text)) { this.gfx?.destroy(); this.gfx = new Text({ text: '', style: { fontFamily: 'Rubik, system-ui, sans-serif' } }); this.c.addChildAt(this.gfx, 0); texts.add(this); }
       const t = this.gfx as Text;
+      if (!this.textRes) this.textRes = textNeed(this, TEXT_DPR.v);   // לפי הזום עכשיו
+      t.resolution = this.textRes;
       t.text = this._text;
-      t.style.fontSize = size * S; t.style.fontWeight = (this.style('font-weight') || '400') as any; t.style.fill = fill[0];
+      t.style.fontSize = size; t.style.fontWeight = (this.style('font-weight') || '400') as any; t.style.fill = fill[0];
       t.style.fontFamily = this.style('font-family') || 'Rubik, system-ui, sans-serif';
       t.style.fontStyle = (this.style('font-style') || 'normal') as any;
       // קו מתאר לטקסט (הילה סביב האותיות), רק אם הוגדר על הטקסט עצמו
       const sc = a.stroke && parseColor(a.stroke);
-      t.style.stroke = sc ? { color: sc[0], alpha: sc[1], width: +(a['stroke-width'] || 1) * S, join: 'round' } : undefined as any;
-      t.alpha = fill[1]; t.scale.set(1 / S);
+      t.style.stroke = sc ? { color: sc[0], alpha: sc[1], width: +(a['stroke-width'] || 1), join: 'round' } : undefined as any;
+      t.alpha = fill[1]; t.scale.set(1);
       t.anchor.set(anchor === 'middle' ? .5 : anchor === 'end' ? 1 : 0, .78);   // y של SVG הוא קו הבסיס
       t.position.set(num('x'), num('y'));
       return;
