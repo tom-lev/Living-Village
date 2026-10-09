@@ -49,6 +49,9 @@
         im.style.cssText = 'position:absolute;left:' + x + 'px;top:' + y + 'px;width:' + (Math.round((B.x0 + (i + 1) * tw) * k + cx) - x) + 'px;height:' + (Math.round((B.y0 + (j + 1) * tw) * k + cy) - y) + 'px';
         box.appendChild(im);
       }
+      // מתי התמונה המיידית הוצגה כולה (לתג של ?debug)
+      var left = box.children.length;
+      [].forEach.call(box.children, function (im) { im.onload = im.onerror = function () { if (--left === 0) window.__instantAt = performance.now(); }; });
     }).catch(function () {});
   } catch (e) {}
 })();
