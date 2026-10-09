@@ -79,8 +79,8 @@ git clone https://github.com/tom-lev/Living-Village.git && cd Living-Village
 cd app && npm install && npm run dev    # open the URL, add ?debug
 ```
 - Live site: https://tom-lev.github.io/Living-Village/
-- Deploy: `.github/workflows/pages.yml` runs on every push to `main`. It does `npm ci && npm run build` in `app/` and copies `app/dist` (+ `.nojekyll`) to the `gh-pages` branch. GitHub Pages serves `gh-pages`. A push is live about 1–2 minutes later.
-- The repo is public. (Pages was enabled by pushing an orphan `gh-pages` branch; `configure-pages` with `enablement` failed for lack of token permissions, so don't use it.)
+- Deploy (since 2026-10-09, task 30): `.github/workflows/pages.yml` runs on every push to `main`: `npm ci`, installs Playwright's Chromium, runs `node tools/site.mjs` in `app/` (build, serve the built site, bake in a headless browser – `tools/bake.mjs` – and rebuild if the baked data changed), and publishes `app/dist` straight to GitHub Pages with `upload-pages-artifact` + `deploy-pages` (Pages source: GitHub Actions, switched with `gh api -X PUT repos/tom-lev/Living-Village/pages -f build_type=workflow`). No `gh-pages` branch any more, so pre-rendered files will not pile up in git history. A push is live a few minutes later.
+- The repo is public. (The old `gh-pages` branch is no longer used for publishing.)
 
 ### Commands (in `app/`)
 ```
@@ -220,7 +220,7 @@ Order:
   - **Precomputed at upload (item 2)** (`world/bake.ts`, `tools/bake.mjs`, `tools/geohash.mjs`): the trail rules' result (trails, junction flares and fillets, tapers, door trails) is baked into `src/world/baked.json` with a fingerprint of the world data (without the palette) and the geometry code (`__GEO_CODE_HASH__` from `vite.config.ts`); the page uses it when the fingerprint matches (geometry stage 484 → 10 ms). **After changing `world.json` or `geometry.ts`/`curve.ts`/`decl.ts`: `npm run bake -- http://localhost:5199/`** – `npm run build` fails otherwise (`bake.mjs --check`), and the world check reports `baked`.
   - **Load budget (item 5, rule `boot-time`):** the page work before the map shows (`scene + tiles + actors`) ≤ `BUDGET.bootMs` and at most `bootChunks` areas drawn while loading; the world check reports `boot`.
   - Measured on the production build (phone viewport, 2026-10-09): the map is fully painted after 3.5 s instead of 6.35 s (with WebGL 3.4 instead of 6.6); building the map 1.45 s → 0.66 s.
-  - `window.__boot`: `scene`, `tiles`, `actors`, `first` (first frame), `ready` (all visible tiles painted), `bootChunks`. `tileStats.log` records each tile's paint time.
+  - `window.__boot`: `scene`, `tiles`, `actors`, `first` (first frame), `ready` (all visible tiles painted), `bootChunks`. The `?debug` badge shows the real load time on the device (`load 2.3s` = until all tiles on screen are painted). `tileStats.log` records each tile's paint time.
 - **Static tiles** (`render/tiles.ts`, `tilePainter.ts`, `tileWorker.ts`):
   - The static SVG is built once and flattened into a display list. Text is moved to the dynamic layer so it stays sharp.
   - 1–2 workers (`floor(cores/3)`, at most 2) paint 256 px tiles at levels BASE = 1/8 px per unit × 2^l, l = 0..10.

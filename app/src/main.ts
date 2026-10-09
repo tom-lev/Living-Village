@@ -180,7 +180,9 @@ async function boot() {
     document.body.appendChild(d);
     let n = 0, t0 = performance.now();
     let issueText = '';
-    const upd = (t: number) => { n++; if (t - t0 > 1000) { d.textContent = `${tileStats.mode || '…'} · ${n} fps${issueText}`; n = 0; t0 = t; } requestAnimationFrame(upd); };
+    // זמן הטעינה האמיתי במכשיר: מתחילת טעינת הדף עד שכל האריחים שעל המסך צוירו (שלב 0 במשימה 30)
+    const load = () => tm.ready !== undefined ? ` · load ${(tm.ready / 1000).toFixed(1)}s` : ' · loading…';
+    const upd = (t: number) => { n++; if (t - t0 > 1000) { d.textContent = `${tileStats.mode || '…'} · ${n} fps${load()}${issueText}`; n = 0; t0 = t; } requestAnimationFrame(upd); };
     requestAnimationFrame(upd);
     // בדיקת העולם (נטענת רק כאן, אז למבקרים רגילים היא לא עולה כלום): מספר ההפרות בתג, ולחיצה פותחת רשימה
     // בדיקת העולם רצה על העולם כולו: מחכים שכל האזורים (וכל הפרטים) ייבנו

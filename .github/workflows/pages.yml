@@ -1,14 +1,18 @@
-name: Build app and publish to gh-pages
+name: Build the site and publish to GitHub Pages
+# בכל העלאה: בונים את האתר, מריצים את העולם בדפדפן בלי מסך ושומרים את מה שחושב (tools/site.mjs),
+# ומפרסמים ישירות מכאן (בלי ענף gh-pages: הקבצים לא נאספים בהיסטוריה של git). משימה 30.
 on:
   push:
     branches: [main]
     paths: ['app/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,19 +21,21 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
-      - name: Build
+      - name: Install (with a headless Chromium for baking)
         working-directory: app
-        run: npm ci && npm run build
-      - name: Copy app/dist to gh-pages
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp -r app/dist /tmp/site && touch /tmp/site/.nojekyll
-          git fetch origin gh-pages
-          git worktree add /tmp/ghp origin/gh-pages
-          cd /tmp/ghp
-          git rm -rq . && cp -r /tmp/site/. .
-          git add -A
-          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
-          git commit -m "Publish app from ${GITHUB_SHA::7}"
-          git push origin HEAD:gh-pages
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Build and bake
+        working-directory: app
+        run: node tools/site.mjs && touch dist/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
