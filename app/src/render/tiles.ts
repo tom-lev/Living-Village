@@ -14,47 +14,93 @@ import { createGpuTiles, type GpuTiles } from './gpu';
 const TILE = 256, BASE = 1 / 8, LMAX = 10, TILE_CAP = 300;
 const tileScale = (l: number) => BASE * 2 ** l;   // פיקסלים של המסך ליחידת עולם
 
-/** הופך את הנוף הקבוע (עץ של SNode בזיכרון) לרשימת ציור: מסלול, צבעים, מטריצה ותיבה תוחמת לכל צורה.
- *  בלי אלמנטים של הדפדפן ובלי למדוד אותם: המטריצות והגבולות מחושבים כאן (render/snode.ts) */
-function extractDisplayList(): DLItem[] {
-  const DL: DLItem[] = [], { worldS, svgS, L } = ctx;
-  const DETAIL = new Set(DETAIL_GROUPS);
-  const KEYS = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'font-size', 'font-weight', 'font-family', 'font-style', 'text-anchor'];
-  const walk = (node: SNode, inh: Record<string, string>, alpha: number, detail: boolean, pm: M6) => {
-    for (const e of node.kids) {
-      const st = { ...inh }, at = e.attrs;
-      for (const k of KEYS) { const v = rawColor(e as any, k) ?? at[k]; if (v !== undefined) st[k] = v; }   // צבע מקורי; הפלטה מוחלת בצייר
-      const a = alpha * ('opacity' in at ? +at.opacity : 1), det = detail || DETAIL.has(e), tag = e.tagName;
-      const m = at.transform ? mul(pm, parseTransform(at.transform)) : pm;
-      if (tag === 'g') { walk(e, st, a, det, m); continue; }
-      const num = (k: string) => +at[k] || 0;
-      if (tag === 'text') {
-        // טקסט עובר לשכבה הדינמית כ-SVG רגיל (חד בכל זום, ובלי צורך בגופן בתוך ה-Worker)
-        const ta: Record<string, any> = { x: num('x'), y: num('y'), 'font-size': st['font-size'] || 12, 'font-weight': st['font-weight'] || 400,
-          'text-anchor': st['text-anchor'] || 'start', fill: st.fill || '#000', transform: `matrix(${m[0]} ${m[1]} ${m[2]} ${m[3]} ${m[4]} ${m[5]})` };
-        for (const k of ['font-family', 'font-style', 'stroke', 'stroke-width']) if (st[k] !== undefined) ta[k] = st[k];
-        const t = el('text', ta, L.fx);
-        t.textContent = e.textContent; continue;
-      }
-      let d: string;
-      if (tag === 'path') d = at.d || '';
-      else if (tag === 'rect') { const rx = Math.min(num('rx'), num('width') / 2, num('height') / 2); d = rx > 0 ? rrect(num('x'), num('y'), num('width'), num('height'), rx) : `M${num('x')},${num('y')}h${num('width')}v${num('height')}h${-num('width')}z`; }
-      else if (tag === 'circle') d = circ(num('cx'), num('cy'), num('r'));
-      else if (tag === 'ellipse') { const cx = num('cx'), cy = num('cy'), rx = num('rx'), ry = num('ry'); d = `M${cx - rx},${cy}a${rx},${ry} 0 1,0 ${2 * rx},0a${rx},${ry} 0 1,0 ${-2 * rx},0`; }
-      else continue;
-      // הגבולות של כל צורה מחושבים בציירים שברקע (Workers), לא כאן: הדף לא מחכה לפענוח של כל המסלולים
-      const sw = st.stroke && st.stroke !== 'none' ? +(st['stroke-width'] || 1) : 0, pad = sw / 2 + 2;
-      const fill = st.fill === undefined ? '#000' : st.fill;
-      DL.push({ d, m: [...m], a, det, bb: null, pad,
-        fill: fill === 'none' || fill === 'transparent' ? null : fill, stroke: sw ? st.stroke : null, sw,
-        cap: st['stroke-linecap'] || 'butt', join: st['stroke-linejoin'] || 'miter',
-        dash: st['stroke-dasharray'] ? st['stroke-dasharray'].split(/[\s,]+/).map(Number) : null });
+/* סדר הציור: לכל צורה מפתח z. קודם לפי שכבה (קרקע, דרכים, פרטי קרקע, מים, חפצים), ובשכבת החפצים לפי ה-y של הדבר העומד
+   (מה שלמטה במסך מצויר מעל), ואז לפי המספר הסידורי שלו ולפי הסדר בתוכו. כך גם דברים שמצוירים מאוחר יותר (לפי אזורים)
+   נכנסים בדיוק למקום הנכון בין השכנים שלהם */
+const LAYERS = ['ground', 'roads', 'groundProps', 'water', 'props'];
+let zSeq = 0;
+const KEYS = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'font-size', 'font-weight', 'font-family', 'font-style', 'text-anchor'];
+const zOfStatic = (st: any) => (st.y + 1e5) * 1e8 + (st.idx ?? 0) * 1e3;
+
+/** חילוץ של צמתים (עם הצאצאים שלהם) לרשימת ציור, בשכבה נתונה */
+function extractNodes(nodes: SNode[], layer: string, DL: DLItem[]) {
+  const rank = LAYERS.indexOf(layer) * 1e15, DETAIL = new Set(DETAIL_GROUPS), L = ctx.L;
+  const one = (e: SNode, inh: Record<string, string>, alpha: number, detail: boolean, pm: M6, zb: number | null, zc: { n: number }) => {
+    const st = { ...inh }, at = e.attrs;
+    for (const k of KEYS) { const v = rawColor(e as any, k) ?? at[k]; if (v !== undefined) st[k] = v; }   // צבע מקורי; הפלטה מוחלת בצייר
+    const a = alpha * ('opacity' in at ? +at.opacity : 1), det = detail || DETAIL.has(e), tag = e.tagName;
+    const m = at.transform ? mul(pm, parseTransform(at.transform)) : pm;
+    if (tag === 'g') { for (const k of e.kids) one(k, st, a, det, m, zb, zc); return; }
+    const num = (k: string) => +at[k] || 0;
+    if (tag === 'text') {
+      // טקסט עובר לשכבה הדינמית כ-SVG רגיל (חד בכל זום, ובלי צורך בגופן בתוך ה-Worker)
+      const ta: Record<string, any> = { x: num('x'), y: num('y'), 'font-size': st['font-size'] || 12, 'font-weight': st['font-weight'] || 400,
+        'text-anchor': st['text-anchor'] || 'start', fill: st.fill || '#000', transform: `matrix(${m[0]} ${m[1]} ${m[2]} ${m[3]} ${m[4]} ${m[5]})` };
+      for (const k of ['font-family', 'font-style', 'stroke', 'stroke-width']) if (st[k] !== undefined) ta[k] = st[k];
+      const t = el('text', ta, L.fx);
+      t.textContent = e.textContent; return;
     }
+    let d: string;
+    if (tag === 'path') d = at.d || '';
+    else if (tag === 'rect') { const rx = Math.min(num('rx'), num('width') / 2, num('height') / 2); d = rx > 0 ? rrect(num('x'), num('y'), num('width'), num('height'), rx) : `M${num('x')},${num('y')}h${num('width')}v${num('height')}h${-num('width')}z`; }
+    else if (tag === 'circle') d = circ(num('cx'), num('cy'), num('r'));
+    else if (tag === 'ellipse') { const cx = num('cx'), cy = num('cy'), rx = num('rx'), ry = num('ry'); d = `M${cx - rx},${cy}a${rx},${ry} 0 1,0 ${2 * rx},0a${rx},${ry} 0 1,0 ${-2 * rx},0`; }
+    else return;
+    // הגבולות של כל צורה מחושבים בציירים שברקע (Workers), לא כאן: הדף לא מחכה לפענוח של כל המסלולים
+    const sw = st.stroke && st.stroke !== 'none' ? +(st['stroke-width'] || 1) : 0, pad = sw / 2 + 2;
+    const fill = st.fill === undefined ? '#000' : st.fill;
+    const z = rank + (zb === null ? ++zSeq : zb + Math.min(999, zc.n++));
+    DL.push({ d, m: [...m], a, det, bb: null, pad, z,
+      fill: fill === 'none' || fill === 'transparent' ? null : fill, stroke: sw ? st.stroke : null, sw,
+      cap: st['stroke-linecap'] || 'butt', join: st['stroke-linejoin'] || 'miter',
+      dash: st['stroke-dasharray'] ? st['stroke-dasharray'].split(/[\s,]+/).map(Number) : null });
   };
-  walk(worldS, {}, 1, false, [1, 0, 0, 1, 0, 0]);
+  for (const n of nodes) {
+    // בשכבת החפצים: כל דבר עומד (קבוצה עם st) מקבל מפתח לפי ה-y שלו; צורות אחרות לפי הסדר
+    const sto = layer === 'props' ? (n as any).st : null;
+    one(n, {}, 1, false, [1, 0, 0, 1, 0, 0], sto ? zOfStatic(sto) : layer === 'props' ? 0 : null, { n: 0 });
+  }
+}
+
+/** הופך את הנוף הקבוע (עץ של SNode בזיכרון) לרשימת ציור: מסלול, צבעים, מטריצה, מפתח סדר ותיבה תוחמת לכל צורה.
+ *  בלי אלמנטים של הדפדפן ובלי למדוד אותם: המטריצות והגבולות מחושבים בעצמנו (render/snode.ts) */
+function extractDisplayList(): DLItem[] {
+  const DL: DLItem[] = [], { svgS, L } = ctx;
+  for (const layer of LAYERS) extractNodes([...(L[layer] as SNode).kids], layer, DL);
   svgS.remove();   // ה-SVG הסטטי של הדף כבר לא משמש
   return DL;
 }
+
+/** אזור שצויר עכשיו (scene/chunks.ts): הצורות שלו נשלחות לציירים, והאריחים שכבר צוירו באזור נזרקים ומצוירים מחדש */
+export function addChunkItems(layers: Record<string, any[]>, rect: number[], coarseNow = false) {
+  const DL: DLItem[] = [];
+  for (const layer of LAYERS) if (layers[layer]) extractNodes(layers[layer], layer, DL);
+  if (!DL.length) return;
+  for (const it of DL) { if (it.fill) addColor(it.fill); if (it.stroke) addColor(it.stroke); }
+  const { pk } = packDL(DL), KEYS2 = ['d', 'dLen', 'm', 'a', 'pad', 'sw', 'det', 'sty', 'z'];
+  const packs: any[] = painters.map((_, q) => q === 0 ? pk : { ...pk, ...Object.fromEntries(KEYS2.map(k => [k, (pk as any)[k].slice()])) });
+  painters.forEach((p, q) => (p as any).postMessage({ type: 'add', packed: packs[q] }, KEYS2.map(k => packs[q][k].buffer)));
+  // אריחים שכבר צוירו ונוגעים באזור – מחדש (עם מרווח לצמרות שמעל לבסיס)
+  const x0 = rect[0] - 40, y0 = rect[1] - 40, x1 = rect[2] + 40, y1 = rect[3] + 40, { B } = ctx;
+  for (const k of [...tiles.keys()]) {
+    const [l, i, j] = k.split('/').map(Number), t = TILE / tileScale(l), tx = B.x0 + i * t, ty = B.y0 + j * t;
+    if (tx > x1 || tx + t < x0 || ty > y1 || ty + t < y0) continue;
+    // האריחים הגסים (מבט מרחוק) מכסים הרבה אזורים: לא מציירים אותם מחדש אחרי כל אזור, אלא פעם אחת בסוף (או מדי פעם)
+    if (l <= 1 && !coarseNow) { coarseDirty.add(k); continue; }
+    const v = tiles.get(k); tiles.delete(k); gpu?.remove(k); v?.close?.();
+  }
+  if (coarseNow || performance.now() - coarseAt > 2500) flushCoarseTiles();
+  lastNeed = ''; requestStatic();
+}
+const coarseDirty = new Set<string>(); let coarseAt = 0;
+/** מצייר מחדש את האריחים הגסים שהשתנו (אחרי שאזורים נוספו) */
+export function flushCoarseTiles() {
+  coarseAt = performance.now();
+  for (const k of coarseDirty) { const v = tiles.get(k); tiles.delete(k); gpu?.remove(k); v?.close?.(); }
+  coarseDirty.clear(); lastNeed = ''; requestStatic();
+}
+let colorSet = new Set<string>();
+const addColor = (c: string) => { if (!colorSet.has(c)) { colorSet.add(c); colors.push(c); for (const p of painters) p.postMessage({ type: 'palette', cmap: colorMap(), gen, keep: true }); } };
 
 /* ───────── מטמון אריחים (LRU; רמה 0 נשמרת תמיד) ───────── */
 const tiles = new Map<string, any>();
@@ -140,9 +186,9 @@ export function initTiles(canvas: HTMLCanvasElement) {
     const handle = createPainter(m => setTimeout(() => onTile(m), 0));
     painters = [{ postMessage: m => handle(m) }];
   }
-  colors = [...new Set(DL.flatMap(it => [it.fill, it.stroke]).filter(Boolean))];
+  colors = [...new Set(DL.flatMap(it => [it.fill, it.stroke]).filter(Boolean))]; colorSet = new Set(colors);
     // ארוז פעם אחת: מחרוזת אחת ומערכים מספריים שמועברים בלי העתקה (לכל צייר נוסף – עותק של המערכים)
-  const { pk } = packDL(DL), KEYS = ['d', 'dLen', 'm', 'a', 'pad', 'sw', 'det', 'sty'];
+  const { pk } = packDL(DL), KEYS = ['d', 'dLen', 'm', 'a', 'pad', 'sw', 'det', 'sty', 'z'];
   // קודם מכינים עותק לכל צייר (אחרי ההעברה המערכים של המקור כבר לא שלנו), ואז שולחים
   const packs: any[] = painters.map((_, q) => q === 0 ? pk : { ...pk, ...Object.fromEntries(KEYS.map(k => [k, (pk as any)[k].slice()])) });
   painters.forEach((p, q) => {

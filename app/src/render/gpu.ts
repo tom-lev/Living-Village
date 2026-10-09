@@ -4,6 +4,9 @@
    איפה שאריח חד עוד בדרך מוצג במקומו אריח מרמה אחרת, כך שאף פעם אין חורים. */
 import { Application, Container, Sprite, Texture } from 'pixi.js';
 import { flushVNodes } from './vnode';
+import { cullLayers } from './cull';
+/** שכבות האפקטים שמדלגים בהן על מה שמחוץ למסך (render/cull.ts) */
+export const CULL: { layers: Container[] } = { layers: [] };
 
 export interface GpuTiles {
   add(key: string, l: number, x: number, y: number, size: number, bmp: ImageBitmap): void;
@@ -92,6 +95,7 @@ export async function createGpuTiles(canvas: HTMLCanvasElement, w: number, h: nu
       if (l !== lastL) { lastL = l; levels.forEach((c, i) => { c.zIndex = i === l ? LMAX + 2 : i === l + 1 ? LMAX + 1 : i; }); tilesC.sortChildren(); }
       world.scale.set(cam.k); world.position.set(cam.x, cam.y);
       flushVNodes();
+      if (CULL.layers.length) cullLayers(CULL.layers, cam, app.renderer.width / app.renderer.resolution, app.renderer.height / app.renderer.resolution);
       app.renderer.render(app.stage);
     },
     resize(w, h, res) { app.renderer.resize(w, h, res); },

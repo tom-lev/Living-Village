@@ -4,7 +4,9 @@ import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene } from './scene/build';
-import { initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic } from './render/tiles';
+import { initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
+import { CULL } from './render/gpu';
+import { chunksIn, buildChunk, buildDetail, nextChunk, pendingCount, allChunks } from './scene/chunks';
 import { ctx } from './world/context';
 import { FRAME } from './world/budget';
 import { vstats } from './render/vnode';
@@ -35,11 +37,24 @@ async function boot() {
   view.gpu = ctx.gpuDyn = tileStats.mode === 'gpu';
   const tm: Record<string, number> = {}, t0 = performance.now();   // זמני הטעינה (window.__boot), למדידה
   startPainters(); await paintersLoaded();   // הציירים שברקע נטענים קודם (הטעינה שלהם צריכה דף פנוי), ואז בונים
-  buildScene(world, svgS, svgD); tm.scene = performance.now() - t0;
+  buildScene(world, svgS, svgD);
+  // בנייה לפי אזורים (scene/chunks.ts): רק האזורים של המבט הראשון מצוירים עכשיו; השאר ברקע אחרי שהמפה מוצגת
+  {
+    const r = document.getElementById('stage').getBoundingClientRect(), { B, home } = ctx, hw = home.x1 - home.x0, hh = home.y1 - home.y0;
+    const c = Math.min(r.width / hw, r.height / hh), v = Math.max(r.width / hw, r.height / hh);
+    const k = Math.max(v / c < 1.2 ? v : c, Math.max(r.width / (B.x1 - B.x0), r.height / (B.y1 - B.y0)));
+    const cx = (home.x0 + home.x1) / 2, cy = (home.y0 + home.y1) / 2, ex = r.width / 2 / k * 1.15, ey = r.height / 2 / k * 1.15;
+    for (const ch of chunksIn(cx - ex, cy - ey, cx + ex, cy + ey)) {
+      tm.bootChunks = (tm.bootChunks || 0) + 1;
+      const out = buildChunk(ch);
+      if (out) for (const [layer, nodes] of Object.entries(out.layers)) for (const n of nodes) ctx.L[layer].appendChild(n);
+    }
+  }
+  tm.scene = performance.now() - t0;
   // קודם רשימת הציור לציירים (הם מתחילים לעבד אותה ברקע), ורק אחר כך הדמויות
   const items = initTiles(canvas); tm.tiles = performance.now() - t0 - tm.scene;
   // המצלמה והבקשה הראשונה לאריחים לפני הדמויות: הציירים מציירים את המפה בזמן שהדף בונה את הדמויות
-  if (view.gpu) { gpuOverlay(ctx.worldD.c); document.getElementById('dWrap').style.display = 'none'; }
+  if (view.gpu) { gpuOverlay(ctx.worldD.c); document.getElementById('dWrap').style.display = 'none'; CULL.layers = [ctx.L.fx.c, ctx.L.air.c]; }
   const { startFollow } = initCamera(followables);
   if (view.gpu) renderNow(); else requestStatic();
   await new Promise(r => setTimeout(r, 0));   // הפסקה קצרה: ההודעות לציירים יוצאות עכשיו, לא אחרי כל הבנייה
@@ -133,6 +148,24 @@ async function boot() {
   document.documentElement.style.setProperty('--bg', grade('#9cd162'));
   applyGrain(currentPalette().grain);
 
+  /* שאר העולם נבנה ברקע, אזור אחרי אזור, הקרוב למבט קודם (כל צעד קצר, כדי שהדף יישאר חלק).
+     כשמתקרבים בזום לאזור – קודם הפרטים הקטנים שלו (שרכים, פטריות). window.__built: כל האזורים נבנו */
+  let builtResolve: () => void = () => {};
+  const built = new Promise<void>(r => { builtResolve = r; });
+  (window as any).__built = false;
+  const chunkStep = () => {
+    const { cam, vw, vh } = view, x0 = -cam.x / cam.k, y0 = -cam.y / cam.k, x1 = (vw - cam.x) / cam.k, y1 = (vh - cam.y) / cam.k;
+    if (cam.k * Math.min(view.dpr, 2) >= .5)
+      for (const c of chunksIn(x0, y0, x1, y1)) { const out = buildDetail(c); if (out) { addChunkItems(out.layers, out.rect); setTimeout(chunkStep, 0); return; } }
+    const c = nextChunk((x0 + x1) / 2, (y0 + y1) / 2);
+    if (c) { const out = buildChunk(c); if (out) addChunkItems(out.layers, out.rect, pendingCount() === 0); setTimeout(chunkStep, 0); return; }
+    if (!(window as any).__built) { (window as any).__built = true; flushCoarseTiles(); builtResolve(); }
+    setTimeout(chunkStep, 250);   // מכאן רק פרטים, כשמתקרבים
+  };
+  setTimeout(chunkStep, 200);
+  /** לבדיקות: כל העולם, כולל כל הפרטים */
+  const buildEverything = async () => { await built; for (const c of allChunks()) { const out = buildDetail(c); if (out) addChunkItems(out.layers, out.rect); } flushCoarseTiles(); };
+
   // פריים ראשון, כדי שגם במצב "פחות תנועה" הדמויות יופיעו
   actors.update(.016, 0);
   if (view.gpu) renderNow();
@@ -148,7 +181,8 @@ async function boot() {
     const upd = (t: number) => { n++; if (t - t0 > 1000) { d.textContent = `${tileStats.mode || '…'} · ${n} fps${issueText}`; n = 0; t0 = t; } requestAnimationFrame(upd); };
     requestAnimationFrame(upd);
     // בדיקת העולם (נטענת רק כאן, אז למבקרים רגילים היא לא עולה כלום): מספר ההפרות בתג, ולחיצה פותחת רשימה
-    import('./world/check').then(({ runChecks }) => {
+    // בדיקת העולם רצה על העולם כולו: מחכים שכל האזורים (וכל הפרטים) ייבנו
+    Promise.all([import('./world/check'), buildEverything()]).then(([{ runChecks }]) => {
       const run = () => runChecks();
       (window as any).__check = run;
       setTimeout(() => {

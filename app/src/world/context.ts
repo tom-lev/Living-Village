@@ -34,7 +34,10 @@ export function initLayers(svgS: SVGSVGElement, svgD: SVGSVGElement) {
 }
 
 /* ───────── אובייקטים נייחים: ממוינים לפי y (מה שלמטה במסך מצויר מעל) ───────── */
-export const statics: { el: any; y: number; bb?: number[] }[] = [];
+export const statics: { el: any; y: number; bb?: number[]; idx?: number }[] = [];
+/** ציור נדחה (בנייה לפי אזורים, scene/chunks.ts): בזמן שהדבר מצויר, prop() מחזיר את הקבוצה שכבר שמורה לו ברשימה */
+let deferTarget: any = null;
+export function drawInto(g: any, f: () => void) { const k = deferTarget; deferTarget = g; try { f(); } finally { deferTarget = k; } }
 /** המלבן המצויר של דבר עומד: [x, y, רוחב, גובה]. נמדד פעם אחת וזוכרים אותו (כל מדידה מכריחה את הדפדפן לחשב פריסה מחדש,
  *  ומדידות לסירוגין עם ציור עלו שניות בטעינה). קוראים לזה רק אחרי שהציור של הדבר סופי */
 export function bboxOf(st: { el: any; bb?: number[] }) {
@@ -42,13 +45,15 @@ export function bboxOf(st: { el: any; bb?: number[] }) {
   return st.bb;
 }
 export function prop(y: number, parent?: any) {
+  if (deferTarget && !parent) { const g = deferTarget; deferTarget = null; return g; }
   const g = el('g', null, parent || ctx.L.props);
-  if (!parent) statics.push({ el: g, y });
+  if (!parent) { const st = { el: g, y }; statics.push(st); g.st = st; }
   return g;
 }
 export function sortStatics() {
   statics.sort((a, b) => a.y - b.y);
-  for (const s of statics) ctx.L.props.appendChild(s.el);
+  // מספר סידורי אחרי המיון: סדר הציור של דברים באותו גובה (גם אלה שיצוירו מאוחר יותר, לפי אזורים)
+  statics.forEach((s, i) => { s.idx = i; if (s.el) ctx.L.props.appendChild(s.el); });
 }
 
 /* ───────── אזורים שבהם לא שותלים עצים (בתים, שדות, מבנים) ───────── */

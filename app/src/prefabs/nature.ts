@@ -27,7 +27,7 @@ export function pine(x: number, y: number, s: number, snowy = false) {
   // המלבן המצויר, מחושב מהצורה (בלי למדוד את הציור: מדידה מכריחה את הדפדפן לחשב פריסה, וזה האט את הטעינה)
   { const hw = Math.max(...tiers.map(q => q[1])) * s, top = Math.min(...tiers.map(q => y - q[0] * s - q[2] * s)) - 1;
     const x0 = Math.min(x - hw, x + 2 * s - 9 * s * wf) - 1, x1 = Math.max(x + hw, x + 2 * s + 9 * s * wf) + 1;
-    statics[statics.length - 1].bb = [x0, top, x1 - x0, y + 2.6 * s - top]; }
+    g.st.bb = [x0, top, x1 - x0, y + 2.6 * s - top]; }
   if (snowy) {
     let sn = '';
     for (const [dy, hw, th, lx] of tiers) {
@@ -52,17 +52,50 @@ export function roundTree(x: number, y: number, s: number, fruit = false) {
   // המלבן המצויר, מחושב מהצורה (בלי למדוד את הציור)
   { const top = Math.min(y - 22 * s - dy - 10.5 * s * cr, extra ? y - 29 * s - dy - 6.1 * s : Infinity) - 1, side = 6.5 * s * cr + 8.3 * s;
     const x0 = Math.min(x + sx - side - 4 * s, x + 2 * s - 10 * s * cr), x1 = Math.max(x + sx + side + 4 * s, x + 2 * s + 10 * s * cr);
-    statics[statics.length - 1].bb = [x0, top, x1 - x0, y + 3 * s - top]; }
+    g.st.bb = [x0, top, x1 - x0, y + 3 * s - top]; }
   el('path', { d: crown, fill: c }, g);
   el('path', { d: circ(x - 3 * s + sx, y - 26 * s - dy, 4.2 * s), fill: shade(c, .2) }, g);
+  // קווים קטנים ופירות: אקראיות מקומית (העץ נראה אותו דבר בכל סדר ציור, גם כשהוא מצויר מאוחר לפי אזורים)
+  const w = rngAt(x, y, 8);
   let ticks = '';
-  for (let i = 0; i < 3; i++) { const tx = x + rand(-6, 6) * s, ty = y - rand(14, 27) * s; ticks += `M${n2(tx)},${n2(ty)}q${n2(1.6 * s)},${n2(-1 * s)} ${n2(1.8 * s)},${n2(1 * s)}`; }
+  for (let i = 0; i < 3; i++) { const tx = x + w.rand(-6, 6) * s, ty = y - w.rand(14, 27) * s; ticks += `M${n2(tx)},${n2(ty)}q${n2(1.6 * s)},${n2(-1 * s)} ${n2(1.8 * s)},${n2(1 * s)}`; }
   el('path', { d: ticks, fill: 'none', stroke: shade(c, -.25), 'stroke-width': .9, 'stroke-linecap': 'round' }, g);
-  if (fruit || R() < .22) {
+  if (fruit || w.r() < .22) {
     let fr = '';
-    for (let i = 0; i < 5; i++) fr += circ(x + rand(-9, 9) * s, y - rand(15, 28) * s, 1.3 * s);
+    for (let i = 0; i < 5; i++) fr += circ(x + w.rand(-9, 9) * s, y - w.rand(15, 28) * s, 1.3 * s);
     el('path', { d: fr, fill: '#e8513f' }, g);
   }
+}
+
+/* ───── המידות של עץ בלי לצייר אותו (לבנייה לפי אזורים: יודעים מראש איפה כל עץ ומה גודלו, ומציירים רק כשצריך).
+   כל אחת עושה בדיוק את אותן בחירות אקראיות, באותו סדר, כמו הציור – לכן התוצאה זהה לגמרי ───── */
+export function pineBox(x: number, y: number, s: number) {
+  s = Math.max(s * 1.35, TREE_MIN / 29);
+  const v = rngAt(x, y, 3), wf = v.rand(.88, 1.12), hf = v.rand(.9, 1.12), lean = v.rand(-.06, .06) * s, trunk = v.rand(5, 7.5);
+  v.rand(-.08, .08);   // גוון הגזע
+  const tiers = [[5, 10.5, 14], [12, 8.5, 12], [18.5, 6.2, 10.5]].map(([dy, hw, th], i) => [(dy + trunk - 6) * hf, hw * wf * v.rand(.92, 1.08), th * hf * v.rand(.94, 1.06), lean * (i + 1) * 4]);
+  const hw = Math.max(...tiers.map(q => q[1])) * s, top = Math.min(...tiers.map(q => y - q[0] * s - q[2] * s)) - 1;
+  const x0 = Math.min(x - hw, x + 2 * s - 9 * s * wf) - 1, x1 = Math.max(x + hw, x + 2 * s + 9 * s * wf) + 1;
+  return [x0, top, x1 - x0, y + 2.6 * s - top];
+}
+export function roundBox(x: number, y: number, s: number) {
+  s = Math.max(s * 1.4, TREE_MIN / 33);
+  const v = rngAt(x, y, 5), tk = v.rand(12.5, 15.5), cr = v.rand(.9, 1.1), sx = v.rand(-1.2, 1.2) * s;
+  v.rand(-.08, .08); v.rand(-.05, .05);   // גוון הגזע והצמרת
+  const dy = (tk - 14) * s;
+  v.rand(-1, 1); v.rand(.88, 1.1); v.rand(-1, 1); v.rand(.88, 1.1);   // שני הגושים בצדדים
+  const extra = v.chance(.35);
+  const top = Math.min(y - 22 * s - dy - 10.5 * s * cr, extra ? y - 29 * s - dy - 6.1 * s : Infinity) - 1, side = 6.5 * s * cr + 8.3 * s;
+  const x0 = Math.min(x + sx - side - 4 * s, x + 2 * s - 10 * s * cr), x1 = Math.max(x + sx + side + 4 * s, x + 2 * s + 10 * s * cr);
+  return [x0, top, x1 - x0, y + 3 * s - top];
+}
+export function sequoiaBox(x: number, y: number, s: number) {
+  const H = 150 * s * rngAt(x, y, 15).rand(.9, 1.1), x0 = x - 30 * s, x1 = x + 32 * s;
+  return [x0, y - H, x1 - x0, H + 7 * s];
+}
+export function firBox(x: number, y: number, s: number) {
+  const v = rngAt(x, y, 17), H = 105 * s * v.rand(.9, 1.12), W = 17 * s * v.rand(.88, 1.12);
+  return [x - W - 1, y - H * .92 - 2, 2 * W + 2, H * .92 + 6 * s];
 }
 
 export function palm(x: number, y: number, s: number) {
@@ -124,8 +157,7 @@ export function sequoia(x: number, y: number, s: number) {
   crown += `M${n2(tx - 7 * s)},${n2(ty)}L${n2(tx)},${n2(y - H * 1.01)}L${n2(tx + 7 * s)},${n2(ty)}Z`;   // קצה מחודד
   el('path', { d: crown, fill: c }, g);
   el('path', { d: hl, fill: shade(c, .13) }, g);
-  const x0 = x - 30 * s, x1 = x + 32 * s;
-  statics[statics.length - 1].bb = [x0, y - H, x1 - x0, H + 7 * s];
+  g.st.bb = sequoiaBox(x, y, s);
 }
 
 /** אשוח עתיק: גבוה, צר וכהה, ענפים שמשתלשלים בשכבות; גזע כהה. במדרון המושלג – עם שלג */
@@ -146,7 +178,7 @@ export function ancientFir(x: number, y: number, s: number, snowy = false) {
   el('path', { d: body, fill: c }, g);
   el('path', { d: hl, fill: shade(c, .12) }, g);
   if (snowy) el('path', { d: sn, fill: '#ffffff' }, g);
-  statics[statics.length - 1].bb = [x - W - 1, y - H * .92 - 2, 2 * W + 2, H * .92 + 6 * s];
+  g.st.bb = firBox(x, y, s);
 }
 
 /** הענק הזקן: סקוויה עצומה אחת עם שם (יעד לטיול), בקרחת קטנה עם טחב ושרכים */

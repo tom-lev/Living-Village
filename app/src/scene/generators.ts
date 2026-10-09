@@ -3,7 +3,9 @@ import { el, n2, circ, blob } from '../core/util';
 import { rand, pick, R, rngAt } from '../core/rng';
 import { ctx, prop, NO_TREE, inWater, statics, bboxOf } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
-import { pine, roundTree, sequoia, ancientFir } from '../prefabs/nature';
+import { pine, roundTree, sequoia, ancientFir, pineBox, roundBox, sequoiaBox, firBox } from '../prefabs/nature';
+import { deferStatic, deferArea, CH } from './chunks';
+import { DETAIL_GROUPS } from './terrain';
 import { winter, prairie, lakeShore } from './terrain';
 import { PREFABS } from '../prefabs/registry';
 import { placeOk, flagsAt, PATH, WATER, SOLID } from '../world/walk';
@@ -23,31 +25,46 @@ export const TREES: { x: number; y: number; x0: number; x1: number; top: number;
 /** רצפת היער העתיק: גוון כהה ועשיר שמתחזק מזרחה, כתמי טחב, שרכים, פטריות וגזעים שנפלו מכוסי טחב.
  *  הכול לפי המקום (rngAt לכל תא), לא על שבילים, מים או מבנים, ולא בשלג */
 function ancientFloor(AN: any, anc: (x: number) => number, cold: (y: number) => number, lake: any, T: any) {
-  const { B } = ctx, G = ctx.L.groundProps, free = (x: number, y: number) => !(flagsAt(x, y) & (PATH | WATER | SOLID));
+  const { B } = ctx, free = (x: number, y: number) => !(flagsAt(x, y) & (PATH | WATER | SOLID));
   const nearLake = (x: number, y: number) => lake && y > T.beach.y - 60 && x < lake.Ex(y) + 70;
   // (בלי שכבת גוון גדולה: שקיפות על שטח גדול השאירה קווים ישרים בין האריחים. את הרצפה הכהה נותנים כתמי הטחב)
-  let moss = '', fern = '', mush = '', caps = '';
-  const C = 70;
+  const C = 70, byChunk = new Map<string, number[][]>();
   for (let gy = Math.floor(B.y0 / C); gy < B.y1 / C; gy++) for (let gx = Math.floor(AN.x0 / C); gx < B.x1 / C; gx++) {
     const v = rngAt(gx, gy, 13), x = gx * C + v.r() * C, y = gy * C + v.r() * C, t = anc(x), k = v.r();
     if (k > t * (1 - cold(y)) * .7 || !free(x, y) || nearLake(x, y)) continue;
     const kind = v.r();
-    if (kind < .55) moss += blob(x, y, v.rand(14, 34), v.rand(5, 11), 7, .22, v.rand(0, 6));
-    else if (kind < .8) {
-      for (let j = -1; j <= 1; j++) { const a = -Math.PI / 2 + j * .6, l = (9 - Math.abs(j) * 1.6) * v.rand(.8, 1.2); fern += `M${n2(x)},${n2(y)}Q${n2(x + Math.cos(a) * l * .4)},${n2(y + Math.sin(a) * l * .7 - 2)} ${n2(x + Math.cos(a) * l)},${n2(y + Math.sin(a) * l * .8)}`; }
-    } else if (kind < .93) {
-      for (let j = 0; j < 3; j++) { const mx = x + v.rand(-4, 4), my = y + v.rand(-1.5, 1.5); mush += `M${n2(mx - .5)},${n2(my)}v-2.4h1v2.4Z`; caps += `M${n2(mx - 1.8)},${n2(my - 2.2)}q1.8,-2.6 3.6,0Z`; }
-    } else if (placeOk(x - 22, y - 6, x + 22, y + 3)) {
-      // גזע שנפל, מכוסה טחב, עם טבעות בקצה
+    if (kind < .93) { const key = Math.floor(x / CH) + ',' + Math.floor(y / CH); (byChunk.get(key) || byChunk.set(key, []).get(key)!).push([gx, gy]); }
+    else if (placeOk(x - 22, y - 6, x + 22, y + 3)) {
+      // גזע שנפל, מכוסה טחב, עם טבעות בקצה (דבר עומד: מצויר בטעינה, כדי שמפת ההליכה והחיות יידעו עליו)
       const g = prop(y), L = v.rand(26, 40), a = v.rand(-.2, .2), dx = Math.cos(a) * L / 2, dy = Math.sin(a) * L / 2;
       el('path', { d: `M${n2(x - dx)},${n2(y - dy - 3)}L${n2(x + dx)},${n2(y + dy - 3)}`, stroke: '#7a4f30', 'stroke-width': 6, 'stroke-linecap': 'round' }, g);
       el('path', { d: `M${n2(x - dx * .7)},${n2(y - dy * .7 - 5.4)}L${n2(x + dx * .4)},${n2(y + dy * .4 - 5.4)}`, stroke: '#6f9a46', 'stroke-width': 2.6, 'stroke-linecap': 'round' }, g);
       el('path', { d: circ(x + dx, y + dy - 3, 3) + circ(x + dx, y + dy - 3, 1.4), fill: '#d8a66e', stroke: '#8a5a32', 'stroke-width': .6 }, g);
     }
   }
-  if (moss) el('path', { d: moss, fill: '#4f7f3e', opacity: .5 }, G);
-  if (fern) el('path', { d: fern, fill: 'none', stroke: '#3f7a3c', 'stroke-width': 1.5, 'stroke-linecap': 'round' }, G);
-  if (mush) { el('path', { d: mush, fill: '#f1e6cc' }, G); el('path', { d: caps, fill: '#c0504d' }, G); }
+  /** מצייר את התאים של אזור: base – טחב; detail – שרכים ופטריות (רק כשמתקרבים) */
+  const drawCells = (cells: number[][], detail: boolean, G: any) => {
+    let moss = '', fern = '', mush = '', caps = '';
+    for (const [gx, gy] of cells) {
+      const v = rngAt(gx, gy, 13), x = gx * C + v.r() * C, y = gy * C + v.r() * C; v.r();
+      const kind = v.r();
+      if (kind < .55) { if (!detail) moss += blob(x, y, v.rand(14, 34), v.rand(5, 11), 7, .22, v.rand(0, 6)); }
+      else if (kind < .8) {
+        if (detail) for (let j = -1; j <= 1; j++) { const a = -Math.PI / 2 + j * .6, l = (9 - Math.abs(j) * 1.6) * v.rand(.8, 1.2); fern += `M${n2(x)},${n2(y)}Q${n2(x + Math.cos(a) * l * .4)},${n2(y + Math.sin(a) * l * .7 - 2)} ${n2(x + Math.cos(a) * l)},${n2(y + Math.sin(a) * l * .8)}`; }
+      } else if (detail) for (let j = 0; j < 3; j++) { const mx = x + v.rand(-4, 4), my = y + v.rand(-1.5, 1.5); mush += `M${n2(mx - .5)},${n2(my)}v-2.4h1v2.4Z`; caps += `M${n2(mx - 1.8)},${n2(my - 2.2)}q1.8,-2.6 3.6,0Z`; }
+    }
+    if (moss) el('path', { d: moss, fill: '#4f7f3e', opacity: .5 }, G);
+    if (detail) {
+      const D = el('g', null, G); DETAIL_GROUPS.push(D);   // פרטים: מנוע האריחים מצייר אותם רק מקרוב
+      if (fern) el('path', { d: fern, fill: 'none', stroke: '#3f7a3c', 'stroke-width': 1.5, 'stroke-linecap': 'round' }, D);
+      if (mush) { el('path', { d: mush, fill: '#f1e6cc' }, D); el('path', { d: caps, fill: '#c0504d' }, D); }
+    }
+  };
+  for (const [key, cells] of byChunk) {
+    const [cx, cy] = key.split(',').map(Number), x = (cx + .5) * CH, y = (cy + .5) * CH;
+    deferArea(x, y, 'groundProps', G => drawCells(cells, false, G));
+    deferArea(x, y, 'groundProps', G => drawCells(cells, true, G), true);
+  }
 }
 
 export const GENERATORS: Record<string, (o: any) => void> = {
@@ -133,22 +150,29 @@ export const GENERATORS: Record<string, (o: any) => void> = {
     }
     // סוג העץ וגודלו נקבעים לפי המיקום שלו (rngAt), לא לפי הסדר: כך הוספה או הסרה של עצים (קרחת, אובייקט חדש) לא משנה את שאר היער
     const cold = winter(ctx.world.terrain);
-    const planted: number[][] = [];
+    /* בנייה לפי אזורים (scene/chunks.ts): כאן רק מתכננים כל עץ – סוג, גודל ומידות מדויקות, בלי לצייר.
+       העץ נכנס לרשימת הדברים העומדים עם המידות שלו (מפת ההליכה, החיות והציפורים יודעים עליו מיד),
+       והציור עצמו קורה כשהאזור שלו נבנה. הבחירות האקראיות זהות לגמרי לציור המיידי */
     for (const [x, y] of trees) {
       const v = rngAt(x, y, 7);
       // שלג על העצים בהדרגה: ככל שמצפינים בעמק, יותר עצים מושלגים (משימה 10א)
       const snowy = ctx.world.terrain.snow.full !== undefined ? v.r() < cold(y) ** 1.2 * 1.02 : y < o.snowLine;
       // בערבה: עצים עגולים (אלונים) בודדים, בלי שלג
-      const s0 = statics.length, t = anc(x), a = t > 0 ? rngAt(x, y, 9) : null;
-      if (a && a.r() < t * .9 && cold(y) < .45) { if (a.r() < .55) sequoia(x, y, a.rand(.85, 1.15)); else ancientFir(x, y, a.rand(.9, 1.15), snowy); }
-      else if (a && a.r() < t * .6) ancientFir(x, y, a.rand(.8, 1), snowy);
-      else if (pr(y) * (1 - .9 * t * t) > .4) { v.r(); roundTree(x, y, v.rand(1.4, 1.9)); }
-      else if (inRects(x, y, o.pineZones) || v.r() < o.pineChance) pine(x, y, v.rand(1.5, 2.1), snowy);
-      else roundTree(x, y, v.rand(1.3, 1.75));
-      if (statics.length > s0) planted.push([x, y, s0]);
+      const t = anc(x), a = t > 0 ? rngAt(x, y, 9) : null;
+      let draw: () => void, bb: number[];
+      if (a && a.r() < t * .9 && cold(y) < .45) {
+        if (a.r() < .55) { const sc = a.rand(.85, 1.15); bb = sequoiaBox(x, y, sc); draw = () => sequoia(x, y, sc); }
+        else { const sc = a.rand(.9, 1.15); bb = firBox(x, y, sc); draw = () => ancientFir(x, y, sc, snowy); }
+      }
+      else if (a && a.r() < t * .6) { const sc = a.rand(.8, 1); bb = firBox(x, y, sc); draw = () => ancientFir(x, y, sc, snowy); }
+      else if (pr(y) * (1 - .9 * t * t) > .4) { v.r(); const sc = v.rand(1.4, 1.9); bb = roundBox(x, y, sc); draw = () => roundTree(x, y, sc); }
+      else if (inRects(x, y, o.pineZones) || v.r() < o.pineChance) { const sc = v.rand(1.5, 2.1); bb = pineBox(x, y, sc); draw = () => pine(x, y, sc, snowy); }
+      else { const sc = v.rand(1.3, 1.75); bb = roundBox(x, y, sc); draw = () => roundTree(x, y, sc); }
+      const st = { el: null, y, bb }; statics.push(st);
+      deferStatic(x, y, st, draw);
+      // לציפורים (actors/bluebirds.ts) ולדוב: איפה כל עץ וקופסת הצמרת שלו
+      TREES.push({ x, y, x0: bb[0], x1: bb[0] + bb[2], top: bb[1], pine: bb[3] > 0 && bb[2] < bb[3] * .62 });
     }
     if (AN) ancientFloor(AN, anc, cold, lake, T);
-    // לציפורים (actors/bluebirds.ts): איפה כל עץ וקופסת הצמרת שלו. נמדד אחרי שכל העצים צוירו – מדידה אחת של הפריסה
-    for (const [x, y, s0] of planted) { const bb = bboxOf(statics[s0]); TREES.push({ x, y, x0: bb[0], x1: bb[0] + bb[2], top: bb[1], pine: bb[3] > 0 && bb[2] < bb[3] * .62 }); }
   },
 };

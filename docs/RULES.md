@@ -62,5 +62,7 @@ Every rule says where in the code it is enforced and how it is verified: **check
 | **build-order**: The world is built in a fixed order of stages; nothing runs before what it needs | `world/issues.ts STAGES, need(); scene/build.ts buildScene` | check `order` |
 | **declared**: Every object type declares its footprint, door, kind and label in one table | `world/decl.ts DECL` | check `undeclared` |
 | **perf-budget**: Performance budget: no single object too heavy to draw, the whole static map within its point budget (by area: the same density however big the world grows), moving things within their per-frame time and count | `world/budget.ts BUDGET; core/util.ts drawCost; main.ts FRAME` | check `perf` |
+| **boot-time**: Loading time does not grow with the world: only the areas of the first view are drawn while loading (the rest in the background, nearest first; fine details only when zoomed in), and the page work before the map shows stays within a fixed budget | `scene/chunks.ts, main.ts (boot chunks, chunkStep), world/budget.ts bootMs, bootChunks` | check `boot` |
+| **baked-fresh**: Results that depend only on the world data and the code (the trail rules) are computed in advance at upload time, and the build fails if they are stale | `world/bake.ts, tools/bake.mjs (npm run bake; --check in npm run build)` | check `baked` |
 | **overlap**: Plots and buildings do not overlap each other | `tools/history/spread_plots.py` | check `overlap` |
 

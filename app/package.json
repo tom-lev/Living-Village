@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node tools/rules.mjs --check && tsc --noEmit && vite build",
+    "build": "node tools/rules.mjs --check && node tools/bake.mjs --check && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "check": "node tools/check.mjs",
     "motion": "node tools/motion.mjs",
-    "rules": "node tools/rules.mjs"
+    "rules": "node tools/rules.mjs",
+    "bake": "node tools/bake.mjs"
   },
   "devDependencies": {
     "playwright": "^1.63.0",

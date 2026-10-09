@@ -104,6 +104,8 @@ function addHikes() {
 }
 /** אפשר להגיע? מקום נכנס לבחירה רק אם יש אליו מסלול מהכפר שמכבד את כללי העולם (נבדק פעם אחת לכל מקום) */
 const reachCache = new Map<number, boolean>();
+/** מה כבר ידוע על המקום (בלי לחשב): true / false, או undefined אם עוד לא נבדק */
+const reachKnown = (p: Place, priv = -1) => reachCache.get(p.id * 1000 + priv + 1);
 export function reachable(p: Place, priv = -1) {
   const key = p.id * 1000 + priv + 1;
   let r = reachCache.get(key);
@@ -139,6 +141,15 @@ export function assignHomes(walkers: any[], rg: LocalRng, others: any[] = []) {
 /** בוחר את היעד הבא לדמות */
 export function chooseNext(w: any, rg: LocalRng): Place {
   addHikes();
+  // אפשר להגיע? נבדק רק למקום שנבחר (ונשמר), לא לכל המקומות בעולם מראש: אחרת הבחירה הראשונה חישבה מסלול לכל מקום,
+  // וזמן הטעינה גדל עם גודל העולם. מקום שאי אפשר להגיע אליו יוצא מהבחירה, ובוחרים שוב
+  for (let tries = 0; tries < 12; tries++) {
+    const p = chooseOnce(w, rg);
+    if (p === w.home || reachable(p)) return p;
+  }
+  return w.home;
+}
+function chooseOnce(w: any, rg: LocalRng): Place {
   const like = LIKES[w.role] || LIKES.adult, here = [w.x, w.y];
   // אחרי כמה יציאות חוזרים הביתה לנוח
   if (w.outings >= 2 + Math.floor(rg.r() * 3) && w.home) { w.outings = 0; return w.home; }
@@ -146,7 +157,7 @@ export function chooseNext(w: any, rg: LocalRng): Place {
   // כך כמות המקומות מכל סוג (למשל עשרות קצוות של שבילים) לא משנה כמה פעמים בוחרים בו
   const byKind = new Map<string, [Place, number][]>();
   for (const p of places) {
-    if (p.kind === 'home' || w.recent.includes(p.id) || w.bad?.has(p.id) || !reachable(p) || (p.busy && p.busy !== w)) continue;   // ספסל תפוס: לא
+    if (p.kind === 'home' || w.recent.includes(p.id) || w.bad?.has(p.id) || reachKnown(p) === false || (p.busy && p.busy !== w)) continue;   // ספסל תפוס: לא
     // ילדים לא הולכים רחוק לבד: לא ליער, לים או לרכבת, ורק קרוב לבית
     if (w.role === 'child' && (FAR_OK.has(p.kind) || (w.home?.door && Math.hypot(spotOf(p)[0] - w.home.door[0], spotOf(p)[1] - w.home.door[1]) > 700))) continue;
     let wt = like[p.kind] ?? 0; if (!wt) continue;

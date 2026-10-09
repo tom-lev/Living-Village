@@ -4,6 +4,7 @@ import { ctx, NO_TREE, inWater } from './context';
 import type { Pt, WorldData } from './types';
 import { curveFixed, curvePts, curveWithSegs, cachedCurve, bbDist } from './curve';
 import { declOf, doorX } from './decl';
+import { geoHash, BAKED } from './bake';
 export { doorX } from './decl';
 
 export interface Edge { a?: string; b?: string; pts: number[][]; acc: number[]; len: number; d: string }
@@ -41,6 +42,7 @@ export const geo = {
   ROAD_TAPERS: [] as { x: number; y: number; dx: number; dy: number }[],   // דרך ללא מוצא שממשיכה כשביל: הדרך הולכת ונהיית צרה
    // קצה שביל שלא מוביל לשום מקום: נמוג בהדרגה
   CREEK_SAMPLES: [] as number[][],   // הפלג שבעמק
+  baked: false,                      // כללי השבילים נקראו מהקובץ שנאפה מראש
 };
 
 /* ───────── רשת תפוסה גסה (תא של 10 יחידות): דרך / נהר / שביל ───────── */
@@ -65,7 +67,7 @@ export function occ(x: number, y: number, bit: number) {
   return gx < 0 || gy < 0 || gx >= OGW || gy >= OGH ? 0 : OCC[gy * OGW + gx] & bit;
 }
 
-export function buildGeometry(w: WorldData) {
+export function buildGeometry(w: WorldData, worldText: string) {
   const { B } = ctx;
   const { nodes, edges, outer } = w.roads;
   geo.EDGES = edges.map(([a, b, c1x, c1y, c2x, c2y]) => ({ a, b, ...bez(nodes[a], c1x, c1y, c2x, c2y, nodes[b]) }));
@@ -83,9 +85,19 @@ export function buildGeometry(w: WorldData) {
   geo.RIVER_SAMPLES = curveFixed(w.river, 20);
   const C = w.terrain.creek as number[][] | undefined;
   geo.CREEK_SAMPLES = C ? curveFixed(C, 20, true) : [];
-  trailRules(w);
-  joinTrails(w.trails);
-  tidyTrails(w.trails);   // אחרי החיבורים: בלי נקודות כפולות
+  // כללי השבילים: מהקובץ שנאפה מראש אם הוא תואם (world/bake.ts), אחרת מחושבים כאן
+  const h = geoHash(worldText), B0 = BAKED.geo;
+  if (B0 && BAKED.hash === h && !location.search.includes('nobake')) {
+    w.trails = B0.trails; geo.TRAIL_FLARES = B0.flares; geo.TRAIL_FREE = B0.free; geo.TRAIL_FILLETS = B0.fillets; geo.ROAD_TAPERS = B0.tapers; geo.DOOR_TRAILS = new Set(B0.doorTrails);
+    geo.baked = true;
+  } else {
+    trailRules(w);
+    joinTrails(w.trails);
+    tidyTrails(w.trails);   // אחרי החיבורים: בלי נקודות כפולות
+    geo.baked = false;
+  }
+  // לכלי האפייה (tools/bake.mjs): התוצאה וטביעת האצבע
+  (globalThis as any).__geoBake = { hash: h, geo: { trails: w.trails, flares: geo.TRAIL_FLARES, free: geo.TRAIL_FREE, fillets: geo.TRAIL_FILLETS, tapers: geo.ROAD_TAPERS, doorTrails: [...geo.DOOR_TRAILS] } };
   const trailSamples: number[][] = [];
   for (const t of w.trails) for (let i = 0; i < t.length - 1; i++) {
     const n = Math.ceil(Math.hypot(t[i + 1][0] - t[i][0], t[i + 1][1] - t[i][1]) / 6);

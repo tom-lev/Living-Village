@@ -24,7 +24,7 @@ import { BUDGET, STATIC_COST, FRAME, totalPts } from './budget';
 import { dynamics } from '../actors/people';
 
 /** הבדיקות שממומשות כאן (כל אחת שייכת לכלל ב-RULES) */
-const IMPLEMENTED = ['water', 'trail-end', 'prop', 'bench', 'plot-path', 'overlap', 'labels', 'reach', 'undeclared', 'order', 'scale',
+const IMPLEMENTED = ['boot', 'baked', 'water', 'trail-end', 'prop', 'bench', 'plot-path', 'overlap', 'labels', 'reach', 'undeclared', 'order', 'scale',
   'trail-water', 'parallel', 'junctions', 'curves', 'lamps', 'gardens', 'wildlife', 'perf'];
 
 const near = (P: number[][], p: number[]) => {
@@ -186,6 +186,16 @@ export function runChecks(): Issue[] {
   const build = Object.values(stageMs).reduce((a, b) => a + b, 0);
   if (build > BUDGET.buildMs) add('perf', `Building the world takes ${Math.round(build)} ms (budget ${BUDGET.buildMs})`, 0, 0);
   if (dynamics.length > BUDGET.movers) add('perf', `${dynamics.length} moving things (budget ${BUDGET.movers})`, 0, 0);
+
+  // boot: זמן הטעינה לא גדל עם העולם – עבודת הדף עד שהמפה מוצגת בתקציב קבוע, ובטעינה נבנים רק האזורים של המבט הראשון
+  const bt = (window as any).__boot;
+  if (bt) {
+    const main = bt.scene + bt.tiles + bt.actors;
+    if (main > BUDGET.bootMs) add('boot', `Loading takes ${Math.round(main)} ms of page work before the map shows (budget ${BUDGET.bootMs})`, 0, 0);
+    if (bt.bootChunks > BUDGET.bootChunks) add('boot', `${bt.bootChunks} areas are drawn while loading (budget ${BUDGET.bootChunks}: only the first view)`, 0, 0);
+  }
+  // baked: החישוב שנאפה מראש תואם לעולם ולקוד (אחרת הוא לא משמש, והטעינה איטית יותר)
+  if (!geo.baked) add('baked', 'The precomputed trail geometry (src/world/baked.json) is stale: run npm run bake -- <dev url>', 0, 0);
 
   // wildlife: חיות היער במקום טבעי
   for (const it of wildIssues()) add('wildlife', it.msg, it.x, it.y);

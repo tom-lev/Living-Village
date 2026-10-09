@@ -3,7 +3,7 @@
 import { pathBox, boxThrough, type M6 } from './snode';
 
 export interface DLItem {
-  d: string; m: number[]; a: number; det: boolean; bb: number[] | null; pad?: number;
+  d: string; m: number[]; a: number; det: boolean; bb: number[] | null; pad?: number; z: number;
   /** צורה ענקית (הרבה חלקים על שטח גדול): כל חלק עם הגבולות שלו, כדי לצייר באריח רק את החלקים שנופלים בו */
   parts?: { d: string; bb: number[] }[];
   fill: string | null; stroke: string | null; sw: number; cap: string; join: string; dash: number[] | null;
@@ -12,26 +12,26 @@ export interface DLItem {
 /** רשימת ציור ארוזה למעבר מהיר ל-Worker: מחרוזת אחת לכל המסלולים, ומערכים מספריים שמועברים בלי העתקה
  *  (העברה של עשרות אלפי אובייקטים נפרדים עלתה יותר משנייה) */
 export interface PackedDL {
-  d: Uint8Array; dLen: Int32Array; m: Float64Array; a: Float32Array; pad: Float32Array; sw: Float32Array; det: Uint8Array; sty: Int32Array;
+  d: Uint8Array; dLen: Int32Array; z: Float64Array; m: Float64Array; a: Float32Array; pad: Float32Array; sw: Float32Array; det: Uint8Array; sty: Int32Array;
   styles: [string | null, string | null, string, string, number[] | null][];
 }
 export function packDL(DL: DLItem[]): { pk: PackedDL; transfer: ArrayBuffer[] } {
-  const n = DL.length, dLen = new Int32Array(n), m = new Float64Array(n * 6), a = new Float32Array(n), pad = new Float32Array(n), sw = new Float32Array(n), det = new Uint8Array(n), sty = new Int32Array(n);
+  const n = DL.length, z = new Float64Array(n), dLen = new Int32Array(n), m = new Float64Array(n * 6), a = new Float32Array(n), pad = new Float32Array(n), sw = new Float32Array(n), det = new Uint8Array(n), sty = new Int32Array(n);
   const styles: PackedDL['styles'] = [], sIdx = new Map<string, number>(), ds: string[] = [];
   DL.forEach((it, i) => {
-    ds.push(it.d); dLen[i] = it.d.length; m.set(it.m, i * 6); a[i] = it.a; pad[i] = it.pad ?? 2; sw[i] = it.sw; det[i] = it.det ? 1 : 0;
+    ds.push(it.d); dLen[i] = it.d.length; z[i] = it.z; m.set(it.m, i * 6); a[i] = it.a; pad[i] = it.pad ?? 2; sw[i] = it.sw; det[i] = it.det ? 1 : 0;
     const key = `${it.fill}|${it.stroke}|${it.cap}|${it.join}|${it.dash}`;
     let k = sIdx.get(key); if (k === undefined) { k = styles.length; sIdx.set(key, k); styles.push([it.fill, it.stroke, it.cap, it.join, it.dash]); }
     sty[i] = k;
   });
   // המחרוזת הופכת לבתים (העברה בלי העתקה; מחרוזת גדולה הועתקה לצייר רק כשהדף התפנה, ועיכבה אותו בשניות)
-  return { pk: { d: new TextEncoder().encode(ds.join('')), dLen, m, a, pad, sw, det, sty, styles }, transfer: [dLen.buffer, m.buffer, a.buffer, pad.buffer, sw.buffer, det.buffer, sty.buffer] };
+  return { pk: { d: new TextEncoder().encode(ds.join('')), dLen, z, m, a, pad, sw, det, sty, styles }, transfer: [z.buffer, dLen.buffer, m.buffer, a.buffer, pad.buffer, sw.buffer, det.buffer, sty.buffer] };
 }
 function unpackDL(pk: PackedDL): DLItem[] {
   const out: DLItem[] = [], all = new TextDecoder().decode(pk.d); let o = 0;
   for (let i = 0; i < pk.dLen.length; i++) {
     const st = pk.styles[pk.sty[i]], d = all.substr(o, pk.dLen[i]); o += pk.dLen[i];
-    out.push({ d, m: Array.from(pk.m.subarray(i * 6, i * 6 + 6)), a: pk.a[i], det: !!pk.det[i], bb: null, pad: pk.pad[i], fill: st[0], stroke: st[1], sw: pk.sw[i], cap: st[2], join: st[3], dash: st[4] });
+    out.push({ d, z: pk.z[i], m: Array.from(pk.m.subarray(i * 6, i * 6 + 6)), a: pk.a[i], det: !!pk.det[i], bb: null, pad: pk.pad[i], fill: st[0], stroke: st[1], sw: pk.sw[i], cap: st[2], join: st[3], dash: st[4] });
   }
   return out;
 }
@@ -79,7 +79,7 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
       for (let cx = Math.floor(x0 / DLC); cx <= Math.floor(x1 / DLC); cx++)
         for (const id of grid.get(ck(cx, cy)) || []) if (seen[id] !== stamp) { seen[id] = stamp; ids.push(id); }
     for (const id of wide) ids.push(id);
-    ids.sort((a, b) => a - b);   // סדר הציור המקורי
+    ids.sort((a, b) => items[a].z - items[b].z || a - b);   // סדר הציור: לפי מפתח הסדר (שכבה, ואז y של הדבר העומד)
     for (const id of ids) {
       const it = items[id], b = it.bb;
       if (b[2] < x0 || b[0] > x1 || b[3] < y0 || b[1] > y1) continue;
@@ -104,19 +104,9 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
     return typeof createImageBitmap !== 'undefined' && cv.transferToImageBitmap ? createImageBitmap(c.getImageData(0, 0, TILE, TILE)) : Promise.resolve(cv);
   }
 
-  async function pump() {
-    busy = false;
-    if (!queue.length) return;
-    const t0 = performance.now(), [l, i, j] = queue.shift(), bmp = await render(l, i, j);
-    post({ type: 'tile', l, i, j, bmp, gen, ms: performance.now() - t0, n: drawn} as any, bmp.close ? [bmp] : undefined);
-    busy = true; setTimeout(pump, 0);
-  }
-
-  return (m: any) => {
-    if (m.type === 'init') {
-      const ti0 = performance.now();
-      ({ B, TILE, BASE } = m); items = m.packed ? unpackDL(m.packed) : m.items; seen = new Uint32Array(items.length);
-      items.forEach((it, id) => {
+  /** מוסיף לאינדקס המרחבי את הצורות מ-from והלאה (בהתחלה כולן; אחר כך אזורים שמתווספים) */
+  function index(from: number) {
+    items.forEach((it, id) => { if (id < from) return;
         // הגבולות של הצורה בעולם (מחושבים כאן ברקע, לא בדף): מהמסלול, עם מרווח לעובי הקו, דרך המטריצה.
         // מסלול ארוך מפורק לחלקים, והגבולות שלו הם האיחוד של החלקים (מפענחים אותו פעם אחת)
         if (!it.bb) {
@@ -129,9 +119,31 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
         if ((cx1 - cx0 + 1) * (cy1 - cy0 + 1) > WIDE) { wide.push(id); return; }
         for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) { const k = ck(cx, cy); (grid.get(k) || grid.set(k, []).get(k)!).push(id); }
       });
+  }
+
+  async function pump() {
+    busy = false;
+    if (!queue.length) return;
+    const t0 = performance.now(), [l, i, j] = queue.shift(), bmp = await render(l, i, j);
+    post({ type: 'tile', l, i, j, bmp, gen, ms: performance.now() - t0, n: drawn} as any, bmp.close ? [bmp] : undefined);
+    busy = true; setTimeout(pump, 0);
+  }
+
+  return (m: any) => {
+    if (m.type === 'init') {
+      const ti0 = performance.now();
+      ({ B, TILE, BASE } = m); items = m.packed ? unpackDL(m.packed) : m.items; seen = new Uint32Array(items.length);
+      index(0);
       (post as any)({ type: 'ready', ms: performance.now() - ti0, n: items.length, sent: m.sent, wStart: performance.timeOrigin + ti0, wEnd: performance.timeOrigin + performance.now(), wBoot: performance.timeOrigin });
+    } else if (m.type === 'add') {
+      // אזור שצויר מאוחר יותר: מצטרף לרשימה ולאינדקס
+      const from = items.length, add = unpackDL(m.packed);
+      for (const it of add) items.push(it);
+      const s2 = new Uint32Array(items.length); s2.set(seen); seen = s2;
+      index(from);
     } else if (m.type === 'palette') {
-      cmap = m.cmap; gen = m.gen; queue = [];
+      cmap = m.cmap; if (m.keep) return;   // צבע חדש (מאזור שנוסף): בלי לזרוק את התור
+      gen = m.gen; queue = [];
     } else if (m.type === 'need') {
       queue = m.list;                     // התור מתחלף בכל בקשה: תמיד מה שרלוונטי עכשיו
       if (!busy) { busy = true; setTimeout(pump, 0); }

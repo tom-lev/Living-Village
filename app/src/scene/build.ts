@@ -28,17 +28,19 @@ import { catmull } from '../world/nav';
 import { autoBridges } from './mountains';
 import { WATERS } from '../world/context';
 import { SNode } from '../render/snode';
+import { worldKey } from '../world/bake';
 
 const rect = ([x0, y0, x1, y1]: number[]) => ({ x0, y0, x1, y1 });
 
 export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElement) {
+  const worldText = worldKey(w);   // לפני כל שינוי בנתונים: טביעת האצבע לחישוב שנאפה מראש (world/bake.ts)
   resetStages();   // הסדר הקבוע של שלבי הבנייה: world/issues.ts (כלל תשתית 3)
   ctx.world = w; ctx.B = rect(w.bounds); ctx.home = rect(w.home);
   setSeed(w.seed);
   setPalette(w.palettes?.find(p => p.name === w.palette), w.palettes);
   initLayers(svgS, svgD);
   finish('setup');
-  buildGeometry(w);                        // דרכים, דגימת הנהר והפלג, כללי השבילים, צמתים
+  buildGeometry(w, worldText);             // דרכים, דגימת הנהר והפלג, כללי השבילים, צמתים
   finish('geometry');
   initWalk();   // מפת מעבר: מסמנים תוך כדי בנייה מה מותר לדרוך עליו
   buildTerrain(w);
