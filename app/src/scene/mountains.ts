@@ -6,11 +6,11 @@
    עם גשרים אוטומטיים בכל מקום שדרך או שביל חוצים אותו. */
 import { bakedF64 } from '../world/lbake';
 import { curvePts } from '../world/curve';
-import { el, n2, blob, shade, smoothOpen } from '../core/util';
+import { el, n2, blob, shade, smoothOpen, STATIC } from '../core/util';
 import { rand, rngAt, type LocalRng } from '../core/rng';
 import { ctx } from '../world/context';
 import { geo, ROAD_W } from '../world/geometry';
-import { markPolygon, markLine, DANGER, PATH, BRIDGE, LANE } from '../world/walk';
+import { markPolygon, markLine, walkFrozen, DANGER, PATH, BRIDGE, LANE } from '../world/walk';
 import type { WorldData } from '../world/types';
 import { addLabel } from '../world/labels';
 
@@ -118,7 +118,7 @@ function range(m: any, idx: number, foot: string): Massif[] {
 }
 
 /** פלג קפוא בקרקעית העמק, עם גשרים במקומות שבהם דרכים ושבילים חוצים אותו */
-function creek(pts: Pt[], trails: Pt[][]) {
+function creek(pts: Pt[], trails: () => Pt[][]) {
   const L = ctx.L, d = smoothOpen(pts), rg = rngAt(pts[0][0], pts[0][1], 41);
   el('path', { d, fill: 'none', stroke: '#f7fbfd', 'stroke-width': 26, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.ground);
   el('path', { d, fill: 'none', stroke: '#8ccbe2', 'stroke-width': 15, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, L.ground);
@@ -148,11 +148,11 @@ function bridgeName(x: number, y: number, pool: string[]) {
 }
 
 let bridgeN = 0;
-export function autoBridges(C: Pt[], trails: Pt[][], half: number, existing: Pt[], snow = false) {
+export function autoBridges(C: Pt[], trailsOf: () => Pt[][], half: number, existing: Pt[], snow = false) {
   const L = ctx.L;
   // איפה דרכים ושבילים חוצים מים: באתר המפורסם מגיע מוכן (world/lbake.ts)
   const flat = bakedF64('bridges' + (bridgeN++), () => {
-  const hits: { x: number; y: number; a: number; road: boolean }[] = [];
+  const hits: { x: number; y: number; a: number; road: boolean }[] = [], trails = trailsOf();   // (העקומות של כל השבילים: רק כשמחשבים)
   // רשת חיפוש של קטעי המים (תא 80): כל קטע של דרך או שביל נבדק רק מול קטעי מים באותו תא ובתאים שלידו
   const G = new Map<number, number[]>(), key = (x: number, y: number) => Math.floor(x / 80) * 100003 + Math.floor(y / 80);
   for (let j = 0; j < C.length - 1; j++) for (const q of [C[j], C[j + 1]]) { const k = key(q[0], q[1]), L = G.get(k) || G.set(k, []).get(k)!; if (!L.includes(j)) L.push(j); }
@@ -201,6 +201,7 @@ export function buildMountains(w: WorldData) {
   // הרכסים הישנים צרכו מספרים מהמחולל הכללי; צורכים אותם גם עכשיו, כדי שהיער ושאר העולם יישארו במקומם
   // אותה צריכה של מספרים אקראיים כמו כשהעולם נגמר ב-x 2100 (לפני היער העתיק), כדי שהרחבת העולם לא תשנה שום דבר אחר
   for (const m of T.mountains) for (let x = B.x0 - 120; x < Math.min(B.x1, 2100) + 120; x += m.step * rand(.75, 1.15)) { rand(240, 330); rand(m.hMin, m.hMax); rand(-20, 20); }
-  T.mountains.forEach((m: any, i: number) => range(m, i, m.foot || (m.valley === 1 ? '#e2edf2' : '#a9bfa6')));
-  if (T.creek) creek(T.creek, w.trails.map(t => curvePts(t)));   // גשרים מול העקומה המצוירת, לא מול הקווים הישרים שבין נקודות הנתונים
+  // הרכסים רק מצוירים ומסמנים "לא מטפסים" במפת המעבר: באתר המפורסם שניהם מגיעים מוכנים (הנוף והמפה הסופית), אז לא נבנים
+  if (!(STATIC.off && walkFrozen())) T.mountains.forEach((m: any, i: number) => range(m, i, m.foot || (m.valley === 1 ? '#e2edf2' : '#a9bfa6')));
+  if (T.creek) creek(T.creek, () => w.trails.map(t => curvePts(t)));   // גשרים מול העקומה המצוירת, לא מול הקווים הישרים שבין נקודות הנתונים
 }

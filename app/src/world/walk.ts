@@ -27,7 +27,8 @@ export const walkPriv = () => PRIV;
 /* האתר המפורסם (משימה 30): מפת המעבר הסופית מגיעה מוכנה, ומרגע שנטענה – "קפואה": סימונים נוספים (של אובייקטים
    שנבנים עכשיו או מאוחר יותר) כבר כלולים בה, ולא משנים אותה */
 let FROZEN = false;
-export function freezeWalk(f: Uint16Array, priv: Uint16Array) { F.set(f); PRIV.set(priv); FROZEN = true; }
+export const walkFrozen = () => FROZEN;
+export function freezeWalk() { FROZEN = true; }   // (המפה כבר פוענחה ישירות לתוך F ו-PRIV)
 const ix = (x: number) => Math.floor((x - X0) / C), iy = (y: number) => Math.floor((y - Y0) / C);
 const inside = (i: number, j: number) => i >= 0 && j >= 0 && i < W && j < H;
 

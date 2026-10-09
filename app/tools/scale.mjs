@@ -26,8 +26,9 @@ async function measure(url) {
     let bytes = 0, done = false;
     c.on('requestfinished', async q => { if (done) return; try { const s = await q.sizes(); bytes += s.responseBodySize + s.responseHeadersSize; } catch {} });
     await p.goto(url + (url.includes('?') ? '&' : '?') + 'debug&r=' + Date.now(), { waitUntil: 'commit' });
-    await p.waitForFunction(() => window.__boot?.ready && window.__boot?.allActors, null, { timeout: 300000, polling: 50 });
-    done = true;
+    await p.waitForFunction(() => window.__boot?.ready, null, { timeout: 300000, polling: 50 });
+    done = true;   // ההורדות נספרות עד שהמבט הראשון מוכן (אחר כך יורד ברקע מה שצריך להמשך)
+    await p.waitForFunction(() => window.__boot?.allActors, null, { timeout: 300000, polling: 200 });
     const bt = await p.evaluate(() => window.__boot);
     // זמן העדכון בפריים: אחרי שכולם נבנו, ממוצע של 120 פריימים (מבדיקת העולם, ?debug)
     await p.waitForFunction(() => window.__check, null, { timeout: 300000 });

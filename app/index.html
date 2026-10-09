@@ -33,6 +33,13 @@
 (function () {
   try {
     var inl = window.__BAKED;   // בהעלאה הרשימה נכתבת לתוך הדף (בלי הורדה נוספת)
+    // נתוני ההיגיון ורשת ההליכה: מתחילים לרדת אחרי האריחים של התמונה (שיגיעו קודם), במקביל לקוד;
+    // רשת ההליכה נדרשת רק לדמויות, אז בעדיפות נמוכה
+    var more = function () {
+      if (!inl || window.__LOGIC) return;
+      window.__LOGIC = fetch('tiles/logic.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+      window.__NAV = fetch('tiles/nav.bin', { priority: 'low' }).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).catch(function () { return null; });
+    };
     (inl ? Promise.resolve(inl.manifest) : fetch('tiles/manifest.json').then(function (r) { return r.ok ? r.json() : null; })).then(function (m) {
       var box = document.getElementById('instant'); if (!m || !m.B || !box) return;
       var pal = m.def; try { var s = localStorage.getItem('village-palette'); if (m.pals.indexOf(s) >= 0) pal = s; } catch (e) {}
@@ -53,7 +60,8 @@
       // מתי התמונה המיידית הוצגה כולה (לתג של ?debug)
       var left = box.children.length;
       [].forEach.call(box.children, function (im) { im.onload = im.onerror = function () { if (--left === 0) window.__instantAt = performance.now(); }; });
-    }).catch(function () {});
+      more();
+    }).catch(function () {}).then(more);
   } catch (e) {}
 })();
 </script>

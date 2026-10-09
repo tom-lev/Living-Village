@@ -12,7 +12,7 @@ import { reachPack, reachLoad } from './actors/agenda';
 import { warmUp, bakeTile, tileGrid, bakeRegions, bakeStatic, manifestP, inlineStatic, initTilesFromRegions, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
 import { CULL } from './render/gpu';
 import { chunksIn, buildChunk, buildDetail, nextChunk, pendingCount, allChunks } from './scene/chunks';
-import { ctx, STATIC_BB, sortStatics } from './world/context';
+import { ctx, STATIC_BB, sortStatics, BG_JOBS } from './world/context';
 import { STATIC } from './core/util';
 import { RNG_REPLAY, seedNow } from './core/rng';
 import { FRAME } from './world/budget';
@@ -62,13 +62,18 @@ async function boot() {
   let staticJson: any = null;
   if (man?.regions) {
     try {
-      const inl = inlineStatic(), b64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0)).buffer;
-      const [bin, js] = inl ? [b64(inl.bin), inl.json] : await Promise.all([fetch('tiles/static.bin').then(r => r.ok ? r.arrayBuffer() : null), fetch('tiles/static.json').then(r => r.ok ? r.json() : null)]);
+      const inl = inlineStatic(), b64 = (s: string) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
+      let bin: ArrayBuffer | null = null, js: any = null;
+      if (inl) {
+        // נתוני ההיגיון: קובץ שהדף כבר התחיל להוריד (index.html, window.__LOGIC)
+        const lg = await ((window as any).__LOGIC ?? fetch('tiles/logic.json').then(r => r.ok ? r.json() : null));
+        if (lg) { bin = b64(lg.bin); js = { ...inl.json, logic: lg.logic }; }
+      } else [bin, js] = await Promise.all([fetch('tiles/static.bin').then(r => r.ok ? r.arrayBuffer() : null), fetch('tiles/static.json').then(r => r.ok ? r.json() : null)]);
       if (bin && js) { STATIC_BB.arr = new Float64Array(bin); STATIC.off = true; staticJson = js; RNG_REPLAY.marks = js.rng ?? null; LBAKE.in = js.logic ?? null; }
     } catch {}
   }
   // רשת ההליכה האפויה (משימה 30, שלב 5): מורדת במקביל לבנייה, ונטענת לפני הדמויות
-  const navP: Promise<ArrayBuffer | null> = STATIC.off ? fetch('tiles/nav.bin').then(r => r.ok ? r.arrayBuffer() : null).catch(() => null) : Promise.resolve(null);
+  const navP: Promise<ArrayBuffer | null> = STATIC.off ? ((window as any).__NAV ?? fetch('tiles/nav.bin').then(r => r.ok ? r.arrayBuffer() : null).catch(() => null)) : Promise.resolve(null);
   // המבט הראשון בעולם (כמו המצלמה, עם שוליים): באתר המפורסם רק האובייקטים שבו נבנים עכשיו, השאר ברקע
   const firstView = (() => {
     const r = document.getElementById('stage').getBoundingClientRect(), [hx0, hy0, hx1, hy1] = world.home, [bx0, by0, bx1, by1] = world.bounds, hw = hx1 - hx0, hh = hy1 - hy0;
@@ -122,7 +127,10 @@ async function boot() {
     const s0 = performance.now();
     while (di < deferredObjects.length && performance.now() - s0 < 8) runDeferredObject(deferredObjects[di++]);
     if (di < deferredObjects.length) { setTimeout(bgActors, 0); return; }
-    if (!(window as any).__objsDone) { if (deferredObjects.length) sortStatics(); (window as any).__objsDone = true; tm.objsDone = performance.now(); setTimeout(bgActors, 0); return; }
+    while (BG_JOBS.length && performance.now() - s0 < 8) if (BG_JOBS[0]()) BG_JOBS.shift();
+    if (BG_JOBS.length) { setTimeout(bgActors, 0); return; }
+    if (!(window as any).__objsDone) { if (STATIC.off) sortStatics();   // (מה שנבנה ברקע: אובייקטים ועצים)
+      (window as any).__objsDone = true; tm.objsDone = performance.now(); setTimeout(bgActors, 0); return; }
     if (actors.build(8)) { tm.allActors = performance.now(); (window as any).__actorTimes = actors.times; } else setTimeout(bgActors, 0);
   };
   setTimeout(bgActors, 0);

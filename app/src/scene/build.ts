@@ -49,7 +49,7 @@ const applyDiff = (o: any, d: any) => { for (const [k, v] of Object.entries(d)) 
 export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElement, firstView?: number[]) {
   const worldText = worldKey(w);   // לפני כל שינוי בנתונים: טביעת האצבע לחישוב שנאפה מראש (world/bake.ts)
   resetStages();   // הסדר הקבוע של שלבי הבנייה: world/issues.ts (כלל תשתית 3)
-  ctx.world = w; ctx.B = rect(w.bounds); ctx.home = rect(w.home);
+  ctx.world = w; ctx.B = rect(w.bounds); ctx.home = rect(w.home); ctx.firstView = firstView ?? null;
   setSeed(w.seed);
   REC = LBAKE.in?.objs ? JSON.parse(LBAKE.in.objs) : null;
   if (REC) { places.push(...REC.places); PLACE_REPLAY.on = true; PLACE_REPLAY.i = 0; relocated.push(...REC.relocated); plotDoors.push(...REC.plotDoors); }
@@ -59,10 +59,11 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   buildGeometry(w, worldText);             // דרכים, דגימת הנהר והפלג, כללי השבילים, צמתים
   finish('geometry');
   initWalk();   // מפת מעבר: מסמנים תוך כדי בנייה מה מותר לדרוך עליו
+  // מפת המעבר: באתר המפורסם הסופית מגיעה מוכנה (וקפואה) – לפני פני השטח, כדי שאף סימון לא ייעשה לשווא;
+  // בבנייה המלאה מסמנים לאורך הבנייה
+  if (REC) { unrle16(bakedInts('walkFinal', () => new Int32Array()), walkFlags()); unrle16(bakedInts('walkPriv', () => new Int32Array()), walkPriv()); freezeWalk(); }
   buildTerrain(w);
-  // מפת המעבר: באתר המפורסם הסופית מגיעה מוכנה (וקפואה); בבנייה המלאה מסמנים לאורך הבנייה
-  if (REC) { const F = walkFlags(), P = walkPriv(), f = new Uint16Array(F.length), q = new Uint16Array(P.length); unrle16(bakedInts('walkFinal', () => new Int32Array()), f); unrle16(bakedInts('walkPriv', () => new Int32Array()), q); freezeWalk(f, q); }
-  else markTerrain(w);
+  if (!REC) markTerrain(w);
   finish('terrain');
   // אגמים ובריכות מסומנים כמים כבר עכשיו, לפני שחפצים קטנים מחפשים מקום (אחרת ספסל יכול "לזוז" לתוך אגם)
   if (!REC) for (const o of w.objects) { const e = declOf(o.type).water?.(o); if (e) markEllipse(e[0], e[1], e[2], e[3], WATER); }
@@ -110,7 +111,7 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   if (!REC) for (const st of statics) { const bb = bboxOf(st); if (bb[2] > 0) markEllipse(bb[0] + bb[2] / 2, st.y - 2, Math.min(bb[2] / 2, 4.5), 3, SOFT); }
   if (!REC) for (const W of WATERS) markEllipse(W.cx, W.cy, W.rx, W.ry, WATER);   // אגמים
   // גשרים אוטומטיים מעל הנהר, איפה שדרך או שביל חוצים אותו ואין שם גשר מהנתונים
-  autoBridges(geo.RIVER_SAMPLES, w.trails.map(t => catmull(t)), 34, w.objects.filter(o => o.type === 'stoneBridge' || o.type === 'footbridge').map(o => [o.x, o.y]));
+  autoBridges(geo.RIVER_SAMPLES, () => w.trails.map(t => catmull(t)), 34, w.objects.filter(o => o.type === 'stoneBridge' || o.type === 'footbridge').map(o => [o.x, o.y]));
   if (!REC) for (const W of WATERS) clearPathIn(W.cx, W.cy, W.rx, W.ry);   // אגם: הדרך או השביל לא חוצים אותו (חוץ מגשר)
   // מפת המעבר הסופית: נאפית לאתר המפורסם (שם היא נטענת בתחילת הבנייה)
   if (!REC) { bakedInts('walkFinal', () => rle16(walkFlags())); bakedInts('walkPriv', () => rle16(walkPriv())); }

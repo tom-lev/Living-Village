@@ -1,7 +1,8 @@
 /* גאומטריה של העולם: רשת הדרכים, הנהר, השבילים, ורשת תפוסה מהירה לשתילה */
-import { clamp, P } from '../core/util';
+import { clamp, P, STATIC } from '../core/util';
 import { ctx, NO_TREE, inWater } from './context';
 import type { Pt, WorldData } from './types';
+import { LBAKE } from './lbake';
 import { curveFixed, curvePts, curveWithSegs, cachedCurve, bbDist } from './curve';
 import { declOf, doorX } from './decl';
 import { geoHash, BAKED } from './bake';
@@ -98,6 +99,8 @@ export function buildGeometry(w: WorldData, worldText: string) {
   }
   // לכלי האפייה (tools/bake.mjs): התוצאה וטביעת האצבע
   (globalThis as any).__geoBake = { hash: h, geo: { trails: w.trails, flares: geo.TRAIL_FLARES, free: geo.TRAIL_FREE, fillets: geo.TRAIL_FILLETS, tapers: geo.ROAD_TAPERS, doorTrails: [...geo.DOOR_TRAILS] } };
+  // רשת התפוסה (דרכים, שבילים, מים) משמשת רק את בחירת מקומות העצים ואת ציור הדשא והערבה – באתר המפורסם שלושתם מגיעים מוכנים
+  if (STATIC.off && LBAKE.in?.objs) return;
   const trailSamples: number[][] = [];
   for (const t of w.trails) for (let i = 0; i < t.length - 1; i++) {
     const n = Math.ceil(Math.hypot(t[i + 1][0] - t[i][0], t[i + 1][1] - t[i][1]) / 6);

@@ -4,7 +4,7 @@ import { rand, pick, R, rngAt, drawOnly } from '../core/rng';
 import { STATIC } from '../core/util';
 import { bakedInts, bakedF64 } from '../world/lbake';
 let forestN = 0;
-import { ctx, prop, NO_TREE, inWater, statics, bboxOf } from '../world/context';
+import { ctx, prop, NO_TREE, inWater, statics, bboxOf, BG_JOBS } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
 import { pine, roundTree, sequoia, ancientFir, pineBox, roundBox, sequoiaBox, firBox } from '../prefabs/nature';
 import { deferStatic, deferArea, CH } from './chunks';
@@ -154,13 +154,14 @@ export const GENERATORS: Record<string, (o: any) => void> = {
     const AN = o.ancient, anc = (x: number) => { if (!AN) return 0; const t = Math.min(1, Math.max(0, (x - AN.x0) / (AN.x1 - AN.x0))); return t * t * (3 - 2 * t); };
     /* מיקומי העצים נקבעים לפי המקום (רשת של תאים, ובכל תא אקראיות מקומית rngAt), לא לפי סדר הגרלה:
        כך הרחבת המפה, הוספת אובייקט או קרחת לא מזיזות אף עץ אחר (כלל stable-forest) */
-    const C = o.cell ?? 52, cand: number[][] = [];
-    for (let gy = Math.floor(B.y0 / C); gy < B.y1 / C; gy++) for (let gx = Math.floor(B.x0 / C); gx < B.x1 / C; gx++) {
-      const v = rngAt(gx, gy, 11);
-      cand.push([gx * C + v.r() * C, gy * C + v.r() * C, v.r()]);
-    }
+    const C = o.cell ?? 52, gx0 = Math.floor(B.x0 / C), gy0 = Math.floor(B.y0 / C);
+    let nx = 0; for (let gx = gx0; gx < B.x1 / C; gx++) nx++;
+    /** המועמד מספר ci (שורה אחרי שורה): מחושב לפי המקום, אז באתר המפורסם מחשבים רק את אלה שנבחרו */
+    const candAt = (ci: number) => { const gx = gx0 + ci % nx, gy = gy0 + Math.floor(ci / nx), v = rngAt(gx, gy, 11); return [gx * C + v.r() * C, gy * C + v.r() * C, v.r()]; };
     // הבחירה (צפיפות, מים, מפת המעבר, מרווח בין עצים) כבדה: באתר המפורסם מגיעה מוכנה – רק המספרים של המועמדים שנבחרו
     const keep = bakedInts('forest' + (forestN++), () => { const ks: number[] = [];
+    const cand: number[][] = [];
+    for (let gy = gy0; gy < B.y1 / C; gy++) for (let gx = gx0; gx < B.x1 / C; gx++) cand.push(candAt(cand.length));
     cand.forEach(([x, y, roll], ci) => {
       if (x < B.x0 || x > B.x1 || y < B.y0 || y > B.y1) return;
       // בערבה: עצים בודדים בלבד
@@ -173,13 +174,13 @@ export const GENERATORS: Record<string, (o: any) => void> = {
       const k = Math.floor(x / cell) + ',' + Math.floor(y / cell); (grid.get(k) || grid.set(k, []).get(k)).push([x, y]);
     });
     return Int32Array.from(ks); });
-    for (const ci of keep) trees.push([cand[ci][0], cand[ci][1]]);
+    for (const ci of keep) { const c = candAt(ci); trees.push([c[0], c[1]]); }
     // סוג העץ וגודלו נקבעים לפי המיקום שלו (rngAt), לא לפי הסדר: כך הוספה או הסרה של עצים (קרחת, אובייקט חדש) לא משנה את שאר היער
     const cold = winter(ctx.world.terrain);
     /* בנייה לפי אזורים (scene/chunks.ts): כאן רק מתכננים כל עץ – סוג, גודל ומידות מדויקות, בלי לצייר.
        העץ נכנס לרשימת הדברים העומדים עם המידות שלו (מפת ההליכה, החיות והציפורים יודעים עליו מיד),
        והציור עצמו קורה כשהאזור שלו נבנה. הבחירות האקראיות זהות לגמרי לציור המיידי */
-    for (const [x, y] of trees) {
+    const plan = (x: number, y: number) => {
       const v = rngAt(x, y, 7);
       // שלג על העצים בהדרגה: ככל שמצפינים בעמק, יותר עצים מושלגים (משימה 10א)
       const snowy = ctx.world.terrain.snow.full !== undefined ? v.r() < cold(y) ** 1.2 * 1.02 : y < o.snowLine;
@@ -195,10 +196,16 @@ export const GENERATORS: Record<string, (o: any) => void> = {
       else if (inRects(x, y, o.pineZones) || v.r() < o.pineChance) { const sc = v.rand(1.5, 2.1); bb = pineBox(x, y, sc); draw = () => pine(x, y, sc, snowy); }
       else { const sc = v.rand(1.3, 1.75); bb = roundBox(x, y, sc); draw = () => roundTree(x, y, sc); }
       const st = { el: null, y, bb }; statics.push(st);
-      deferStatic(x, y, st, draw);
+      if (!STATIC.off) deferStatic(x, y, st, draw);
       // לציפורים (actors/bluebirds.ts) ולדוב: איפה כל עץ וקופסת הצמרת שלו
-      TREES.push({ x, y, x0: bb[0], x1: bb[0] + bb[2], top: bb[1], pine: bb[3] > 0 && bb[2] < bb[3] * .62 });
-    }
+      return { x, y, x0: bb[0], x1: bb[0] + bb[2], top: bb[1], pine: bb[3] > 0 && bb[2] < bb[3] * .62 };
+    };
+    // באתר המפורסם: עכשיו רק העצים שליד המבט הראשון; השאר ברקע (BG_JOBS), לפני החיות. TREES נבנה בסוף בסדר המקורי
+    // (הציפורים בוחרות עץ לפי המקום ברשימה)
+    const V = STATIC.off ? ctx.firstView : null, out: any[] = new Array(trees.length), later: number[] = [];
+    trees.forEach(([x, y], i) => { if (!V || (x > V[0] && x < V[2] && y > V[1] && y < V[3])) out[i] = plan(x, y); else later.push(i); });
+    if (!later.length) TREES.push(...out);
+    else { let q = 0; BG_JOBS.push(() => { for (const e = Math.min(later.length, q + 400); q < e; q++) { const i = later[q]; out[i] = plan(trees[i][0], trees[i][1]); } if (q < later.length) return false; TREES.push(...out); return true; }); }
     if (AN) ancientFloor(AN, anc, cold, lake, T);
   },
 };

@@ -9,6 +9,7 @@ export interface Bounds { x0: number; y0: number; x1: number; y1: number }
 export interface Ellipse { cx: number; cy: number; rx: number; ry: number }
 
 export const ctx = {
+  firstView: null as number[] | null,   // המבט הראשון בעולם (x0, y0, x1, y1), עם שוליים
   world: null as WorldData,
   B: null as Bounds,           // גבולות העולם
   home: null as Bounds,        // תצוגת הבית (הכפר)
@@ -67,6 +68,8 @@ export function sortStatics() {
 
 /* ───────── אזורים שבהם לא שותלים עצים (בתים, שדות, מבנים) ───────── */
 export const NO_TREE: Rect[] = [];
+/** עבודות רקע של הבנייה באתר המפורסם (משימה 30): רצות אחרי שהמפה מוצגת, בחלקים, לפני החיות; כל קריאה מחזירה true כשסיימה */
+export const BG_JOBS: (() => boolean)[] = [];
 export const block = (x0: number, y0: number, x1: number, y1: number) => { NO_TREE.push([x0, y0, x1, y1]); };
 
 /* ───────── גופי מים (לא שותלים בהם ולא מציירים עליהם דשא) ───────── */

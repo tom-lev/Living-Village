@@ -85,7 +85,11 @@ async function bakeTiles() {
   const manifest = { maxL: MAXL, pals, ...meta, regions: { RS } };
   writeFileSync(new URL('../dist/tiles/manifest.json', import.meta.url), JSON.stringify(manifest));
   // הנתונים הקטנים (הרשימה, מידות הדברים העומדים, השלטים) נכתבים לתוך הדף עצמו: בלי הורדות נוספות בתחילת הטעינה
-  const html = new URL('../dist/index.html', import.meta.url), inline = JSON.stringify({ manifest, static: { bin: st.bin, json: JSON.parse(st.json) } }).replace(/</g, '\\u003c');
+  // בתוך הדף רק הנתונים הקטנים (שלא גדלים עם העולם: הרשימה, השלטים, הצבעים); נתוני ההיגיון (מידות, מפת המעבר, היער, האובייקטים)
+  // בקובץ נפרד שמתחיל לרדת מיד עם הדף (tiles/logic.json), כדי שהדף – והתמונה המיידית – לא יגדלו עם העולם
+  const { logic, ...small } = JSON.parse(st.json);
+  writeFileSync(new URL('../dist/tiles/logic.json', import.meta.url), JSON.stringify({ bin: st.bin, logic }));
+  const html = new URL('../dist/index.html', import.meta.url), inline = JSON.stringify({ manifest, static: { json: small } }).replace(/</g, '\\u003c');
   // כל חלקי הקוד שנטענים בהתחלה (המנוע הגרפי, הצייר שברקע): מתחילים להוריד מיד, במקביל לקוד הראשי (ולא בסבבים אחד אחרי השני)
   const pre = readdirSync(new URL('../dist/assets/', import.meta.url)).filter(f => f.endsWith('.js') && !/^(index|check|samples)-/.test(f)).map(f => `<link rel="modulepreload" href="./assets/${f}">`).join('');
   writeFileSync(html, readFileSync(html, 'utf8').replace('</head>', pre + '</head>'));
