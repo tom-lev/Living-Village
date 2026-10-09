@@ -23,14 +23,21 @@ export function initWalk() {
 }
 /** כל מפת המעבר (לאפייה של סימוני הקרקע) */
 export const walkFlags = () => F;
+export const walkPriv = () => PRIV;
+/* האתר המפורסם (משימה 30): מפת המעבר הסופית מגיעה מוכנה, ומרגע שנטענה – "קפואה": סימונים נוספים (של אובייקטים
+   שנבנים עכשיו או מאוחר יותר) כבר כלולים בה, ולא משנים אותה */
+let FROZEN = false;
+export function freezeWalk(f: Uint16Array, priv: Uint16Array) { F.set(f); PRIV.set(priv); FROZEN = true; }
 const ix = (x: number) => Math.floor((x - X0) / C), iy = (y: number) => Math.floor((y - Y0) / C);
 const inside = (i: number, j: number) => i >= 0 && j >= 0 && i < W && j < H;
 
 /* ───────── סימון ───────── */
 export function markRect(x0: number, y0: number, x1: number, y1: number, flag: number) {
+  if (FROZEN) return;
   for (let j = Math.max(0, iy(y0)); j <= Math.min(H - 1, iy(y1)); j++) for (let i = Math.max(0, ix(x0)); i <= Math.min(W - 1, ix(x1)); i++) F[j * W + i] |= flag;
 }
 export function markEllipse(cx: number, cy: number, rx: number, ry: number, flag: number) {
+  if (FROZEN) return;
   for (let j = Math.max(0, iy(cy - ry)); j <= Math.min(H - 1, iy(cy + ry)); j++) for (let i = Math.max(0, ix(cx - rx)); i <= Math.min(W - 1, ix(cx + rx)); i++) {
     const x = X0 + (i + .5) * C, y = Y0 + (j + .5) * C;
     if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) F[j * W + i] |= flag;
@@ -38,6 +45,7 @@ export function markEllipse(cx: number, cy: number, rx: number, ry: number, flag
 }
 /** דרך או שביל: מותרים, חוץ מאיפה שהם עוברים מעל מים (שם רק גשר מתיר מעבר) */
 export function markPath(pts: number[][], r: number) {
+  if (FROZEN) return;
   for (let k = 0; k < pts.length - 1; k++) {
     const [ax, ay] = pts[k], [bx, by] = pts[k + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (C / 2)));
     for (let s = 0; s <= n; s++) {
@@ -51,6 +59,7 @@ export function markPath(pts: number[][], r: number) {
 }
 /** קו עבה (גדר, נהר, שביל) דרך רשימת נקודות */
 export function markLine(pts: number[][], r: number, flag: number) {
+  if (FROZEN) return;
   for (let k = 0; k < pts.length - 1; k++) {
     const [ax, ay] = pts[k], [bx, by] = pts[k + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (C / 2)));
     for (let s = 0; s <= n; s++) markEllipse(ax + (bx - ax) * s / n, ay + (by - ay) * s / n, r, r, flag);
@@ -58,6 +67,7 @@ export function markLine(pts: number[][], r: number, flag: number) {
   if (pts.length === 1) markEllipse(pts[0][0], pts[0][1], r, r, flag);
 }
 export function markPolygon(P: number[][], flag: number) {
+  if (FROZEN) return;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of P) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
   for (let j = Math.max(0, iy(y0)); j <= Math.min(H - 1, iy(y1)); j++) for (let i = Math.max(0, ix(x0)); i <= Math.min(W - 1, ix(x1)); i++) {
@@ -69,6 +79,7 @@ export function markPolygon(P: number[][], flag: number) {
 }
 /** אגם שסומן אחרי הדרכים: בתוכו הדרך או השביל לא מתירים מעבר (חוץ מגשר) */
 export function clearPathIn(cx: number, cy: number, rx: number, ry: number) {
+  if (FROZEN) return;
   for (let j = Math.max(0, iy(cy - ry)); j <= Math.min(H - 1, iy(cy + ry)); j++) for (let i = Math.max(0, ix(cx - rx)); i <= Math.min(W - 1, ix(cx + rx)); i++) {
     const x = X0 + (i + .5) * C, y = Y0 + (j + .5) * C, k = j * W + i;
     if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1 && !(F[k] & BRIDGE)) F[k] &= ~(PATH | LANE);
@@ -95,6 +106,7 @@ export function findPlace(fp: number[]): number[] | null {
 }
 /** מגרש פרטי: רק מי שגר בבית של המגרש נכנס */
 export function markPrivate(x0: number, y0: number, x1: number, y1: number, id: number) {
+  if (FROZEN) return;
   for (let j = Math.max(0, iy(y0)); j <= Math.min(H - 1, iy(y1)); j++) for (let i = Math.max(0, ix(x0)); i <= Math.min(W - 1, ix(x1)); i++) PRIV[j * W + i] = id;
 }
 export const privateAt = (x: number, y: number) => { const i = ix(x), j = iy(y); return inside(i, j) ? PRIV[j * W + i] : 0; };

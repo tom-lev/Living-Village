@@ -58,6 +58,12 @@ export interface Place {
   id: number;
 }
 export const places: Place[] = [];
-export function addPlace(p: Omit<Place, 'id'>) { const q = { ...p, id: places.length } as Place; places.push(q); return q; }
+/** האתר המפורסם (משימה 30): רשימת המקומות מגיעה מוכנה, ומי שיוצר מקום (גם אובייקט שנבנה מאוחר יותר) מקבל את המקום
+ *  ששמור לו ברשימה, לפי הסדר (i) */
+export const PLACE_REPLAY = { on: false, i: 0 };
+export function addPlace(p: Omit<Place, 'id'>) {
+  if (PLACE_REPLAY.on) return places[PLACE_REPLAY.i++];
+  const q = { ...p, id: places.length } as Place; places.push(q); return q;
+}
 /** הנקודה שאליה הולכים: הדלת או נקודת העמידה */
 export const spotOf = (p: Place) => (p.door || p.at)!;

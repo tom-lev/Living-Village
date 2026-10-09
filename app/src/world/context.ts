@@ -39,6 +39,7 @@ export const statics: { el: any; y: number; bb?: number[]; idx?: number; cid?: n
 let CID = 0;
 export const STATIC_BB: { arr: Float64Array | null } = { arr: null };
 export const cidCount = () => CID;
+export const setCid = (n: number) => { CID = n; };
 /** ציור נדחה (בנייה לפי אזורים, scene/chunks.ts): בזמן שהדבר מצויר, prop() מחזיר את הקבוצה שכבר שמורה לו ברשימה */
 let deferTarget: any = null;
 export function drawInto(g: any, f: () => void) { const k = deferTarget; deferTarget = g; try { f(); } finally { deferTarget = k; } }

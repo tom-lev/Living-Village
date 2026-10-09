@@ -2,7 +2,7 @@
 import { el, n2, circ, blob } from '../core/util';
 import { rand, pick, R, rngAt, drawOnly } from '../core/rng';
 import { STATIC } from '../core/util';
-import { bakedInts } from '../world/lbake';
+import { bakedInts, bakedF64 } from '../world/lbake';
 let forestN = 0;
 import { ctx, prop, NO_TREE, inWater, statics, bboxOf } from '../world/context';
 import { geo, edgeAt, treeOk } from '../world/geometry';
@@ -32,12 +32,22 @@ function ancientFloor(AN: any, anc: (x: number) => number, cold: (y: number) => 
   const nearLake = (x: number, y: number) => lake && y > T.beach.y - 60 && x < lake.Ex(y) + 70;
   // (בלי שכבת גוון גדולה: שקיפות על שטח גדול השאירה קווים ישרים בין האריחים. את הרצפה הכהה נותנים כתמי הטחב)
   const C = 70, byChunk = new Map<string, number[][]>();
+  // הבחירה של כל תא (מפת המעבר) כבדה וגדלה עם השטח: באתר המפורסם מגיעה מוכנה – רק התאים של הגזעים שנפלו (דברים עומדים);
+  // את הטחב, השרכים והפטריות שם לא צריך (הנוף מגיע מוכן)
+  const logs = bakedInts('ancientLogs', () => {
+  const out: number[] = [];
   for (let gy = Math.floor(B.y0 / C); gy < B.y1 / C; gy++) for (let gx = Math.floor(AN.x0 / C); gx < B.x1 / C; gx++) {
     const v = rngAt(gx, gy, 13), x = gx * C + v.r() * C, y = gy * C + v.r() * C, t = anc(x), k = v.r();
     if (k > t * (1 - cold(y)) * .7 || !free(x, y) || nearLake(x, y)) continue;
     const kind = v.r();
     if (kind < .93) { const key = Math.floor(x / CH) + ',' + Math.floor(y / CH); (byChunk.get(key) || byChunk.set(key, []).get(key)!).push([gx, gy]); }
-    else if (placeOk(x - 22, y - 6, x + 22, y + 3)) {
+    else if (placeOk(x - 22, y - 6, x + 22, y + 3)) out.push(gx, gy);
+  }
+  return Int32Array.from(out);
+  });
+  for (let q = 0; q < logs.length; q += 2) {
+    const gx = logs[q], gy = logs[q + 1], v = rngAt(gx, gy, 13), x = gx * C + v.r() * C, y = gy * C + v.r() * C; v.r(); v.r();
+    {
       // גזע שנפל, מכוסה טחב, עם טבעות בקצה (דבר עומד: מצויר בטעינה, כדי שמפת ההליכה והחיות יידעו עליו)
       const g = prop(y), L = v.rand(26, 40), a = v.rand(-.2, .2), dx = Math.cos(a) * L / 2, dy = Math.sin(a) * L / 2;
       el('path', { d: `M${n2(x - dx)},${n2(y - dy - 3)}L${n2(x + dx)},${n2(y + dy - 3)}`, stroke: '#7a4f30', 'stroke-width': 6, 'stroke-linecap': 'round' }, g);
@@ -87,6 +97,8 @@ export const GENERATORS: Record<string, (o: any) => void> = {
   streetLamps(o) {
     const { spacing = 150, offset = 31 } = o, { home } = ctx, M = 40, lamps: number[][] = [];
     LAMPS.length = 0; LAMPS_SPACING.v = spacing;
+    // הבחירה (בתים, מים, מפת המעבר) – באתר המפורסם מגיעה מוכנה
+    const flat = bakedF64('lamps', () => { const out: number[] = [];
     for (const E of geo.EDGES) {
       for (let s = 40; s < E.len - 30; s += spacing) {
         const p = edgeAt(E, s), side = (Math.round(s / spacing) % 2 ? 1 : -1), x = p.x - p.ty * offset * side, y = p.y + p.tx * offset * side;
@@ -96,9 +108,14 @@ export const GENERATORS: Record<string, (o: any) => void> = {
         lamps.push([x, y]);
         // הזרוע של הפנס פונה אל הדרך, כדי שהאור ייפול עליה (ליד דרך אופקית, שהפנס מעליה או מתחתיה: לכיוון ההמשך של הדרך)
         const flip = Math.abs(p.x - x) > 4 ? (p.x > x ? 1 : -1) : (p.tx >= 0 ? 1 : -1);
-        LAMPS.push({ x, y, flip, rx: p.x, ry: p.y });
-        PREFABS.lamp({ type: 'lamp', x, y, k: LAMP_K, flip });
+        out.push(x, y, flip, p.x, p.y);
       }
+    }
+    return Float64Array.from(out); });
+    for (let q = 0; q < flat.length; q += 5) {
+      const [x, y, flip, rx, ry] = flat.subarray(q, q + 5);
+      LAMPS.push({ x, y, flip, rx, ry });
+      PREFABS.lamp({ type: 'lamp', x, y, k: LAMP_K, flip });
     }
   },
 

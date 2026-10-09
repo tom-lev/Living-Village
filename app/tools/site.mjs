@@ -94,7 +94,7 @@ async function bakeTiles() {
   // בדיקה: האתר המפורסם (בלי ציור הנוף) בונה בדיוק את אותו היגיון כמו הבנייה המלאה – עצים, מקומות, מידות האובייקטים
   {
     const b2 = await chromium.launch(), q = await b2.newPage();
-    await q.goto(SITE); await q.waitForFunction(() => window.__trees?.length && window.__village && window.__places && window.__boot, null, { timeout: 180000 });
+    await q.goto(SITE); await q.waitForFunction(() => window.__trees?.length && window.__village && window.__places && window.__boot && window.__objsDone, null, { timeout: 180000 });
     const logicSite = await q.evaluate(LOGIC); await b2.close();
     const bad = Object.keys(logicBaked).filter(k => JSON.stringify(logicBaked[k]) !== JSON.stringify(logicSite[k]));
     if (bad.length) throw new Error(`the published site builds different world logic than the full build: ${bad.join(', ')}`);

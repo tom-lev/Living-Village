@@ -3,7 +3,7 @@ import { geo } from './world/geometry';
 import './styles.css';
 import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
-import { buildScene } from './scene/build';
+import { buildScene, deferredObjects, runDeferredObject } from './scene/build';
 import { LBAKE } from './world/lbake';
 import { updateLabels } from './world/labels';
 import { walkFlags } from './world/walk';
@@ -12,7 +12,7 @@ import { reachPack, reachLoad } from './actors/agenda';
 import { warmUp, bakeTile, tileGrid, bakeRegions, bakeStatic, manifestP, inlineStatic, initTilesFromRegions, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
 import { CULL } from './render/gpu';
 import { chunksIn, buildChunk, buildDetail, nextChunk, pendingCount, allChunks } from './scene/chunks';
-import { ctx, STATIC_BB } from './world/context';
+import { ctx, STATIC_BB, sortStatics } from './world/context';
 import { STATIC } from './core/util';
 import { RNG_REPLAY, seedNow } from './core/rng';
 import { FRAME } from './world/budget';
@@ -69,7 +69,15 @@ async function boot() {
   }
   // רשת ההליכה האפויה (משימה 30, שלב 5): מורדת במקביל לבנייה, ונטענת לפני הדמויות
   const navP: Promise<ArrayBuffer | null> = STATIC.off ? fetch('tiles/nav.bin').then(r => r.ok ? r.arrayBuffer() : null).catch(() => null) : Promise.resolve(null);
-  buildScene(world, svgS, svgD);
+  // המבט הראשון בעולם (כמו המצלמה, עם שוליים): באתר המפורסם רק האובייקטים שבו נבנים עכשיו, השאר ברקע
+  const firstView = (() => {
+    const r = document.getElementById('stage').getBoundingClientRect(), [hx0, hy0, hx1, hy1] = world.home, [bx0, by0, bx1, by1] = world.bounds, hw = hx1 - hx0, hh = hy1 - hy0;
+    const c = Math.min(r.width / hw, r.height / hh), v = Math.max(r.width / hw, r.height / hh);
+    const k = Math.max(v / c < 1.2 ? v : c, Math.max(r.width / (bx1 - bx0), r.height / (by1 - by0)));
+    const cx = (hx0 + hx1) / 2, cy = (hy0 + hy1) / 2, ex = r.width / 2 / k * 1.3, ey = r.height / 2 / k * 1.3;
+    return [cx - ex, cy - ey, cx + ex, cy + ey];
+  })();
+  buildScene(world, svgS, svgD, firstView);
   // בדיקה: המחולל הכללי בסוף הבנייה – באתר המפורסם (בלי ציור) חייב להיות זהה למה שנאפה (אחרת ההיגיון לא תואם לנוף)
   (globalThis as any).__seedEnd = seedNow();
   if (STATIC.off && staticJson?.seedEnd !== undefined && staticJson.seedEnd !== seedNow()) { console.warn('the world logic differs from the baked scenery'); (window as any).__rngMismatch = true; }
@@ -108,7 +116,15 @@ async function boot() {
   (window as any).__walkSig = () => { const u = new Uint8Array(walkFlags().buffer); let h = 2166136261; for (let i = 0; i < u.length; i++) h = Math.imul(h ^ u[i], 16777619); return h >>> 0; };   // וגם של מפת המעבר
   (window as any).__navSig = () => { const u = new Uint8Array(navPack()); let h = 2166136261; for (let i = 0; i < u.length; i++) h = Math.imul(h ^ u[i], 16777619); return h >>> 0; };
   // בנייה ברקע של שאר מה שזז, בחלקים של עד כ-8 אלפיות שנייה בין הפריימים (גם כשהעולם מושהה); בסוף – מתי (__boot.allActors)
-  const bgActors = () => { if (actors.build(8)) { tm.allActors = performance.now(); (window as any).__actorTimes = actors.times; } else setTimeout(bgActors, 0); };
+  // קודם האובייקטים שנדחו (באתר המפורסם: כל מה שלא ליד המבט הראשון, הקרובים קודם), ואז שאר מה שזז
+  let di = 0;
+  const bgActors = () => {
+    const s0 = performance.now();
+    while (di < deferredObjects.length && performance.now() - s0 < 8) runDeferredObject(deferredObjects[di++]);
+    if (di < deferredObjects.length) { setTimeout(bgActors, 0); return; }
+    if (!(window as any).__objsDone) { if (deferredObjects.length) sortStatics(); (window as any).__objsDone = true; tm.objsDone = performance.now(); setTimeout(bgActors, 0); return; }
+    if (actors.build(8)) { tm.allActors = performance.now(); (window as any).__actorTimes = actors.times; } else setTimeout(bgActors, 0);
+  };
   setTimeout(bgActors, 0);
 
   let instantEl: HTMLElement | null = document.getElementById('instant'), textAt = 0;
@@ -228,7 +244,7 @@ async function boot() {
   };
   setTimeout(chunkStep, 200);
   /** לבדיקות: כל העולם, כולל כל הפרטים */
-  const buildEverything = async () => { await built; for (const c of allChunks()) { const out = buildDetail(c); if (out) addChunkItems(out.layers, out.rect); } flushCoarseTiles(); };
+  const buildEverything = async () => { await built; while (!(window as any).__objsDone) await new Promise(r => setTimeout(r, 50)); for (const c of allChunks()) { const out = buildDetail(c); if (out) addChunkItems(out.layers, out.rect); } flushCoarseTiles(); };
   // שרת הבנייה (tools/site.mjs, ?bake=tiles): העולם כולו, ואז ציור של כל אריח מוכן מראש
   // (העולם עוצר בזמן האפייה: רק ציור האריחים רץ, בלי דמויות ואנימציה שמתחרות עליו)
   if (location.search.includes('bake=tiles')) (window as any).__tileBake = { ready: buildEverything().then(() => setRunning(false)), bakeTile, tileGrid, bakeRegions, bakeStatic, bakeNav: () => { const u8 = new Uint8Array(navPack()); let s = ''; for (let q = 0; q < u8.length; q += 0x8000) s += String.fromCharCode(...u8.subarray(q, q + 0x8000)); return btoa(s); }, bakeReach: reachPack, pals: world.palettes.map((p: any) => p.name), meta: { B: world.bounds, home: world.home, def: world.palette } };

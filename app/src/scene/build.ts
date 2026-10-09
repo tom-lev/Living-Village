@@ -4,9 +4,9 @@ import { n2, drawCost } from '../core/util';
 import { STATIC_COST } from '../world/budget';
 import { REAL_H, MAP_MIN, HOUSE_H, fitScale } from '../world/scale';
 import { finish, need, note, resetStages } from '../world/issues';
-import { setSeed } from '../core/rng';
+import { setSeed, seedNow, withSeed } from '../core/rng';
 import { setPalette } from '../core/palette';
-import { ctx, initLayers, sortStatics, NO_TREE, statics, bboxOf } from '../world/context';
+import { ctx, initLayers, sortStatics, NO_TREE, statics, bboxOf, cidCount, setCid } from '../world/context';
 import { buildGeometry } from '../world/geometry';
 import type { WorldData } from '../world/types';
 import { PREFABS } from '../prefabs/registry';
@@ -21,9 +21,10 @@ import '../prefabs/tallgrass';
 import { buildTerrain, lakeShore } from './terrain';
 import { GENERATORS } from './generators';
 import { addLabel } from '../world/labels';
-import { places, autoPlace } from '../world/places';
-import { bakedInts, rle16, unrle16 } from '../world/lbake';
-import { walkFlags, initWalk, markRect, markEllipse, markLine, markPolygon, markPath, clearPathIn, placeOk, findPlace, flagsAt, WATER, SWIM, SOFT, SOLID, PATH, BRIDGE, LANE, PLAZA } from '../world/walk';
+import { places, autoPlace, PLACE_REPLAY } from '../world/places';
+import { plotDoors } from '../prefabs/village';
+import { bakedInts, rle16, unrle16, LBAKE } from '../world/lbake';
+import { walkFlags, walkPriv, freezeWalk, initWalk, markRect, markEllipse, markLine, markPolygon, markPath, clearPathIn, placeOk, findPlace, flagsAt, WATER, SWIM, SOFT, SOLID, PATH, BRIDGE, LANE, PLAZA } from '../world/walk';
 import { geo, ROAD_W } from '../world/geometry';
 import { catmull } from '../world/nav';
 import { autoBridges } from './mountains';
@@ -33,11 +34,25 @@ import { worldKey } from '../world/bake';
 
 const rect = ([x0, y0, x1, y1]: number[]) => ({ x0, y0, x1, y1 });
 
-export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElement) {
+/* ───── היגיון האובייקטים אפוי (משימה 30): בעולם גדול, הרצת הקוד של כל האובייקטים בטעינה גדלה עם העולם ─────
+   בבנייה המלאה נרשם לכל אובייקט: מצב המחולל האקראי, מספר היצירה (cid) ומספר המקום הראשון שלו כשהוא מתחיל,
+   ומה השתנה בנתונים שלו (לפני הציור – מיקום אחרי כלל המיקום, כיוון ספסל, גשר מיושר – ואחריו), ובסוף: רשימת המקומות,
+   מפת המעבר הסופית ועוד. באתר המפורסם בטעינה רצים רק האובייקטים שליד המבט הראשון, כל אחד עם המצב שלו בדיוק,
+   והשאר רצים ברקע אחרי שהמפה מוצגת (deferredObjects). כל השאר מגיע מוכן */
+interface ObjRec { seed: number[]; cid: number[]; p0: number[]; d1: any[]; d2: any[]; bb: (number[] | null)[]; k: (number[] | null)[]; plot: (number | null)[]; seedAfter: number; cidAfter: number; places: any[]; relocated: any[]; plotDoors: any[] }
+let REC: ObjRec | null = null;
+/** אובייקטים שעוד לא רצו באתר המפורסם (נבנים ברקע) */
+export const deferredObjects: number[] = [];
+const diff = (a: any, b: any) => { const out: any = {}; for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) out[k] = b[k] === undefined ? null : b[k]; return out; };
+const applyDiff = (o: any, d: any) => { for (const [k, v] of Object.entries(d)) if (v === null) delete o[k]; else o[k] = JSON.parse(JSON.stringify(v)); };
+
+export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElement, firstView?: number[]) {
   const worldText = worldKey(w);   // לפני כל שינוי בנתונים: טביעת האצבע לחישוב שנאפה מראש (world/bake.ts)
   resetStages();   // הסדר הקבוע של שלבי הבנייה: world/issues.ts (כלל תשתית 3)
   ctx.world = w; ctx.B = rect(w.bounds); ctx.home = rect(w.home);
   setSeed(w.seed);
+  REC = LBAKE.in?.objs ? JSON.parse(LBAKE.in.objs) : null;
+  if (REC) { places.push(...REC.places); PLACE_REPLAY.on = true; PLACE_REPLAY.i = 0; relocated.push(...REC.relocated); plotDoors.push(...REC.plotDoors); }
   setPalette(w.palettes?.find(p => p.name === w.palette), w.palettes);
   initLayers(svgS, svgD);
   finish('setup');
@@ -45,24 +60,77 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
   finish('geometry');
   initWalk();   // מפת מעבר: מסמנים תוך כדי בנייה מה מותר לדרוך עליו
   buildTerrain(w);
-  // סימוני המים והדרכים: באתר המפורסם מגיעים מוכנים (world/lbake.ts)
-  { const F = walkFlags(); unrle16(bakedInts('walkTerrain', () => { markTerrain(w); return rle16(F); }), F); }
+  // מפת המעבר: באתר המפורסם הסופית מגיעה מוכנה (וקפואה); בבנייה המלאה מסמנים לאורך הבנייה
+  if (REC) { const F = walkFlags(), P = walkPriv(), f = new Uint16Array(F.length), q = new Uint16Array(P.length); unrle16(bakedInts('walkFinal', () => new Int32Array()), f); unrle16(bakedInts('walkPriv', () => new Int32Array()), q); freezeWalk(f, q); }
+  else markTerrain(w);
   finish('terrain');
   // אגמים ובריכות מסומנים כמים כבר עכשיו, לפני שחפצים קטנים מחפשים מקום (אחרת ספסל יכול "לזוז" לתוך אגם)
-  for (const o of w.objects) { const e = declOf(o.type).water?.(o); if (e) markEllipse(e[0], e[1], e[2], e[3], WATER); }
+  if (!REC) for (const o of w.objects) { const e = declOf(o.type).water?.(o); if (e) markEllipse(e[0], e[1], e[2], e[3], WATER); }
   finish('water');
-  alignBridges(w);   // גשר מהנתונים: בדיוק איפה שהדרך או השביל חוצים את המים, בכיוון שלהם
+  if (!REC) alignBridges(w);   // גשר מהנתונים: בדיוק איפה שהדרך או השביל חוצים את המים, בכיוון שלהם
   finish('bridges');
-  for (const o of w.objects) {
-    const f = PREFABS[o.type];
-    if (!f) { note('undeclared', `No prefab named "${o.type}"`, o.x ?? o.x0 ?? o.cx ?? 0, o.y ?? o.y0 ?? o.cy ?? 0); continue; }
-    if (o.removed) { drawAway(o, f); continue; }   // אובייקט שהוסר: לא מצויר, אבל צורך את אותם מספרים אקראיים (היער לא זז)
-    if (o.id) ctx.named[o.id] = o;
-    placeSmall(o);                             // כלל המיקום: חפץ לא עומד על שביל, על מים או על שפת רחבה
-    const n0 = NO_TREE.length, s0 = statics.length, p0 = places.length, c0 = { ...drawCost };
-    f(o);
-    Object.defineProperty(o, '_cost', { value: [drawCost.els - c0.els, Math.round(drawCost.pts - c0.pts)], enumerable: false });   // תקציב ביצועים
-    if (places.length === p0) autoPlace(o);   // כל אובייקט (גם עתידי) הוא יעד, אלא אם הוא נוף בלבד
+  for (const o of w.objects) if (o.id) ctx.named[o.id] = o;
+  if (REC) {
+    // האתר המפורסם: רק מה שליד המבט הראשון עכשיו; השאר ברקע (runDeferredObject)
+    const V = firstView;
+    w.objects.forEach((o, i) => {
+      if (o.removed || !PREFABS[o.type]) return;
+      const b = REC!.bb[i], x = o.x ?? o.x0 ?? o.cx ?? 0, y = o.y ?? o.y0 ?? o.cy ?? 0;
+      const near = !V || (b ? b[0] < V[2] && b[2] > V[0] && b[1] < V[3] && b[3] > V[1] : x > V[0] && x < V[2] && y > V[1] && y < V[3]);
+      if (near) replayObject(i); else deferredObjects.push(i);
+    });
+    // ברקע: הקרובים למבט קודם
+    if (V) { const cx = (V[0] + V[2]) / 2, cy = (V[1] + V[3]) / 2, d = (i: number) => { const o: any = w.objects[i]; return Math.hypot((o.x ?? o.x0 ?? o.cx ?? 0) - cx, (o.y ?? o.y0 ?? o.cy ?? 0) - cy); }; deferredObjects.sort((a, b) => d(a) - d(b)); }
+    setSeed(REC.seedAfter); setCid(REC.cidAfter); PLACE_REPLAY.on = false;
+  } else {
+    const rec: ObjRec = { seed: [], cid: [], p0: [], d1: [], d2: [], bb: [], k: [], plot: [], seedAfter: 0, cidAfter: 0, places: [], relocated: [], plotDoors: [] };
+    w.objects.forEach((o, i) => {
+      const before = JSON.parse(JSON.stringify(o));
+      rec.seed[i] = seedNow(); rec.cid[i] = cidCount(); rec.p0[i] = places.length;
+      runObject(o, i, () => { rec.d1[i] = diff(before, o); });
+      rec.d2[i] = diff(before, o);
+      rec.bb[i] = o._bb ?? null; rec.k[i] = o._k ?? null; rec.plot[i] = o._plotId ?? null;
+    });
+    rec.seedAfter = seedNow(); rec.cidAfter = cidCount();
+    rec.places = places.map(p => { const { busy, ...q } = p as any; return q; });
+    rec.relocated = relocated.slice(); rec.plotDoors = plotDoors.slice();
+    LBAKE.out.objs = JSON.stringify(rec);
+  }
+  finish('objects');
+  for (const g of w.generators) {
+    const f = GENERATORS[g.type];
+    if (!f) { console.warn('אין מחולל בשם', g.type, g); continue; }
+    const s0 = statics.length;
+    f(g);
+    for (const st of statics.slice(s0)) bboxOf(st);   // נמדד מיד (העצים כבר יודעים את המידה שלהם בלי מדידה)
+  }
+  finish('generators');
+  sortStatics();
+  // מכשולים קטנים: כל דבר שעומד על הקרקע (עצים, ספסלים, פנסים, חביות) חוסם רק את הבסיס שלו (גזע, רגליים), לא את הצמרת
+  if (!REC) for (const st of statics) { const bb = bboxOf(st); if (bb[2] > 0) markEllipse(bb[0] + bb[2] / 2, st.y - 2, Math.min(bb[2] / 2, 4.5), 3, SOFT); }
+  if (!REC) for (const W of WATERS) markEllipse(W.cx, W.cy, W.rx, W.ry, WATER);   // אגמים
+  // גשרים אוטומטיים מעל הנהר, איפה שדרך או שביל חוצים אותו ואין שם גשר מהנתונים
+  autoBridges(geo.RIVER_SAMPLES, w.trails.map(t => catmull(t)), 34, w.objects.filter(o => o.type === 'stoneBridge' || o.type === 'footbridge').map(o => [o.x, o.y]));
+  if (!REC) for (const W of WATERS) clearPathIn(W.cx, W.cy, W.rx, W.ry);   // אגם: הדרך או השביל לא חוצים אותו (חוץ מגשר)
+  // מפת המעבר הסופית: נאפית לאתר המפורסם (שם היא נטענת בתחילת הבנייה)
+  if (!REC) { bakedInts('walkFinal', () => rle16(walkFlags())); bakedInts('walkPriv', () => rle16(walkPriv())); }
+  finish('obstacles');
+  STATIC_COST.els = drawCost.els; STATIC_COST.pts = Math.round(drawCost.pts);   // תקציב ביצועים: כל הציור הנייח
+  finish('ready');
+}
+
+/** הבנייה של אובייקט אחד: כלל המיקום, הציור (והיגיון: מקומות, סימונים, אפקטים), המידות, הפרופורציות והתווית.
+ *  afterPlace: נקרא אחרי כלל המיקום ולפני הציור (לרישום בבנייה המלאה) */
+function runObject(o: any, i: number, afterPlace?: () => void) {
+  const f = PREFABS[o.type];
+  if (!f) { note('undeclared', `No prefab named "${o.type}"`, o.x ?? o.x0 ?? o.cx ?? 0, o.y ?? o.y0 ?? o.cy ?? 0); return; }
+  if (o.removed) { drawAway(o, f); return; }   // אובייקט שהוסר: לא מצויר, אבל צורך את אותם מספרים אקראיים (היער לא זז)
+  if (!REC) placeSmall(o);                     // כלל המיקום: חפץ לא עומד על שביל, על מים או על שפת רחבה (באתר: המיקום הסופי כבר בנתונים)
+  afterPlace?.();
+  const n0 = NO_TREE.length, s0 = statics.length, c0 = { ...drawCost }, pi = REC ? PLACE_REPLAY.i : places.length;
+  f(o);
+  Object.defineProperty(o, '_cost', { value: [drawCost.els - c0.els, Math.round(drawCost.pts - c0.pts)], enumerable: false });   // תקציב ביצועים
+  if ((REC ? PLACE_REPLAY.i : places.length) === pi) autoPlace(o);   // כל אובייקט (גם עתידי) הוא יעד, אלא אם הוא נוף בלבד
     // לבדיקת הפרופורציות: המלבן שהאובייקט צייר (איחוד כל מה שנוסף לסצנה בציור שלו)
     // (כל דבר עומד נמדד עכשיו, כשהציור עוד קטן, ונשמר: מדידה אחרי שכל היער צויר מכריחה חישוב פריסה של כל העולם)
     // (st.bb0: המידה כפי שנמדדה, לפני התאמת הגודל – זו שנאפית לאתר המפורסם, כדי שגם שם ההתאמה תחושב בדיוק אותו דבר)
@@ -94,26 +162,21 @@ export function buildScene(w: WorldData, svgS: SVGSVGElement, svgD: SVGSVGElemen
       if (top === undefined && NO_TREE.length > n0) top = Math.min(...NO_TREE.slice(n0).map(r => r[1])) + 8;
     }
     if (o.name && !declOf(o.type).noLabel) addLabel(o, top);   // לחנות ולתחנה כבר יש שלט עם השם (noLabel בהצהרה)
-  }
-  finish('objects');
-  for (const g of w.generators) {
-    const f = GENERATORS[g.type];
-    if (!f) { console.warn('אין מחולל בשם', g.type, g); continue; }
-    const s0 = statics.length;
-    f(g);
-    for (const st of statics.slice(s0)) bboxOf(st);   // נמדד מיד (העצים כבר יודעים את המידה שלהם בלי מדידה)
-  }
-  finish('generators');
-  sortStatics();
-  // מכשולים קטנים: כל דבר שעומד על הקרקע (עצים, ספסלים, פנסים, חביות) חוסם רק את הבסיס שלו (גזע, רגליים), לא את הצמרת
-  for (const st of statics) { const bb = bboxOf(st); if (bb[2] > 0) markEllipse(bb[0] + bb[2] / 2, st.y - 2, Math.min(bb[2] / 2, 4.5), 3, SOFT); }
-  for (const W of WATERS) markEllipse(W.cx, W.cy, W.rx, W.ry, WATER);   // אגמים
-  // גשרים אוטומטיים מעל הנהר, איפה שדרך או שביל חוצים אותו ואין שם גשר מהנתונים
-  autoBridges(geo.RIVER_SAMPLES, w.trails.map(t => catmull(t)), 34, w.objects.filter(o => o.type === 'stoneBridge' || o.type === 'footbridge').map(o => [o.x, o.y]));
-  for (const W of WATERS) clearPathIn(W.cx, W.cy, W.rx, W.ry);   // אגם: הדרך או השביל לא חוצים אותו (חוץ מגשר)
-  finish('obstacles');
-  STATIC_COST.els = drawCost.els; STATIC_COST.pts = Math.round(drawCost.pts);   // תקציב ביצועים: כל הציור הנייח
-  finish('ready');
+}
+
+/** האתר המפורסם: מריץ אובייקט בדיוק כמו בבנייה המלאה – עם מצב המחולל, מספר היצירה והמקום שלו – ומחזיר את המצבים הכלליים */
+function replayObject(i: number) {
+  const R = REC!, o: any = ctx.world.objects[i], pl = { ...PLACE_REPLAY };
+  applyDiff(o, R.d1[i]);
+  if (R.plot[i] !== null) Object.defineProperty(o, '_plotId', { value: R.plot[i], enumerable: false, writable: true });
+  setCid(R.cid[i]); PLACE_REPLAY.on = true; PLACE_REPLAY.i = R.p0[i];
+  withSeed(R.seed[i], () => runObject(o, i));
+  applyDiff(o, R.d2[i]);
+  Object.assign(PLACE_REPLAY, pl);
+}
+/** אובייקט שנדחה (ברקע, אחרי שהמפה מוצגת) */
+export function runDeferredObject(i: number) {
+  const cid = cidCount(); replayObject(i); setCid(cid);
 }
 
 /* כלל המיקום של חפצים קטנים: כל השטח המצויר של החפץ, כולל הגובה שלו (גוף הכוורת, משענת הספסל),

@@ -55,9 +55,10 @@ function plot(o: any) {
   block(x0, y0, x1, y1 + 30);
   // מפת מעבר: פנים המגרש פרטי (רק לדיירים), והגדר סביבו חסומה חוץ מהשער מול השביל
   // בלי גדר (בקשת הבעלים): המגרש פרטי לדיירים בלבד, אבל אין קירות בלתי נראים סביבו
-  const id = plotDoors.length + 1;
+  // המספר של המגרש נשמר על האובייקט (באתר המפורסם הרשימה מגיעה מוכנה, וגם מגרש שנבנה מאוחר יותר מקבל את המספר שלו)
+  const id = o._plotId ?? plotDoors.length + 1;
   markPrivate(x0, y0, x1, y1, id);
-  if (door) plotDoors.push({ x: door[0], y: door[1], id });
+  if (o._plotId === undefined) { Object.defineProperty(o, '_plotId', { value: id, enumerable: false, writable: true }); if (door) plotDoors.push({ x: door[0], y: door[1], id }); }
 }
 
 /** הדרך או השביל הקרובים שחוצים את הקו האנכי x, מ-y0 בכיוון dir (1 למטה, -1 למעלה), עד max יחידות.
