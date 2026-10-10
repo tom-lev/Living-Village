@@ -18,12 +18,14 @@ const pow2 = (v: number) => Math.min(16, Math.max(.25, 2 ** Math.ceil(Math.log2(
 // הגודל על המסך מחושב במדויק (גם לפני הציור הראשון, כשהמיקום השמור עוד לא עודכן – אחרת כל השלטים נצבעו פעמיים)
 const TM = new Matrix(), textNeed = (n: VNode, dpr: number) => pow2(Math.abs(n.c.getGlobalTransform(TM, false).a) * dpr);
 /** נקרא כשהמצלמה עומדת: טקסט נראה שהרזולוציה שלו רחוקה מהדרוש (פי 2) – נצבע מחדש */
-export function refreshTextResolution(dpr: number) {
-  let changed = 0;
+// (max: כמה טקסטים לכל היותר בקריאה אחת – אחרי זום כל טקסט נצבע מחדש, וכולם יחד עצרו פריים בטלפון; TEXT_MORE: נשארו עוד)
+export const TEXT_MORE = { v: false };
+export function refreshTextResolution(dpr: number, max = Infinity) {
+  let changed = 0; TEXT_MORE.v = false;
   for (const n of texts) {
     if (!n.c.visible || !n.c.parent) continue;
     const want = textNeed(n, dpr);
-    if (want !== n.textRes) { n.textRes = want; dirty.add(n); changed++; }
+    if (want !== n.textRes) { if (changed >= max) { TEXT_MORE.v = true; break; } n.textRes = want; dirty.add(n); changed++; }
   }
   return changed;
 }

@@ -11,6 +11,8 @@ export const CULL: { layers: Container[] } = { layers: [] };
 export interface GpuTiles {
   add(key: string, l: number, x: number, y: number, size: number, bmp: ImageBitmap): void;
   remove(key: string): void;
+  /** יש אריחים שמחכים להעלאה */
+  pending(): boolean;
   clear(): void;
   compose(l: number, r: { ix0: number; ix1: number; iy0: number; iy1: number }, cam: { k: number; x: number; y: number }): void;
   resize(w: number, h: number, res: number): void;
@@ -18,7 +20,7 @@ export interface GpuTiles {
   overlay(c: Container): void;   // הדמויות והאפקטים, מעל האריחים ובאותה מצלמה
 }
 
-interface Entry { s: Sprite; l: number }
+interface Entry { s: Sprite; l: number; i: number; j: number; up: boolean }
 
 export async function createGpuTiles(canvas: HTMLCanvasElement, w: number, h: number, res: number, bg: string, LMAX: number): Promise<GpuTiles> {
   const app = new Application();
@@ -45,7 +47,23 @@ export async function createGpuTiles(canvas: HTMLCanvasElement, w: number, h: nu
   const entries = new Map<string, Entry>();
   let shown = new Set<Entry>(), lastL = -1, lastRange = '', dirty = true;
   const upload = (tex: Texture) => { try { (app.renderer as any).texture?.initSource?.(tex.source); } catch { /* יעלה בציור הראשון */ } };
-  const get = (l: number, i: number, j: number) => entries.get(l + '/' + i + '/' + j);
+  // רק אריח שכבר הועלה לכרטיס מוצג; עד אז רואים במקומו את מה שהיה (אריח גס יותר או ארבעה חדים)
+  const get = (l: number, i: number, j: number) => { const e = entries.get(l + '/' + i + '/' + j); return e && e.up ? e : undefined; };
+  /* תקציב העלאה (זום מהיר בטלפון): אריחים מגיעים בצרורות, והעלאה של כולם באותו פריים עצרה את התמונה.
+     אריח שהגיע מחכה בתור, ובכל פריים מעלים עד UPLOAD_MS אלפיות שנייה (לפחות אחד) – קודם הרמה הנוכחית ומרכז המסך */
+  const UPLOAD_MS = 4, queue: Entry[] = [];
+  function uploadSome(l: number, r: { ix0: number; ix1: number; iy0: number; iy1: number }) {
+    if (!queue.length) return;
+    const ci = (r.ix0 + r.ix1) / 2, cj = (r.iy0 + r.iy1) / 2;
+    const pri = (e: Entry) => { const f = 2 ** (e.l - l); return Math.abs(e.l - l) * 1e6 + Math.hypot(e.i / f - ci, e.j / f - cj); };
+    queue.sort((a, b) => pri(a) - pri(b));
+    const t0 = performance.now(); let n = 0;
+    while (queue.length && (n === 0 || performance.now() - t0 < UPLOAD_MS)) {
+      const e = queue.shift()!;
+      if (entries.get(e.l + '/' + e.i + '/' + e.j) !== e) continue;   // נזרק בינתיים
+      upload(e.s.texture); e.up = true; n++; dirty = true;
+    }
+  }
 
   /* לכל משבצת במסך מציגים אריח אחד בלבד: החד אם מוכן, אחרת ארבעה חדים יותר או אריח גס אחד.
      כך כל פיקסל נצבע פעם אחת (קודם כל הרמות הגסות צוירו זו מעל זו על כל המסך,
@@ -72,15 +90,18 @@ export async function createGpuTiles(canvas: HTMLCanvasElement, w: number, h: nu
 
   return {
     add(key, l, x, y, size, bmp) {
-      const old = entries.get(key); if (old) this.remove(key);
+      const old = entries.get(key), keepUp = !!old?.up;
+      if (old) this.remove(key);
       const tex = Texture.from(bmp);
-      upload(tex);                                     // העלאה לכרטיס עכשיו, לא באמצע פריים של גרירה
       const s = new Sprite(tex);
       s.x = x; s.y = y; s.width = size; s.height = size; s.visible = false;
       levels[l].addChild(s);
-      entries.set(key, { s, l });
-      dirty = true;
+      const [, i, j] = key.split('/').map(Number), e: Entry = { s, l, i, j, up: false };
+      entries.set(key, e);
+      // אריח שמחליף אריח שכבר הוצג (צביעה מחדש): מיד, כדי שלא ייווצר חור; חדש – לתור
+      if (keepUp) { upload(tex); e.up = true; dirty = true; } else queue.push(e);
     },
+    pending: () => queue.length > 0,
     remove(key) {
       const e = entries.get(key); if (!e) return;
       entries.delete(key); shown.delete(e); dirty = true;
@@ -91,6 +112,7 @@ export async function createGpuTiles(canvas: HTMLCanvasElement, w: number, h: nu
     compose(l, r, cam) {
       // בוחרים מחדש רק כשמשבצות נכנסות או יוצאות מהמסך, או כשאריח הגיע או נזרק
       const rk = `${l}|${r.ix0}|${r.ix1}|${r.iy0}|${r.iy1}`;
+      uploadSome(l, r);
       if (dirty || rk !== lastRange) { dirty = false; lastRange = rk; pick(l, r); }
       if (l !== lastL) { lastL = l; levels.forEach((c, i) => { c.zIndex = i === l ? LMAX + 2 : i === l + 1 ? LMAX + 1 : i; }); tilesC.sortChildren(); }
       world.scale.set(cam.k); world.position.set(cam.x, cam.y);

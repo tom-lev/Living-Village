@@ -16,7 +16,7 @@ import { ctx, STATIC_BB, sortStatics, BG_JOBS } from './world/context';
 import { STATIC } from './core/util';
 import { RNG_REPLAY, seedNow } from './core/rng';
 import { FRAME } from './world/budget';
-import { vstats, refreshTextResolution, TEXT_DPR } from './render/vnode';
+import { vstats, refreshTextResolution, TEXT_DPR, TEXT_MORE } from './render/vnode';
 import { setPalette, regrade, grade, currentPalette } from './core/palette';
 import { buildActors, followables } from './actors';
 import { initCamera, cameraTick, loopState, zoomAt, animateTo, camMoved } from './camera/camera';
@@ -139,8 +139,8 @@ async function boot() {
   // טקסטים ברזולוציה של הזום הנוכחי: מתעדכנים רק כשהמצלמה עומדת (לא באמצע זום), לכל היותר 3 פעמים בשנייה; גם בהשהיה
   const textRefresh = () => {
     const now = performance.now();
-    if (!view.gpu || now - textAt < 330 || now - camMoved.at < 250) { if (view.gpu && !loopState.running && now - camMoved.at < 600) setTimeout(requestStatic, 300); return 0; }
-    textAt = now; TEXT_DPR.v = Math.min(view.dpr, 3); return refreshTextResolution(TEXT_DPR.v);
+    if (!view.gpu || (now - textAt < 330 && !TEXT_MORE.v) || now - camMoved.at < 250) { if (view.gpu && !loopState.running && now - camMoved.at < 600) setTimeout(requestStatic, 300); return 0; }
+    textAt = now; TEXT_DPR.v = Math.min(view.dpr, 3); return refreshTextResolution(TEXT_DPR.v, 3);   // עד 3 טקסטים בפריים (השאר בפריימים הבאים)
   };
   /* ───────── לולאת האנימציה ───────── */
   let last = 0, T = 0;

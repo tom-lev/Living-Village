@@ -140,11 +140,20 @@ function fetchTile(l: number, i: number, j: number) {
   if (inflight.has(k)) return; inflight.add(k);
   // אם התמונה המיידית כבר הציגה את האריח הזה – לוקחים אותו ממנה (כבר הורד ופוענח), בלי הורדה נוספת
   const path = `tiles/p${pi}/${l}/${i}_${j}.webp`, im = document.querySelector<HTMLImageElement>(`#instant img[src="${path}"]`);
+  // אחרת – הצייר שברקע מוריד ומפענח (התשובה מגיעה כמו אריח מצויר; ראו doneFetch)
+  if (!(im?.complete && im.naturalWidth) && painters.length) { painters[(i * 7 + j * 13 + l) % painters.length].postMessage({ type: 'fetch', list: [[l, i, j, new URL(path, location.href).href, gen]] }); return; }
   (im?.complete && im.naturalWidth ? createImageBitmap(im) : fetch(path).then(r => { if (!r.ok) throw 0; return r.blob(); }).then(b => createImageBitmap(b))).then(bmp => {
     inflight.delete(k);
     if (g0 !== gen) { bmp.close(); return; }   // הפלטה התחלפה בינתיים
     tileStats.painted++; putTile(l, i, j, bmp); requestStatic();
   }).catch(() => { inflight.delete(k); failed.add(k); lastNeed = ''; requestStatic(); });
+}
+
+/** תשובה מהצייר על אריח מוכן שהוריד (או שההורדה נכשלה: אז מציירים אותו) */
+function doneFetch(m: any) {
+  if (m.type !== 'tile' && m.type !== 'tilefail') return;
+  inflight.delete(tkey(m.l, m.i, m.j));
+  if (m.type === 'tilefail') { failed.add(tkey(m.l, m.i, m.j)); lastNeed = ''; requestStatic(); }
 }
 
 /** לשרת הבנייה: מצייר אריח אחד בפלטה נתונה ומחזיר אותו כתמונת webp (base64) */
@@ -195,7 +204,7 @@ export function initTilesFromRegions(canvas: HTMLCanvasElement, st: { texts: any
   if (mode === '2d') cs = canvas.getContext('2d');
   gpu?.setBackground(grade('#9cd162'));
   startPainters();
-  onTileFn = (m: any) => { if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
+  onTileFn = (m: any) => { doneFetch(m); if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
   if (!painters.length) { const handle = createPainter(m => setTimeout(() => onTileFn(m), 0)); painters = [{ postMessage: m => handle(m) }]; }
   colors = st.colors.slice(); colorSet = new Set(colors);
   const base = new URL('regions/', location.href).href;
@@ -291,7 +300,7 @@ export function initTiles(canvas: HTMLCanvasElement) {
   const DL = extractDisplayList();
   if (BAKE) allDL.push(...DL);
   startPainters();
-  const onTile = (m: any) => { if (m.type === 'ready') { tileStats.log.push([performance.now(), -1, m.ms, m.n, { lag: performance.now() - m.sent, sentAbs: performance.timeOrigin + m.sent, wBoot: m.wBoot, wStart: m.wStart, wEnd: m.wEnd, recvAbs: performance.timeOrigin + performance.now(), origin: performance.timeOrigin }]); return; } if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; if (tileStats.log.length < 400) tileStats.log.push([performance.now(), m.l, m.ms, m.n, m.dbg]); putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
+  const onTile = (m: any) => { doneFetch(m); if (m.type === 'ready') { tileStats.log.push([performance.now(), -1, m.ms, m.n, { lag: performance.now() - m.sent, sentAbs: performance.timeOrigin + m.sent, wBoot: m.wBoot, wStart: m.wStart, wEnd: m.wEnd, recvAbs: performance.timeOrigin + performance.now(), origin: performance.timeOrigin }]); return; } if (m.type === 'tile' && m.gen === gen) { tileStats.painted++; if (tileStats.log.length < 400) tileStats.log.push([performance.now(), m.l, m.ms, m.n, m.dbg]); putTile(m.l, m.i, m.j, m.bmp); requestStatic(); } };
   onTileFn = onTile;
   if (!painters.length) {
     // דפדפן ישן: אותו צייר רץ בדף עצמו (איטי יותר, אבל עובד)
@@ -347,6 +356,7 @@ function drawStatic() {
   requestTiles(l, tw, ix0, ix1, iy0, iy1, wx0, wy0, wx1, wy1, ccx, ccy);
   // בכרטיס הגרפי: רק מטריצה אחת ורשימת אריחים נראים
   if (gpu) gpu.compose(l, { ix0, ix1, iy0, iy1 }, cam);
+  if (gpu?.pending()) requestStatic();   // אריחים שמחכים להעלאה (גם כשהעולם מושהה: עוד פריים)
 }
 
 function requestTiles(l: number, tw: number, ix0: number, ix1: number, iy0: number, iy1: number, wx0: number, wy0: number, wx1: number, wy1: number, ccx: number, ccy: number) {

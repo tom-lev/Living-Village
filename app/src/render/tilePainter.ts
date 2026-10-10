@@ -166,6 +166,19 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
       });
   }
 
+  /* אריחים מוכנים מראש (תמונות): הצייר מוריד ומפענח אותם כאן, ברקע – בזום מהיר בטלפון ההורדה והפענוח בדף עצמו
+     עצרו את התמונה. עד 4 הורדות במקביל; כל בקשה נשמרת עד שהסתיימה (כמו קודם בדף) */
+  const fq: any[] = []; let active = 0;
+  function pumpF() {
+    while (active < 4 && fq.length) {
+      const [l, i, j, url, g] = fq.shift(); active++;
+      fetch(url).then(r => { if (!r.ok) throw 0; return r.blob(); }).then(b => createImageBitmap(b))
+        .then(bmp => post({ type: 'tile', l, i, j, bmp, gen: g, ms: 0, n: 0 } as any, [bmp]))
+        .catch(() => post({ type: 'tilefail', l, i, j, gen: g } as any))
+        .finally(() => { active--; pumpF(); });
+    }
+  }
+
   async function pump() {
     busy = false;
     if (!queue.length) return;
@@ -195,6 +208,8 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
     } else if (m.type === 'palette') {
       cmap = m.cmap; if (m.keep) return;   // צבע חדש (מאזור שנוסף): בלי לזרוק את התור
       gen = m.gen; queue = [];
+    } else if (m.type === 'fetch') {
+      fq.push(...m.list); pumpF();
     } else if (m.type === 'need') {
       queue = m.list;                     // התור מתחלף בכל בקשה: תמיד מה שרלוונטי עכשיו
       if (!busy) { busy = true; setTimeout(pump, 0); }
