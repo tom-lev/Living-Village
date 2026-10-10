@@ -213,6 +213,6 @@ export function runChecks(): Issue[] {
   // כל הפרה שייכת לכלל ברשימה, וכל כלל עם בדיקה – הבדיקה קיימת
   for (const it of out) if (it.rule !== 'rules' && !ruleOfCheck(it.rule)) { out.push({ rule: 'rules', msg: `Check "${it.rule}" belongs to no rule in world/rules.ts`, x: 0, y: 0 }); break; }
   for (const r of RULES) if (r.check && !IMPLEMENTED.includes(r.check)) out.push({ rule: 'rules', msg: `Rule "${r.id}" has no check "${r.check}"`, x: 0, y: 0 });
-  for (const r of RULES) if (!r.check && !r.motion && !r.built) out.push({ rule: 'rules', msg: `Rule "${r.id}" is not verified (check, motion or built)`, x: 0, y: 0 });
+  for (const r of RULES) if (!r.check && !r.motion && !r.built && !r.scale) out.push({ rule: 'rules', msg: `Rule "${r.id}" is not verified (check, motion, scale or built)`, x: 0, y: 0 });
   return out;
 }

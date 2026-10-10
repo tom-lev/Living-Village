@@ -14,11 +14,11 @@ const rules = [...src.matchAll(/^\s*\{ id: '([^']+)'.*\},?\s*$/gm)].map(m => {
 const groups = { walking: 'Walking (everyone who moves)', layout: 'Layout (how the world is built)', proportions: 'Proportions', infrastructure: 'Infrastructure' };
 let md = '# Living Village: world rules\n\n';
 md += '_Generated from `app/src/world/rules.ts` by `npm run rules`. Do not edit by hand: change the code, then regenerate._\n\n';
-md += 'Every rule says where in the code it is enforced and how it is verified: **check** = the world check (`npm run check`), **motion** = the motion check (`npm run motion`), **built** = it holds by construction.\n\n';
+md += 'Every rule says where in the code it is enforced and how it is verified: **check** = the world check (`npm run check`), **motion** = the motion check (`npm run motion`), **scale** = the scale test (`node tools/scale.mjs`: a 5× world against the real one, phone conditions, ~25 min; run after changing loading or per-frame infrastructure), **built** = it holds by construction.\n\n';
 for (const [g, title] of Object.entries(groups)) {
   md += `## ${title}\n\n| Rule | Enforced in | Verified by |\n|---|---|---|\n`;
   for (const r of rules.filter(r => r.group === g)) {
-    const v = r.check ? `check \`${r.check}\`` : r.motion ? `motion (${r.motion})` : 'built';
+    const v = r.check ? `check \`${r.check}\`` : r.motion ? `motion (${r.motion})` : r.scale ? `scale (${r.scale})` : 'built';
     md += `| **${r.id}**: ${r.title} | \`${r.where}\` | ${v} |\n`;
   }
   md += '\n';

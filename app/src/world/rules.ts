@@ -4,6 +4,7 @@
      (אחרת בדיקת העולם עצמה מדווחת "rules").
    - motion: הכלל נבדק בבדיקת התנועה (tools/motion.mjs), כי הוא על דמויות שזזות.
    - built: הכלל מתקיים מעצם הבנייה (אין מצב שבו הוא יכול להיות מופר), והקוד שאוכף אותו כתוב ב-where.
+   - scale: הכלל נבדק במבחן קנה המידה (tools/scale.mjs: עולם גדול פי 5 מול העולם האמיתי, בתנאי טלפון).
    docs/RULES.md נוצר מהקובץ הזה (npm run rules). כלל חדש נכתב כאן, לא רק בתיעוד. */
 
 export interface Rule {
@@ -16,6 +17,7 @@ export interface Rule {
   check?: string;
   motion?: string;
   built?: true;
+  scale?: string;
 }
 
 export const RULES: Rule[] = [
@@ -66,6 +68,7 @@ export const RULES: Rule[] = [
   { id: 'declared', group: 'infrastructure', title: 'Every object type declares its footprint, door, kind and label in one table', where: 'world/decl.ts DECL', check: 'undeclared' },
   { id: 'perf-budget', group: 'infrastructure', title: 'Performance budget: no single object too heavy to draw, the whole static map within its point budget (by area: the same density however big the world grows), moving things within their per-frame time and count', why: 'The site must stay smooth on a phone however much content is added', where: 'world/budget.ts BUDGET; core/util.ts drawCost; main.ts FRAME', check: 'perf' },
   { id: 'boot-time', group: 'infrastructure', title: 'Loading time does not grow with the world: only the areas of the first view are drawn while loading (the rest in the background, nearest first; fine details only when zoomed in), and the page work before the map shows stays within a fixed budget', why: "Owner's request 2026-10-09: the world will grow a lot", where: 'scene/chunks.ts, main.ts (boot chunks, chunkStep), world/budget.ts bootMs, bootChunks', check: 'boot' },
+  { id: 'scale-load', group: 'infrastructure', title: 'A world 5 times larger loads and runs like the real one: the page work before the map shows, the bytes downloaded until the first view is ready and the per-frame work of everything that moves stay within ×1.3, ×1.3 and ×1.5 of the real world. Only the areas near the first view are loaded and built at boot; everything else (logic by area, the walk network, far objects, trees and animals) comes in the background', why: "Owner's request 2026-10-10: prepare for a huge world", where: 'world/lregions.ts, scene/build.ts (deferred objects), scene/generators.ts (forest by area), main.ts (loadRest, bgActors), camera/view.ts farDt; LIMITS in tools/scale.mjs', scale: 'work, kb, frameMs' },
   { id: 'baked-fresh', group: 'infrastructure', title: 'Results that depend only on the world data and the code (the trail rules) are computed in advance at upload time, and the build fails if they are stale', where: 'world/bake.ts, tools/bake.mjs (npm run bake; --check in npm run build)', check: 'baked' },
   { id: 'overlap', group: 'infrastructure', title: 'Plots and buildings do not overlap each other', where: 'tools/history/spread_plots.py', check: 'overlap' },
 ];

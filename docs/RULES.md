@@ -2,7 +2,7 @@
 
 _Generated from `app/src/world/rules.ts` by `npm run rules`. Do not edit by hand: change the code, then regenerate._
 
-Every rule says where in the code it is enforced and how it is verified: **check** = the world check (`npm run check`), **motion** = the motion check (`npm run motion`), **built** = it holds by construction.
+Every rule says where in the code it is enforced and how it is verified: **check** = the world check (`npm run check`), **motion** = the motion check (`npm run motion`), **scale** = the scale test (`node tools/scale.mjs`: a 5× world against the real one, phone conditions, ~25 min; run after changing loading or per-frame infrastructure), **built** = it holds by construction.
 
 ## Walking (everyone who moves)
 
@@ -63,6 +63,7 @@ Every rule says where in the code it is enforced and how it is verified: **check
 | **declared**: Every object type declares its footprint, door, kind and label in one table | `world/decl.ts DECL` | check `undeclared` |
 | **perf-budget**: Performance budget: no single object too heavy to draw, the whole static map within its point budget (by area: the same density however big the world grows), moving things within their per-frame time and count | `world/budget.ts BUDGET; core/util.ts drawCost; main.ts FRAME` | check `perf` |
 | **boot-time**: Loading time does not grow with the world: only the areas of the first view are drawn while loading (the rest in the background, nearest first; fine details only when zoomed in), and the page work before the map shows stays within a fixed budget | `scene/chunks.ts, main.ts (boot chunks, chunkStep), world/budget.ts bootMs, bootChunks` | check `boot` |
+| **scale-load**: A world 5 times larger loads and runs like the real one: the page work before the map shows, the bytes downloaded until the first view is ready and the per-frame work of everything that moves stay within ×1.3, ×1.3 and ×1.5 of the real world. Only the areas near the first view are loaded and built at boot; everything else (logic by area, the walk network, far objects, trees and animals) comes in the background | `world/lregions.ts, scene/build.ts (deferred objects), scene/generators.ts (forest by area), main.ts (loadRest, bgActors), camera/view.ts farDt; LIMITS in tools/scale.mjs` | scale (work, kb, frameMs) |
 | **baked-fresh**: Results that depend only on the world data and the code (the trail rules) are computed in advance at upload time, and the build fails if they are stale | `world/bake.ts, tools/bake.mjs (npm run bake; --check in npm run build)` | check `baked` |
 | **overlap**: Plots and buildings do not overlap each other | `tools/history/spread_plots.py` | check `overlap` |
 
