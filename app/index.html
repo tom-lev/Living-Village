@@ -33,8 +33,8 @@
 (function () {
   try {
     var inl = window.__BAKED;   // בהעלאה הרשימה נכתבת לתוך הדף (בלי הורדה נוספת)
-    // נתוני ההיגיון ורשת ההליכה: מתחילים לרדת אחרי האריחים של התמונה (שיגיעו קודם), במקביל לקוד;
-    // רשת ההליכה נדרשת רק לדמויות, אז בעדיפות נמוכה
+    // נתוני ההיגיון ורשת ההליכה: מתחילים לרדת רק אחרי שכל האריחים של התמונה הגיעו (או אחרי 1.5 שניות), כדי לא להתחרות בהם
+    // ברשת של הטלפון – הבנייה ממילא מחכה לתמונה; רשת ההליכה נדרשת רק לדמויות, אז בעדיפות נמוכה
     var more = function () {
       if (!inl || window.__LOGIC) return;
       window.__LOGIC = fetch('tiles/logic.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
@@ -43,9 +43,9 @@
       window.__NAV = fetch(gz ? 'tiles/nav.navz' : 'tiles/nav.bin', { priority: 'low' }).then(function (r) { return !r.ok ? null : gz ? new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer() : r.arrayBuffer(); }).catch(function () { return null; });
     };
     (inl ? Promise.resolve(inl.manifest) : fetch('tiles/manifest.json').then(function (r) { return r.ok ? r.json() : null; })).then(function (m) {
-      var box = document.getElementById('instant'); if (!m || !m.B || !box) return;
+      var box = document.getElementById('instant'); if (!m || !m.B || !box) return more();
       var pal = m.def; try { var s = localStorage.getItem('village-palette'); if (m.pals.indexOf(s) >= 0) pal = s; } catch (e) {}
-      var pi = m.pals.indexOf(pal); if (pi < 0) return;
+      var pi = m.pals.indexOf(pal); if (pi < 0) return more();
       var vw = innerWidth, vh = innerHeight, B = { x0: m.B[0], y0: m.B[1], x1: m.B[2], y1: m.B[3] }, H = { x0: m.home[0], y0: m.home[1], x1: m.home[2], y1: m.home[3] };
       var hw = H.x1 - H.x0, hh = H.y1 - H.y0, c = Math.min(vw / hw, vh / hh), v = Math.max(vw / hw, vh / hh);
       var k = Math.max(v / c < 1.2 ? v : c, Math.max(vw / (B.x1 - B.x0), vh / (B.y1 - B.y0)));
@@ -61,9 +61,9 @@
       }
       // מתי התמונה המיידית הוצגה כולה (לתג של ?debug)
       var left = box.children.length;
-      [].forEach.call(box.children, function (im) { im.onload = im.onerror = function () { if (--left === 0) window.__instantAt = performance.now(); }; });
-      more();
-    }).catch(function () {}).then(more);
+      [].forEach.call(box.children, function (im) { im.onload = im.onerror = function () { if (--left === 0) { window.__instantAt = performance.now(); more(); } }; });
+      if (!left) more(); else setTimeout(more, 1500);
+    }).catch(more);
   } catch (e) {}
 })();
 </script>
