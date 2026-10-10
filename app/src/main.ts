@@ -5,14 +5,16 @@ import worldJson from './world/world.json';
 import type { WorldData } from './world/types';
 import { buildScene, deferredObjects, runDeferredObject } from './scene/build';
 import { LBAKE } from './world/lbake';
+import { LREG, regionsIn, applyRegion, splitRegions, type RegionData } from './world/lregions';
 import { updateLabels } from './world/labels';
 import { walkFlags } from './world/walk';
-import { navPack, navLoad } from './world/nav';
+import { navPack, navLoad, NAVSTATE } from './world/nav';
 import { reachPack, reachLoad } from './actors/agenda';
 import { warmUp, bakeTile, tileGrid, bakeRegions, bakeStatic, manifestP, inlineStatic, initTilesFromRegions, initTiles, startPainters, paintersLoaded, tileStats, repaintTiles, prepareGpu, gpuOverlay, renderNow, onStaticFrame, requestStatic, addChunkItems, flushCoarseTiles } from './render/tiles';
 import { CULL } from './render/gpu';
 import { chunksIn, buildChunk, buildDetail, nextChunk, pendingCount, allChunks } from './scene/chunks';
-import { ctx, STATIC_BB, sortStatics, BG_JOBS } from './world/context';
+import { ctx, STATIC_BB, sortStatics, BG_JOBS, statics, bboxOf, cidCount } from './world/context';
+import { FOREST_BAKE, LOGS_BAKE } from './scene/generators';
 import { STATIC } from './core/util';
 import { RNG_REPLAY, seedNow } from './core/rng';
 import { FRAME } from './world/budget';
@@ -59,21 +61,6 @@ async function boot() {
   });
   // ההמתנה (לציירים ולתמונה המיידית) היא לא עבודה של הדף: נמדדת לחוד, ועבודת הטעינה (תקציב bootMs) נספרת מכאן
   tm.wait = performance.now() - t0; t0 = performance.now();
-  let staticJson: any = null;
-  if (man?.regions) {
-    try {
-      const inl = inlineStatic(), b64 = (s: string) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
-      let bin: ArrayBuffer | null = null, js: any = null;
-      if (inl) {
-        // נתוני ההיגיון: קובץ שהדף כבר התחיל להוריד (index.html, window.__LOGIC)
-        const lg = await ((window as any).__LOGIC ?? fetch('tiles/logic.json').then(r => r.ok ? r.json() : null));
-        if (lg) { bin = b64(lg.bin); js = { ...inl.json, logic: lg.logic }; }
-      } else [bin, js] = await Promise.all([fetch('tiles/static.bin').then(r => r.ok ? r.arrayBuffer() : null), fetch('tiles/static.json').then(r => r.ok ? r.json() : null)]);
-      if (bin && js) { STATIC_BB.arr = new Float64Array(bin); STATIC.off = true; staticJson = js; RNG_REPLAY.marks = js.rng ?? null; LBAKE.in = js.logic ?? null; }
-    } catch {}
-  }
-  // רשת ההליכה האפויה (משימה 30, שלב 5): מורדת במקביל לבנייה, ונטענת לפני הדמויות
-  const navP: Promise<ArrayBuffer | null> = STATIC.off ? ((window as any).__NAV ?? fetch('tiles/nav.bin').then(r => r.ok ? r.arrayBuffer() : null).catch(() => null)) : Promise.resolve(null);
   // המבט הראשון בעולם (כמו המצלמה, עם שוליים): באתר המפורסם רק האובייקטים שבו נבנים עכשיו, השאר ברקע
   const firstView = (() => {
     const r = document.getElementById('stage').getBoundingClientRect(), [hx0, hy0, hx1, hy1] = world.home, [bx0, by0, bx1, by1] = world.bounds, hw = hx1 - hx0, hh = hy1 - hy0;
@@ -82,6 +69,26 @@ async function boot() {
     const cx = (hx0 + hx1) / 2, cy = (hy0 + hy1) / 2, ex = r.width / 2 / k * 1.3, ey = r.height / 2 / k * 1.3;
     return [cx - ex, cy - ey, cx + ex, cy + ey];
   })();
+  let staticJson: any = null;
+  const regionFetch = (k: string): Promise<RegionData | null> => (window as any).__REG?.[k] ?? fetch(`tiles/logic/${k}.json`).then(r => r.ok ? r.json() : null).catch(() => null);
+  if (man?.regions) {
+    try {
+      const inl = inlineStatic(), b64 = (s: string) => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
+      let bin: ArrayBuffer | null = null, js: any = null;
+      if (inl?.json?.core) {
+        // היגיון לפי אזורים (world/lregions.ts): הליבה בתוך הדף, ורק האזורים של המבט הראשון והכפר עכשיו (index.html כבר התחיל להוריד אותם)
+        const C = inl.json.core; LREG.core = C;
+        STATIC_BB.arr = new Float64Array(C.cidTotal * 4); for (const [cid, x, y, w, h] of C.sb) STATIC_BB.arr.set([x, y, w, h], cid * 4);
+        STATIC.off = true; staticJson = inl.json; RNG_REPLAY.marks = inl.json.rng ?? null; LBAKE.in = C.lbake ?? null;
+        const [hx0, hy0, hx1, hy1] = world.home, V = firstView, keys = regionsIn(Math.min(V[0], hx0 - 500), Math.min(V[1], hy0 - 500), Math.max(V[2], hx1 + 500), Math.max(V[3], hy1 + 500));
+        const data = await Promise.all(keys.map(regionFetch));
+        keys.forEach((k, i) => { if (data[i]) LREG.boot.push([k, data[i]!]); });
+      } else [bin, js] = await Promise.all([fetch('tiles/static.bin').then(r => r.ok ? r.arrayBuffer() : null), fetch('tiles/static.json').then(r => r.ok ? r.json() : null)]);
+      if (!LREG.core && bin && js) { STATIC_BB.arr = new Float64Array(bin); STATIC.off = true; staticJson = js; RNG_REPLAY.marks = js.rng ?? null; LBAKE.in = js.logic ?? null; }
+    } catch {}
+  }
+  // רשת ההליכה האפויה: באתר המפורסם יורדת ברקע אחרי שהמבט הראשון מוכן (loadRest); עד אז הדמויות בבית
+  NAVSTATE.pending = STATIC.off && !!LREG.core;
   buildScene(world, svgS, svgD, firstView);
   // בדיקה: המחולל הכללי בסוף הבנייה – באתר המפורסם (בלי ציור) חייב להיות זהה למה שנאפה (אחרת ההיגיון לא תואם לנוף)
   (globalThis as any).__seedEnd = seedNow();
@@ -111,7 +118,21 @@ async function boot() {
   tm.firstRender = performance.now() - q0; q0 = performance.now();
   await new Promise(r => setTimeout(r, 0));   // הפסקה קצרה: ההודעות לציירים יוצאות עכשיו, לא אחרי כל הבנייה
   tm.yield = performance.now() - q0; q0 = performance.now();
-  { const nb = await navP; if (nb) navLoad(nb); if (staticJson?.reach) reachLoad(staticJson.reach); }
+  /** אחרי שהמבט הראשון מוכן: רשת ההליכה, ושאר האזורים מהקרוב לרחוק (כדי לא להתחרות ברשת באריחים שעל המסך) */
+  let restStarted = false;
+  const loadRest = () => {
+    if (restStarted || !LREG.core) return; restStarted = true;
+    const gz = typeof DecompressionStream !== 'undefined';
+    fetch(gz ? 'tiles/nav.navz' : 'tiles/nav.bin').then(r => !r.ok ? null : gz ? new Response(r.body!.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer() : r.arrayBuffer()).catch(() => null)
+      .then(nb => { if (nb) navLoad(nb); NAVSTATE.pending = false; if (staticJson?.reach) reachLoad(staticJson.reach); tm.navAt = performance.now(); });
+    const cx = (firstView[0] + firstView[2]) / 2, cy = (firstView[1] + firstView[3]) / 2, S = LREG.S;
+    const rest = (LREG.core.regions as string[]).filter(k => !LREG.loaded.has(k))
+      .sort((a, b) => { const d = (k: string) => { const [rx, ry] = k.split('_').map(Number); return Math.hypot((rx + .5) * S - cx, (ry + .5) * S - cy); }; return d(a) - d(b); });
+    let n = 0;
+    const next = () => { const k = rest[n++]; if (!k) return; regionFetch(k).then(d => { if (d) applyRegion(k, d, false); else LREG.loaded.add(k); next(); }); };
+    next(); next();   // שתי הורדות במקביל
+  };
+  if (!STATIC.off || !LREG.core) { if (staticJson?.reach) reachLoad(staticJson.reach); }
   tm.nav = performance.now() - q0; q0 = performance.now();
   const actors = buildActors(world.actors);
   actors.build(0);   // רק הדמויות של הכפר (המבט הראשון); השאר נבנות בפריימים הבאים, אחרי שהמפה מוצגת
@@ -125,10 +146,13 @@ async function boot() {
   let di = 0;
   const bgActors = () => {
     const s0 = performance.now();
+    if (LREG.newObjs.length) deferredObjects.push(...LREG.newObjs.splice(0));   // אובייקטים מאזורים שהגיעו ברקע
     while (di < deferredObjects.length && performance.now() - s0 < 8) runDeferredObject(deferredObjects[di++]);
+    // מה שזז ולא צריך את כל העולם (המכלאה, ברווזים, עננים...) – מיד, גם בזמן שהאזורים עוד מגיעים
+    if (!actors.done && performance.now() - s0 < 8) actors.build(8 - (performance.now() - s0), !!(window as any).__objsDone);
     if (di < deferredObjects.length) { setTimeout(bgActors, 0); return; }
     while (BG_JOBS.length && performance.now() - s0 < 8) if (BG_JOBS[0]()) BG_JOBS.shift();
-    if (BG_JOBS.length) { setTimeout(bgActors, 0); return; }
+    if (BG_JOBS.length || (LREG.core && !LREG.all) || LREG.newObjs.length) { setTimeout(bgActors, LREG.core && !LREG.all ? 30 : 0); return; }
     if (!(window as any).__objsDone) { if (STATIC.off) sortStatics();   // (מה שנבנה ברקע: אובייקטים ועצים)
       (window as any).__objsDone = true; tm.objsDone = performance.now(); setTimeout(bgActors, 0); return; }
     if (actors.build(8)) { tm.allActors = performance.now(); (window as any).__actorTimes = actors.times; } else setTimeout(bgActors, 0);
@@ -159,7 +183,7 @@ async function boot() {
     // טקסטים ברזולוציה של הזום הנוכחי: מתעדכנים רק כשהמצלמה עומדת (לא באמצע זום), לכל היותר 3 פעמים בשנייה
     textRefresh();
     // זמן הטעינה כפי שמרגישים אותו: מתחילת טעינת הדף עד שכל האריחים שעל המסך צוירו (תקציב bootMs)
-    if (tm.ready === undefined && tileStats.painted > 0 && tileStats.missing === 0) { tm.ready = performance.now(); setTimeout(warmUp, 300); }
+    if (tm.ready === undefined && tileStats.painted > 0 && tileStats.missing === 0) { tm.ready = performance.now(); setTimeout(warmUp, 300); setTimeout(loadRest, 0); }
     // התמונה המיידית יורדת כשהמפה החיה מוכנה (הן זהות), או כבר בתנועה הראשונה של המצלמה (אחרת התמונה הייתה נשארת במקום)
     if (instantEl && (tm.ready !== undefined || camMoved.at)) { instantEl.remove(); instantEl = null; }
     drawGrid();
@@ -255,7 +279,16 @@ async function boot() {
   const buildEverything = async () => { await built; while (!(window as any).__objsDone) await new Promise(r => setTimeout(r, 50)); for (const c of allChunks()) { const out = buildDetail(c); if (out) addChunkItems(out.layers, out.rect); } flushCoarseTiles(); };
   // שרת הבנייה (tools/site.mjs, ?bake=tiles): העולם כולו, ואז ציור של כל אריח מוכן מראש
   // (העולם עוצר בזמן האפייה: רק ציור האריחים רץ, בלי דמויות ואנימציה שמתחרות עליו)
-  if (location.search.includes('bake=tiles')) (window as any).__tileBake = { ready: buildEverything().then(() => setRunning(false)), bakeTile, tileGrid, bakeRegions, bakeStatic, bakeNav: () => { const u8 = new Uint8Array(navPack()); let s = ''; for (let q = 0; q < u8.length; q += 0x8000) s += String.fromCharCode(...u8.subarray(q, q + 0x8000)); return btoa(s); }, bakeReach: reachPack, pals: world.palettes.map((p: any) => p.name), meta: { B: world.bounds, home: world.home, def: world.palette } };
+  if (location.search.includes('bake=tiles')) (window as any).__tileBake = { ready: buildEverything().then(() => setRunning(false)), bakeTile, tileGrid, bakeRegions, bakeStatic, bakeNav: () => { const u8 = new Uint8Array(navPack()); let s = ''; for (let q = 0; q < u8.length; q += 0x8000) s += String.fromCharCode(...u8.subarray(q, q + 0x8000)); return btoa(s); }, bakeReach: reachPack, bakeLogicRegions: (S: number) => {
+    // חלוקת נתוני ההיגיון לאזורים (world/lregions.ts): מה שנרשם בבנייה המלאה, לפי מקום
+    const rec = JSON.parse(LBAKE.out.objs), sbc = new Map<number, number[]>();
+    for (const st of statics as any[]) if (st.cid !== undefined) sbc.set(st.cid, (st.bb0 ?? bboxOf(st)).slice());
+    const out = splitRegions(S, ctx.B, { rec, cidTotal: cidCount(), forest: FOREST_BAKE, logs: LOGS_BAKE, firstObjPlace: rec.p0.find((p: number) => p !== undefined) ?? rec.places.length,
+      sb: c => sbc.get(c) ?? null,
+      objXY: i => { const o: any = world.objects[i], b = rec.bb[i]; return rec.seed[i] === undefined ? null : b ? [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] : [o.x ?? o.x0 ?? o.cx ?? 0, o.y ?? o.y0 ?? o.cy ?? 0]; } });
+    (out.core as any).lbake = Object.fromEntries(Object.entries(LBAKE.out).filter(([k]) => k === 'lamps' || k.startsWith('bridges')));
+    return JSON.stringify(out);
+  }, pals: world.palettes.map((p: any) => p.name), meta: { B: world.bounds, home: world.home, def: world.palette } };
 
   // פריים ראשון, כדי שגם במצב "פחות תנועה" הדמויות יופיעו
   actors.update(.016, 0);

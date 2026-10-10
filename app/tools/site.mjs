@@ -72,8 +72,12 @@ async function bakeTiles() {
   const RS = 1024, regs = await pages[0].evaluate(RS => window.__tileBake.bakeRegions(RS), RS);
   mkdirSync(new URL('../dist/regions/', import.meta.url), { recursive: true });
   let rb = 0;
-  for (const [k, b64] of Object.entries(regs)) { const buf = Buffer.from(b64, 'base64'); rb += buf.length; writeFileSync(new URL(`../dist/regions/${k}.bin`, import.meta.url), buf); }
+  // דחוסים (פי 3.5 בערך: גם פחות הורדה בזום, וגם אתר קטן יותר – ל-GitHub Pages יש גבול של 1GB); הצייר פותח אותם בעצמו.
+  // סיומת לא מוכרת בכוונה (כמו nav.navz): שרת שמזהה .gz מסמן אותו כדחוס, והדפדפן פותח אותו לפני הקוד
+  let rz = 0;
+  for (const [k, b64] of Object.entries(regs)) { const buf = Buffer.from(b64, 'base64'), z = gzipSync(buf, { level: 9 }); rb += buf.length; rz += z.length; writeFileSync(new URL(`../dist/regions/${k}.rgz`, import.meta.url), z); }
   const st = await pages[0].evaluate(() => window.__tileBake.bakeStatic());
+  const LRtxt = await pages[0].evaluate(() => window.__tileBake.bakeLogicRegions(2048));   // היגיון לפי אזורים (נכתב בהמשך)
   // שלב 5: רשת ההליכה, ואם אפשר להגיע לכל מקום מהכפר – מוכנים מראש (בדפדפן זה היה החלק הכבד בבניית הדמויות)
   const nav = Buffer.from(await pages[0].evaluate(() => window.__tileBake.bakeNav()), 'base64');
   writeFileSync(new URL('../dist/tiles/nav.bin', import.meta.url), nav);
@@ -84,15 +88,21 @@ async function bakeTiles() {
   console.log(`baked the walk network (${(nav.length / 1e3).toFixed(0)} KB)`);
   writeFileSync(new URL('../dist/tiles/static.bin', import.meta.url), Buffer.from(st.bin, 'base64'));
   writeFileSync(new URL('../dist/tiles/static.json', import.meta.url), st.json);
-  console.log(`baked ${Object.keys(regs).length} region files (${(rb / 1e6).toFixed(1)} MB)`);
+  console.log(`baked ${Object.keys(regs).length} region files (${(rb / 1e6).toFixed(1)} MB, ${(rz / 1e6).toFixed(1)} MB compressed)`);
   await b.close();
   const manifest = { maxL: MAXL, pals, ...meta, regions: { RS } };
   writeFileSync(new URL('../dist/tiles/manifest.json', import.meta.url), JSON.stringify(manifest));
   // הנתונים הקטנים (הרשימה, מידות הדברים העומדים, השלטים) נכתבים לתוך הדף עצמו: בלי הורדות נוספות בתחילת הטעינה
   // בתוך הדף רק הנתונים הקטנים (שלא גדלים עם העולם: הרשימה, השלטים, הצבעים); נתוני ההיגיון (מידות, מפת המעבר, היער, האובייקטים)
   // בקובץ נפרד שמתחיל לרדת מיד עם הדף (tiles/logic.json), כדי שהדף – והתמונה המיידית – לא יגדלו עם העולם
+  // היגיון לפי אזורים (world/lregions.ts): הליבה הקטנה בתוך הדף, וקובץ לכל אזור (tiles/logic/<rx>_<ry>.json)
   const { logic, ...small } = JSON.parse(st.json);
-  writeFileSync(new URL('../dist/tiles/logic.json', import.meta.url), JSON.stringify({ bin: st.bin, logic }));
+  const LR = JSON.parse(LRtxt);
+  mkdirSync(new URL('../dist/tiles/logic/', import.meta.url), { recursive: true });
+  let lb = 0;
+  for (const [k, d] of Object.entries(LR.regions)) { const t = JSON.stringify(d); lb += t.length; writeFileSync(new URL(`../dist/tiles/logic/${k}.json`, import.meta.url), t); }
+  small.core = LR.core;
+  console.log(`logic by area: ${Object.keys(LR.regions).length} files (${(lb / 1e3).toFixed(0)} KB), core ${(JSON.stringify(LR.core).length / 1e3).toFixed(0)} KB`);
   const html = new URL('../dist/index.html', import.meta.url), inline = JSON.stringify({ manifest, static: { json: small } }).replace(/</g, '\\u003c');
   // כל חלקי הקוד שנטענים בהתחלה (המנוע הגרפי, הצייר שברקע): מתחילים להוריד מיד, במקביל לקוד הראשי (ולא בסבבים אחד אחרי השני)
   const pre = readdirSync(new URL('../dist/assets/', import.meta.url)).filter(f => f.endsWith('.js') && !/^(index|check|samples)-/.test(f)).map(f => `<link rel="modulepreload" href="./assets/${f}">`).join('');

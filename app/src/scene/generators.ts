@@ -4,7 +4,8 @@ import { rand, pick, R, rngAt, drawOnly } from '../core/rng';
 import { STATIC } from '../core/util';
 import { bakedInts, bakedF64 } from '../world/lbake';
 let forestN = 0;
-import { ctx, prop, NO_TREE, inWater, statics, bboxOf, BG_JOBS } from '../world/context';
+import { ctx, prop, NO_TREE, inWater, statics, bboxOf, BG_JOBS, cidCount, setCid } from '../world/context';
+import { LREG } from '../world/lregions';
 import { geo, edgeAt, treeOk } from '../world/geometry';
 import { pine, roundTree, sequoia, ancientFir, pineBox, roundBox, sequoiaBox, firBox } from '../prefabs/nature';
 import { deferStatic, deferArea, CH } from './chunks';
@@ -23,6 +24,8 @@ export const LAMPS: { x: number; y: number; flip: number; rx: number; ry: number
 export const LAMPS_SPACING = { v: 150 };
 
 /** כל עצי היער שנשתלו: בסיס, וקופסת הצמרת (לציפורים שיושבות עליהם) */
+/** לחלוקה לאזורים (בבנייה המלאה): העצים שנבחרו [ci, x, y] והגזעים שנפלו [gx, gy, cid, x, y] */
+export const FOREST_BAKE: number[][] = [], LOGS_BAKE: number[][] = [];
 export const TREES: { x: number; y: number; x0: number; x1: number; top: number; pine: boolean }[] = [];
 
 /** רצפת היער העתיק: גוון כהה ועשיר שמתחזק מזרחה, כתמי טחב, שרכים, פטריות וגזעים שנפלו מכוסי טחב.
@@ -34,7 +37,8 @@ function ancientFloor(AN: any, anc: (x: number) => number, cold: (y: number) => 
   const C = 70, byChunk = new Map<string, number[][]>();
   // הבחירה של כל תא (מפת המעבר) כבדה וגדלה עם השטח: באתר המפורסם מגיעה מוכנה – רק התאים של הגזעים שנפלו (דברים עומדים);
   // את הטחב, השרכים והפטריות שם לא צריך (הנוף מגיע מוכן)
-  const logs = bakedInts('ancientLogs', () => {
+  // (באתר המפורסם הגזעים מגיעים עם האזורים שלהם – lregions.ts – ונבנים ברקע עם מספר היצירה שלהם)
+  const logs = LREG.core ? new Int32Array() : bakedInts('ancientLogs', () => {
   const out: number[] = [];
   for (let gy = Math.floor(B.y0 / C); gy < B.y1 / C; gy++) for (let gx = Math.floor(AN.x0 / C); gx < B.x1 / C; gx++) {
     const v = rngAt(gx, gy, 13), x = gx * C + v.r() * C, y = gy * C + v.r() * C, t = anc(x), k = v.r();
@@ -45,8 +49,9 @@ function ancientFloor(AN: any, anc: (x: number) => number, cold: (y: number) => 
   }
   return Int32Array.from(out);
   });
-  for (let q = 0; q < logs.length; q += 2) {
-    const gx = logs[q], gy = logs[q + 1], v = rngAt(gx, gy, 13), x = gx * C + v.r() * C, y = gy * C + v.r() * C; v.r(); v.r();
+  const logAt = (gx: number, gy: number) => {
+    const v = rngAt(gx, gy, 13), x = gx * C + v.r() * C, y = gy * C + v.r() * C; v.r(); v.r();
+    if (!LREG.core) LOGS_BAKE.push([gx, gy, cidCount(), x, y]);   // לחלוקה לאזורים
     {
       // גזע שנפל, מכוסה טחב, עם טבעות בקצה (דבר עומד: מצויר בטעינה, כדי שמפת ההליכה והחיות יידעו עליו)
       const g = prop(y), L = v.rand(26, 40), a = v.rand(-.2, .2), dx = Math.cos(a) * L / 2, dy = Math.sin(a) * L / 2;
@@ -54,7 +59,15 @@ function ancientFloor(AN: any, anc: (x: number) => number, cold: (y: number) => 
       el('path', { d: `M${n2(x - dx * .7)},${n2(y - dy * .7 - 5.4)}L${n2(x + dx * .4)},${n2(y + dy * .4 - 5.4)}`, stroke: '#6f9a46', 'stroke-width': 2.6, 'stroke-linecap': 'round' }, g);
       el('path', { d: circ(x + dx, y + dy - 3, 3) + circ(x + dx, y + dy - 3, 1.4), fill: '#d8a66e', stroke: '#8a5a32', 'stroke-width': .6 }, g);
     }
-  }
+  };
+  for (let q = 0; q < logs.length; q += 2) logAt(logs[q], logs[q + 1]);
+  // באתר המפורסם: כל גזע כשהאזור שלו הגיע, עם אותו מספר יצירה כמו בבנייה המלאה
+  if (LREG.core) BG_JOBS.push(() => {
+    const keep = cidCount();
+    for (const [gx, gy, cid] of LREG.logs.splice(0)) { setCid(cid); logAt(gx, gy); }
+    setCid(keep);
+    return LREG.all && !LREG.logs.length;
+  });
   /** מצייר את התאים של אזור: base – טחב; detail – שרכים ופטריות (רק כשמתקרבים) */
   const drawCells = (cells: number[][], detail: boolean, G: any) => {
     let moss = '', fern = '', mush = '', caps = '';
@@ -159,7 +172,7 @@ export const GENERATORS: Record<string, (o: any) => void> = {
     /** המועמד מספר ci (שורה אחרי שורה): מחושב לפי המקום, אז באתר המפורסם מחשבים רק את אלה שנבחרו */
     const candAt = (ci: number) => { const gx = gx0 + ci % nx, gy = gy0 + Math.floor(ci / nx), v = rngAt(gx, gy, 11); return [gx * C + v.r() * C, gy * C + v.r() * C, v.r()]; };
     // הבחירה (צפיפות, מים, מפת המעבר, מרווח בין עצים) כבדה: באתר המפורסם מגיעה מוכנה – רק המספרים של המועמדים שנבחרו
-    const keep = bakedInts('forest' + (forestN++), () => { const ks: number[] = [];
+    const keep = LREG.core ? new Int32Array() : bakedInts('forest' + (forestN++), () => { const ks: number[] = [];
     const cand: number[][] = [];
     for (let gy = gy0; gy < B.y1 / C; gy++) for (let gx = gx0; gx < B.x1 / C; gx++) cand.push(candAt(cand.length));
     cand.forEach(([x, y, roll], ci) => {
@@ -202,10 +215,20 @@ export const GENERATORS: Record<string, (o: any) => void> = {
     };
     // באתר המפורסם: עכשיו רק העצים שליד המבט הראשון; השאר ברקע (BG_JOBS), לפני החיות. TREES נבנה בסוף בסדר המקורי
     // (הציפורים בוחרות עץ לפי המקום ברשימה)
-    const V = STATIC.off ? ctx.firstView : null, out: any[] = new Array(trees.length), later: number[] = [];
-    trees.forEach(([x, y], i) => { if (!V || (x > V[0] && x < V[2] && y > V[1] && y < V[3])) out[i] = plan(x, y); else later.push(i); });
-    if (!later.length) TREES.push(...out);
-    else { let q = 0; BG_JOBS.push(() => { for (const e = Math.min(later.length, q + 400); q < e; q++) { const i = later[q]; out[i] = plan(trees[i][0], trees[i][1]); } if (q < later.length) return false; TREES.push(...out); return true; }); }
+    if (!LREG.core) { keep.forEach((ci, i) => FOREST_BAKE.push([ci, trees[i][0], trees[i][1]])); TREES.push(...trees.map(([x, y]) => plan(x, y))); }
+    else {
+      // האתר המפורסם: העצים מגיעים עם האזורים שלהם (lregions.ts). עכשיו רק אלה שליד המבט הראשון; השאר ברקע.
+      // TREES נבנה בסוף, בסדר המקורי (לפי מספר המועמד) – הציפורים בוחרות עץ לפי המקום ברשימה
+      const V = ctx.firstView, done = new Map<number, any>(), later: number[] = [];
+      const take = (now: boolean) => { for (const ci of LREG.forest.splice(0)) { const c = candAt(ci); if (now && V && c[0] > V[0] && c[0] < V[2] && c[1] > V[1] && c[1] < V[3]) done.set(ci, plan(c[0], c[1])); else later.push(ci); } };
+      take(true);
+      BG_JOBS.push(() => {
+        take(false);
+        for (let n = 0; n < 400 && later.length; n++) { const ci = later.pop()!, c = candAt(ci); done.set(ci, plan(c[0], c[1])); }
+        if (later.length || !LREG.all || LREG.forest.length) return false;
+        TREES.push(...[...done].sort((a, b) => a[0] - b[0]).map(e => e[1])); return true;
+      });
+    }
     if (AN) ancientFloor(AN, anc, cold, lake, T);
   },
 };

@@ -282,7 +282,7 @@ class Animal {
 
 /** מפזר את החיות לפי world.json (actors.wildlife: כמה מכל סוג). המיקומים נבחרים לפי סדר קבוע (rngAt), אז הם יציבים בין טעינות */
 export function wildlife(counts: Partial<Record<WildKind, number>>) {
-  const homes = places.filter(p => p.kind === 'home' && p.door).map(p => p.door!);
+  const homes = places.filter(p => p && p.kind === 'home' && p.door).map(p => p.door!);
   const { B } = ctx, all: Animal[] = [];
   for (const kind of Object.keys(counts) as WildKind[]) {
     const v = rngAt(kind.length * 97, 13, 84), K = KIND[kind];

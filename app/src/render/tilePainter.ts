@@ -97,7 +97,8 @@ export function createPainter(post: (m: TileMsg, transfer?: any[]) => void) {
   function loadRegion(key: string): Promise<void> {
     let p = loadedR.get(key);
     if (!p) {
-      p = fetch(R!.base + key + '.bin').then(r => r.ok ? r.arrayBuffer() : null).then(b => { if (b) { const { items: add, ids } = decodeRegion(b); addItems(add, ids); } }).catch(() => {});
+      p = fetch(R!.base + key + '.rgz').then(r => r.ok ? new Response(r.body!.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer() : null)   // (דחוס: נפתח כאן)
+        .then(b => { if (b) { const { items: add, ids } = decodeRegion(b); addItems(add, ids); } }).catch(() => {});
       loadedR.set(key, p);
     }
     return p;

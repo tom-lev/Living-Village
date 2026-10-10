@@ -1,4 +1,5 @@
 /* אנשים ובני לוויה: הולכים על רשת הדרכים, כלב עם רצועה, בלון, יושבים */
+import { NAVSTATE } from '../world/nav';
 import { REAL_DYN, fitScale } from '../world/scale';
 import { el, n2, P, clamp, shade, show, circ } from '../core/util';
 import { inView, view } from '../camera/view';
@@ -56,7 +57,9 @@ export class Walker {
     this.rules = { priv: plotOfDoor(this.home?.door) };   // מותר להיכנס רק למגרש של הבית שלי
     const d = this.home.door;
     this.place = this.home; this.x = d[0]; this.y = d[1];
-    if (this.rg.chance(.4)) { this.state = 'inside'; this.alpha = 0; this.timer = this.rg.rand(0, 25); }
+    // (רשת ההליכה עוד בדרך – באתר המפורסם, בעולם גדול: כולם מתחילים בבית ויוצאים בהדרגה כשהיא מגיעה)
+    if (NAVSTATE.pending) { this.state = 'inside'; this.alpha = 0; this.timer = this.rg.rand(.3, 4); }
+    else if (this.rg.chance(.4)) { this.state = 'inside'; this.alpha = 0; this.timer = this.rg.rand(0, 25); }
     else {
       this.go(chooseNext(this, this.rg), this.home);
       if (this.state === 'walk') { this.s = this.rg.rand(0, this.route.len * .7); const p = routeAt(this.route, this.s); this.x = p.x; this.y = p.y; }
@@ -115,6 +118,7 @@ export class Walker {
       if (!this.alpha) { this.state = 'inside'; this.timer = durOf(this.place, this.rg); }
     } else if (this.state === 'inside') {
       this.timer -= dt;
+      if (this.timer <= 0 && NAVSTATE.pending) this.timer = .3;   // מחכים בבית עד שרשת ההליכה מגיעה
       if (this.timer <= 0) {
         const from = this.place; this.state = 'exit';
         const d = from.door; this.x = d[0]; this.y = d[1];

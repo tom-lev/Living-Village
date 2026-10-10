@@ -49,7 +49,7 @@ export function buildActors(A: Record<string, any>) {
       const side = bench && (bench.facing === 'e' || bench.facing === 'w');
       const st = new Sitter(s.look, side ? bench.x : sx, side ? bench.y - 6 : sy, s.seat, side ? (bench.facing === 'e' ? 1 : -1) : s.flip, s.behavior); sitters.push(st); updates.push(nm('sitters', (dt, T) => st.update(dt, T))); }
     assignHomes(sitters, rngAt(2, 2, 91), walkers);   // ליושבים: בתים שעוד אין בהם דיירים (בלי לשנות את הבתים של ההולכים)
-    for (const st of sitters) { const b = places.find(p => p.kind === 'sit' && p.seat && Math.hypot(p.seat[0] - st.x, p.seat[1] - st.y) < 25); if (b) b.busy = st; }   // הספסל של משה תפוס
+    for (const st of sitters) { const b = places.find(p => p && p.kind === 'sit' && p.seat && Math.hypot(p.seat[0] - st.x, p.seat[1] - st.y) < 25); if (b) b.busy = st; }   // הספסל של משה תפוס
   }]);
   steps.push(['paddock', () => {
     const horses = (A.horses || []).map((h: any) => new Horse(h));
@@ -71,6 +71,9 @@ export function buildActors(A: Record<string, any>) {
       }));
     }
   }]);
+  // (WHOLE: קבוצות שצריכות את כל העולם – כל הדברים העומדים, העצים ומפת המעבר: באתר המפורסם בעולם גדול הן מחכות לכל האזורים;
+//  השאר – למשל המכלאה, הברווזים והעננים – נבנות מיד)
+  const WHOLE = new Set(['wildlife', 'bluebirds', 'birds', 'lizards']);
   const group = (name: string, make: ((o: any) => (dt: number, T: number) => void) | undefined) => { if (A[name] && make) steps.push([name, () => { updates.push(nm(name, make(A[name]))); }]); };
   group('wildlife', wildlife);     // חיות היער
   group('trains', trains);         // רכבות קיטור
@@ -83,23 +86,27 @@ export function buildActors(A: Record<string, any>) {
   group('clouds', clouds);
   group('flock', flock);
 
-  let buildSeed = seedNow(), frame = 0, si = 0;
+  // לכל שלב רצף אקראי משלו (מהמצב בתחילת הבנייה ומהשם שלו): הסדר שבו השלבים נבנים – שתלוי בקצב ההורדות – לא משנה אותם
+  const seed0 = seedNow(), seedOf = (name: string) => { let h = seed0 | 0; for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619); return h | 0; };
+  let frame = 0;
+  const left = steps.slice();
   const times: Record<string, number> = {};
   const out = {
     walkers,
     times,
     /** בונה שלבים עד שנגמר הזמן (במילישניות); מחזיר true כשהכול בנוי */
-    build(budget: number) {
+    build(budget: number, whole = true) {
       const t0 = performance.now();
-      while (si < steps.length) {
-        const [name, f] = steps[si++], q = performance.now();
-        buildSeed = withSeed(buildSeed, f);
-        times[name] = performance.now() - q;
+      for (let i = 0; i < left.length;) {
+        const [name, f] = left[i];
+        if (!whole && WHOLE.has(name)) { i++; continue; }   // מחכה לכל העולם
+        left.splice(i, 1);
+        const q = performance.now(); withSeed(seedOf(name), f); times[name] = performance.now() - q;
         if (performance.now() - t0 >= budget) break;
       }
-      return si >= steps.length;
+      return !left.length;
     },
-    get done() { return si >= steps.length; },
+    get done() { return !left.length; },
     update(dt: number, T: number) {
       updateSeen();   // מה רואים בפריים הזה: מה שמחוץ למסך לא מצויר
       updateLabels(); // שמות האובייקטים: מופיעים בזום קרוב

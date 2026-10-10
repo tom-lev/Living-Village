@@ -12,6 +12,8 @@ const nodes: Node[] = [];
 const CELL = 40, grid = new Map<string, number[]>();
 const cellKey = (x: number, y: number) => `${Math.floor(x / CELL)},${Math.floor(y / CELL)}`;
 let built = false;
+/** האתר המפורסם: רשת ההליכה יורדת ברקע אחרי שהמפה מוצגת; עד שהיא מגיעה הדמויות נשארות בבית (people.ts) */
+export const NAVSTATE = { pending: false };
 
 /** העקומה המצוירת של שביל (מקור אחד: world/curve.ts) */
 export const catmull = (P: Pt[]): Pt[] => curvePts(P, 4);

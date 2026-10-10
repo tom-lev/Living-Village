@@ -33,14 +33,17 @@
 (function () {
   try {
     var inl = window.__BAKED;   // בהעלאה הרשימה נכתבת לתוך הדף (בלי הורדה נוספת)
-    // נתוני ההיגיון ורשת ההליכה: מתחילים לרדת רק אחרי שכל האריחים של התמונה הגיעו (או אחרי 1.5 שניות), כדי לא להתחרות בהם
-    // ברשת של הטלפון – הבנייה ממילא מחכה לתמונה; רשת ההליכה נדרשת רק לדמויות, אז בעדיפות נמוכה
-    var more = function () {
-      if (!inl || window.__LOGIC) return;
-      window.__LOGIC = fetch('tiles/logic.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
-      // (דחוסה; דפדפן בלי DecompressionStream – הקובץ הרגיל)
-      var gz = typeof DecompressionStream !== 'undefined';
-      window.__NAV = fetch(gz ? 'tiles/nav.navz' : 'tiles/nav.bin', { priority: 'low' }).then(function (r) { return !r.ok ? null : gz ? new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer() : r.arrayBuffer(); }).catch(function () { return null; });
+    // נתוני ההיגיון של האזורים שליד המבט הראשון והכפר (world/lregions.ts; אותו חישוב כמו ב-main.ts): מתחילים לרדת רק אחרי
+    // שכל האריחים של התמונה הגיעו (או אחרי 1.5 שניות), כדי לא להתחרות בהם ברשת של הטלפון – הבנייה ממילא מחכה לתמונה
+    var V = null, more = function () {
+      var C = inl && inl.static && inl.static.json && inl.static.json.core;
+      if (!C || !V || window.__REG) return;
+      window.__REG = {};
+      var H = inl.manifest.home, x0 = Math.min(V[0], H[0] - 500), y0 = Math.min(V[1], H[1] - 500), x1 = Math.max(V[2], H[2] + 500), y1 = Math.max(V[3], H[3] + 500), S = C.S;
+      for (var ry = Math.floor(y0 / S); ry <= Math.floor(y1 / S); ry++) for (var rx = Math.floor(x0 / S); rx <= Math.floor(x1 / S); rx++) {
+        var key = rx + '_' + ry; if (C.regions.indexOf(key) < 0) continue;
+        window.__REG[key] = fetch('tiles/logic/' + key + '.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+      }
     };
     (inl ? Promise.resolve(inl.manifest) : fetch('tiles/manifest.json').then(function (r) { return r.ok ? r.json() : null; })).then(function (m) {
       var box = document.getElementById('instant'); if (!m || !m.B || !box) return more();
@@ -50,6 +53,7 @@
       var hw = H.x1 - H.x0, hh = H.y1 - H.y0, c = Math.min(vw / hw, vh / hh), v = Math.max(vw / hw, vh / hh);
       var k = Math.max(v / c < 1.2 ? v : c, Math.max(vw / (B.x1 - B.x0), vh / (B.y1 - B.y0)));
       var cx = vw / 2 - (H.x0 + H.x1) / 2 * k, cy = vh / 2 - (H.y0 + H.y1) / 2 * k, BASE = 1 / 8, dpr = Math.min(devicePixelRatio || 1, 2);
+      var ex = vw / 2 / k * 1.3, ey = vh / 2 / k * 1.3; V = [(H.x0 + H.x1) / 2 - ex, (H.y0 + H.y1) / 2 - ey, (H.x0 + H.x1) / 2 + ex, (H.y0 + H.y1) / 2 + ey];
       var l = Math.max(0, Math.min(m.maxL, Math.ceil(Math.log2(k * dpr / BASE) - .15))), tw = 256 / (BASE * Math.pow(2, l));
       var i0 = Math.max(0, Math.floor((-cx / k - B.x0) / tw)), i1 = Math.floor(((vw - cx) / k - B.x0) / tw);
       var j0 = Math.max(0, Math.floor((-cy / k - B.y0) / tw)), j1 = Math.floor(((vh - cy) / k - B.y0) / tw);

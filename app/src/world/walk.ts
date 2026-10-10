@@ -24,6 +24,15 @@ export function initWalk() {
 /** כל מפת המעבר (לאפייה של סימוני הקרקע) */
 export const walkFlags = () => F;
 export const walkPriv = () => PRIV;
+/** לחלוקה לאזורים: הרשת כולה */
+export const walkGrid = () => ({ F, P: PRIV, W, H, X0, Y0, C });
+/** אזור שהגיע (lregions.ts): התאים שלו [c0, r0, c1, r1) נכתבים ישירות למפה */
+export function walkRect(rect: number[], f: Int32Array, p: Int32Array) {
+  const [c0, r0, c1, r1] = rect, w = c1 - c0, tf = new Uint16Array(w * (r1 - r0)), tp = new Uint16Array(tf.length);
+  unrle(f, tf); unrle(p, tp);
+  for (let j = r0; j < r1; j++) { F.set(tf.subarray((j - r0) * w, (j - r0 + 1) * w), j * W + c0); PRIV.set(tp.subarray((j - r0) * w, (j - r0 + 1) * w), j * W + c0); }
+}
+const unrle = (r: Int32Array, into: Uint16Array) => { let o = 0; for (let k = 0; k < r.length; k += 2) { into.fill(r[k], o, o + r[k + 1]); o += r[k + 1]; } };
 /* האתר המפורסם (משימה 30): מפת המעבר הסופית מגיעה מוכנה, ומרגע שנטענה – "קפואה": סימונים נוספים (של אובייקטים
    שנבנים עכשיו או מאוחר יותר) כבר כלולים בה, ולא משנים אותה */
 let FROZEN = false;

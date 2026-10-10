@@ -205,6 +205,7 @@ export function runChecks(): Issue[] {
 
   // reach: מקום עם שם שאי אפשר להגיע אליו ברגל מהכפר
   for (const p of places) {
+    if (!p) continue;
     if (!p.name || /^(the |a bench$)/.test(p.name)) continue;
     // בית במגרש פרטי: בודקים כמו הדיירים שלו (מותר להם להיכנס למגרש)
     if (!reachable(p, p.kind === 'home' ? plotOfDoor(p.door) : -1)) { const s = p.door || p.at || p.seat || [0, 0]; add('reach', `${p.name} cannot be reached on foot from the village`, s[0], s[1]); }

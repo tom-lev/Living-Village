@@ -130,7 +130,7 @@ export function surnameOf(home: Place | null) {
 /** הבית של כל דמות: בית בכפר (או לפי שם מהנתונים). לבוגרים בית משלהם; ילדים גרים עם אחד הבוגרים (משפחה) */
 export function assignHomes(walkers: any[], rg: LocalRng, others: any[] = []) {
   const H = ctx.home;
-  const homes = places.filter(p => p.kind === 'home' && p.door && p.door[0] > H.x0 - 400 && p.door[0] < H.x1 + 400 && p.door[1] > H.y0 && p.door[1] < H.y1 + 200);
+  const homes = places.filter(p => p && p.kind === 'home' && p.door && p.door[0] > H.x0 - 400 && p.door[0] < H.x1 + 400 && p.door[1] > H.y0 && p.door[1] < H.y1 + 200);
   const taken = new Set(others.map(o => o.home)), free = homes.filter(p => !taken.has(p)).sort(() => rg.r() - .5);   // בתים שכבר יש בהם דיירים לא נכנסים
   const grown = walkers.filter(w => w.role !== 'child'), kids = walkers.filter(w => w.role === 'child');
   for (const w of grown) {
@@ -161,7 +161,8 @@ function chooseOnce(w: any, rg: LocalRng): Place {
   // כך כמות המקומות מכל סוג (למשל עשרות קצוות של שבילים) לא משנה כמה פעמים בוחרים בו
   const byKind = new Map<string, [Place, number][]>();
   for (const p of places) {
-    if (p.kind === 'home' || w.recent.includes(p.id) || w.bad?.has(p.id) || reachKnown(p) === false || (p.busy && p.busy !== w)) continue;   // ספסל תפוס: לא
+    if (!p || p.kind === 'home' ||   // (!p: מקום באזור שעוד לא הגיע – באתר המפורסם)
+        w.recent.includes(p.id) || w.bad?.has(p.id) || reachKnown(p) === false || (p.busy && p.busy !== w)) continue;   // ספסל תפוס: לא
     // ילדים לא הולכים רחוק לבד: לא ליער, לים או לרכבת, ורק קרוב לבית
     if (w.role === 'child' && (FAR_OK.has(p.kind) || (w.home?.door && Math.hypot(spotOf(p)[0] - w.home.door[0], spotOf(p)[1] - w.home.door[1]) > 700))) continue;
     let wt = like[p.kind] ?? 0; if (!wt) continue;
